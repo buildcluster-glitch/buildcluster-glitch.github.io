@@ -1,0 +1,2524 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>在庫管理</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --ink:#0f172a; --mute:#64748b; --line:#e5e7eb;
+    --accent:#2563eb; --accent-ink:#fff;
+    --ok:#16a34a; --warn:#f59e0b; --danger:#dc2626;
+    --cat-light:#f59e0b;   /* 照明器具 */
+    --cat-elec:#2563eb;    /* 電気材料 */
+    --cat-water:#0ea5e9;   /* 水栓材料 */
+    --cat-toilet:#a855f7;  /* 便座 */
+    --cat-other:#64748b;   /* その他 */
+    --safe-top:env(safe-area-inset-top,0);
+    --safe-bottom:env(safe-area-inset-bottom,0);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+  input,select,textarea{font:inherit;color:inherit}
+
+  /* ---------- layout ---------- */
+  .app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);
+    padding-bottom:calc(96px + var(--safe-bottom));position:relative}
+  header.bar{position:sticky;top:0;z-index:10;background:#0f172a;color:#fff;
+    padding:calc(14px + var(--safe-top)) 14px 14px;display:flex;align-items:center;gap:10px}
+  header.bar .title{font-weight:700;font-size:17px;flex:1;min-width:0}
+  header.bar .icon-btn{background:rgba(255,255,255,.1);color:#fff;
+    width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:16px;position:relative}
+  header.bar #sync-icon.syncing{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  header.bar #sync-icon.ok{color:#4ade80}
+  header.bar #sync-icon.err{color:#f87171}
+  header.bar #sync-badge{position:absolute;top:-3px;right:-3px;background:var(--warn);color:#fff;
+    font-size:10px;font-weight:800;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center}
+  header.bar .back{color:#fff;padding:4px 4px 4px 0;font-size:22px}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;background:#0f172a;padding:0 8px 8px;gap:4px;position:sticky;
+    top:calc(56px + var(--safe-top));z-index:9}
+  .tabs button{flex:1;padding:8px 4px;border-radius:8px;color:rgba(255,255,255,.6);
+    font-size:12px;font-weight:600}
+  .tabs button.on{background:rgba(255,255,255,.15);color:#fff}
+
+  /* ---------- toolbar (search + chips) ---------- */
+  .toolbar{padding:12px 14px 4px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+  .search-row{display:flex;gap:8px;align-items:stretch}
+  .search{position:relative;flex:1;min-width:0}
+  .search input{width:100%;padding:11px 14px 11px 38px;border:1px solid var(--line);
+    border-radius:12px;background:#fff;outline:none}
+  .search input:focus{border-color:var(--accent)}
+  .search::before{content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);
+    font-size:13px;opacity:.6}
+  .add-item-btn{background:var(--accent);color:#fff;border-radius:12px;padding:0 14px;
+    font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap}
+  .add-item-btn:active{transform:scale(.97)}
+  .add-item-btn .plus{font-size:17px;font-weight:800;line-height:1}
+  .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;padding:7px 13px;border-radius:999px;background:#fff;border:1px solid var(--line);
+    font-size:13px;white-space:nowrap;color:var(--mute)}
+  .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
+  .chip .ct{margin-left:4px;font-size:11px;opacity:.8}
+
+  /* ---------- order summary bar (top of list) ---------- */
+  .ord-summary{margin:4px 14px 0;background:#eff6ff;border:1px solid #bfdbfe;
+    border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .ord-summary:active{transform:scale(.99)}
+  .ord-summary .ico{font-size:18px;flex-shrink:0}
+  .ord-summary .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .ord-summary .head{font-size:12px;color:var(--mute);font-weight:600}
+  .ord-summary .line{font-size:14px;font-weight:700;color:var(--ink);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+  .ord-summary .line b{color:var(--accent);font-size:17px}
+  .ord-summary .line .pill{padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700}
+  .ord-summary .line .pill.delayed{background:#fee2e2;color:var(--danger)}
+  .ord-summary .line .pill.soon{background:#fef3c7;color:#92400e}
+  .ord-summary .arrow{color:var(--accent);font-size:18px;font-weight:700;flex-shrink:0}
+
+  /* ---------- alert banner ---------- */
+  .alerts{padding:4px 14px 0;display:flex;flex-direction:column;gap:6px}
+  .alert{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:10px;
+    font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;border:1px solid #fecaca}
+  .alert.warn{background:#fef3c7;color:#92400e;border-color:#fde68a}
+  .alert .ico{font-size:16px;flex-shrink:0}
+  .alert .msg{flex:1;min-width:0}
+  .alert button{color:inherit;font-weight:700;font-size:13px;text-decoration:underline;padding:0}
+
+  /* ---------- item cards ---------- */
+  .list{padding:10px 14px}
+  .empty{text-align:center;padding:48px 16px;color:var(--mute);font-size:14px}
+  .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);border:1px solid var(--line);cursor:pointer;
+    display:flex;gap:12px;align-items:stretch;position:relative}
+  .card:active{transform:scale(.99)}
+  .card .main{position:relative}
+  .card .edit-btn{position:absolute;top:-4px;right:-4px;width:28px;height:28px;border-radius:8px;
+    background:rgba(241,245,249,.9);color:var(--mute);display:grid;place-items:center;
+    font-size:13px;opacity:.75;z-index:2}
+  .card .edit-btn:hover,.card .edit-btn:active{opacity:1;background:#e0e7ff;color:var(--accent)}
+  .card.low{border-color:#fecaca;background:#fef2f2}
+  .card.zero{border-color:#fca5a5;background:#fee2e2}
+  .card.inactive{opacity:.55}
+  .card .main{flex:1;min-width:0}
+  .card .top{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+  .card .sku{font-size:11px;font-weight:700;padding:2px 7px;background:#f1f5f9;color:var(--mute);border-radius:5px;flex-shrink:0}
+  .card .name{font-weight:700;font-size:15px;line-height:1.3;word-break:break-word}
+  .card .maker{font-size:11px;color:var(--mute);margin-top:2px}
+  .card .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--mute)}
+  .card .meta b{color:var(--ink);font-weight:600}
+  .cat-tag{display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;color:#fff;
+    font-weight:700;letter-spacing:.3px}
+  .cat-tag.light{background:var(--cat-light)}
+  .cat-tag.elec{background:var(--cat-elec)}
+  .cat-tag.water{background:var(--cat-water)}
+  .cat-tag.toilet{background:var(--cat-toilet)}
+  .cat-tag.other{background:var(--cat-other)}
+  .card .stockcol{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+    gap:2px;min-width:70px;padding-left:8px;border-left:1px solid var(--line)}
+  .card .stockn{font-size:28px;font-weight:800;line-height:1;color:var(--ink)}
+  .card.low .stockn{color:var(--danger)}
+  .card .stockmin{font-size:11px;color:var(--mute);font-weight:600}
+  .card .stockmin.low{color:var(--danger)}
+
+  /* ---------- stocktake view ---------- */
+  .st-head{padding:14px;background:#fff;border-bottom:1px solid var(--line)}
+  .st-head h2{margin:0 0 8px;font-size:17px}
+  .st-head .desc{font-size:13px;color:var(--mute);margin:0 0 10px}
+  .st-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .st-stat{background:var(--bg);border-radius:10px;padding:10px 6px;text-align:center}
+  .st-stat .n{font-size:22px;font-weight:800;line-height:1}
+  .st-stat .l{font-size:11px;color:var(--mute);margin-top:3px}
+  .st-stat.diff .n{color:var(--danger)}
+  .st-stat.match .n{color:var(--ok)}
+  .st-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    margin:8px 14px;display:flex;gap:10px;align-items:center}
+  .st-row.diff{border-color:#fbbf24;background:#fffbeb}
+  .st-row .info{flex:1;min-width:0}
+  .st-row .nm{font-weight:600;font-size:14px;line-height:1.3}
+  .st-row .sub{font-size:11px;color:var(--mute);margin-top:2px}
+  .st-row .syss{font-size:12px;color:var(--mute);min-width:50px;text-align:right;flex-shrink:0}
+  .st-row .syss b{color:var(--ink);font-size:16px;font-weight:700}
+  .st-row input{width:60px;padding:8px;border:2px solid var(--line);border-radius:8px;
+    text-align:center;font-size:16px;font-weight:700;outline:none;flex-shrink:0}
+  .st-row input:focus{border-color:var(--accent)}
+  .st-row.diff input{border-color:#f59e0b}
+  .st-diffbadge{font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0}
+  .st-diffbadge.minus{background:#fee2e2;color:#991b1b}
+  .st-diffbadge.plus{background:#dbeafe;color:#1e3a8a}
+  .st-footer{position:fixed;bottom:var(--safe-bottom);left:0;right:0;padding:10px 14px;
+    background:#fff;border-top:1px solid var(--line);display:flex;gap:8px;
+    max-width:560px;margin:0 auto}
+  .st-footer button{flex:1;padding:14px;border-radius:12px;font-weight:700;font-size:15px}
+  .st-footer .cancel{background:#f1f5f9;color:var(--mute)}
+  .st-footer .commit{background:var(--accent);color:#fff}
+  .st-footer .commit:disabled{opacity:.4}
+
+  /* ---------- logs view ---------- */
+  .log-filter{padding:10px 14px;display:flex;gap:8px;background:var(--bg)}
+  .log-filter select{flex:1;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;outline:none}
+  .logs{padding:4px 14px 20px}
+  .log{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;position:relative}
+  .log.out{border-left:3px solid var(--danger)}
+  .log.in{border-left:3px solid var(--ok)}
+  .log.chk{border-left:3px solid var(--warn)}
+  .log .lt{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-bottom:4px;gap:8px}
+  .log .lt .kind{font-weight:700}
+  .log .lt .kind.out{color:var(--danger)}
+  .log .lt .kind.in{color:var(--ok)}
+  .log .lt .kind.chk{color:var(--warn)}
+  .log .ln{font-weight:600;font-size:14px;line-height:1.3}
+  .log .lm{font-size:12px;color:var(--mute);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
+  .log .lm b{color:var(--ink);font-weight:600}
+  .log .del{position:absolute;top:8px;right:8px;color:var(--mute);padding:4px 8px;font-size:14px;border-radius:6px}
+  .log .del:hover{color:var(--danger);background:#fee2e2}
+
+  /* ---------- on-order badge on item card ---------- */
+  .card .onorder{font-size:11px;color:var(--accent);font-weight:700;margin-top:4px;
+    display:flex;align-items:baseline;gap:3px;justify-content:flex-end}
+  .card .onorder.zero{color:#cbd5e1}
+  .card .onorder b{font-size:14px;font-weight:800}
+  .card .effective{font-size:10px;color:var(--mute);margin-top:1px}
+  .card .effective b{font-size:12px;color:var(--accent);font-weight:700}
+
+  /* ---------- orders list ---------- */
+  .ord-row{background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;margin:8px 14px;position:relative}
+  .ord-row.delayed{border-color:#fca5a5;background:#fef2f2}
+  .ord-row.soon{border-color:#fde68a;background:#fffbeb}
+  .ord-row .ot{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+  .ord-row .ot .sku{font-size:11px;font-weight:700;padding:2px 7px;background:#f1f5f9;color:var(--mute);border-radius:5px}
+  .ord-row .ot .due{font-size:12px;font-weight:700;color:var(--mute)}
+  .ord-row .ot .due.delayed{color:var(--danger)}
+  .ord-row .ot .due.soon{color:var(--warn)}
+  .ord-row .on{font-weight:700;font-size:14px;line-height:1.3;word-break:break-word}
+  .ord-row .om{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:4px}
+  .ord-row .om b{color:var(--ink);font-weight:600}
+  .ord-row .oq{display:inline-block;font-weight:700;color:var(--ink)}
+  .ord-row .opart{color:var(--warn);font-size:11px;margin-left:4px}
+  .ord-row .oacts{display:flex;gap:6px;margin-top:10px}
+  .ord-row .oacts button{flex:1;padding:9px;border-radius:8px;font-weight:700;font-size:13px}
+  .ord-row .oacts .recv{background:#dcfce7;color:var(--ok)}
+  .ord-row .oacts .edit{background:#e0e7ff;color:var(--accent)}
+  .ord-row .oacts .cancel{background:#fee2e2;color:var(--danger)}
+
+  .ord-empty{text-align:center;padding:48px 16px;color:var(--mute);font-size:14px}
+  .ord-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px 14px;background:var(--bg)}
+  .ord-stat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center}
+  .ord-stat .n{font-size:20px;font-weight:800;line-height:1}
+  .ord-stat .l{font-size:11px;color:var(--mute);margin-top:3px}
+  .ord-stat.delayed .n{color:var(--danger)}
+  .ord-stat.soon .n{color:var(--warn)}
+
+  /* ---------- settings view ---------- */
+  .set-sec{background:#fff;margin:10px 14px;border-radius:12px;border:1px solid var(--line);overflow:hidden}
+  .set-title{padding:10px 14px;font-size:12px;color:var(--mute);font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid var(--line)}
+  .set-item{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;
+    justify-content:space-between;align-items:center;gap:10px}
+  .set-item:last-child{border-bottom:0}
+  .set-item .lbl{font-size:14px;font-weight:600}
+  .set-item .val{font-size:13px;color:var(--mute);text-align:right}
+  .set-item button{padding:6px 10px;border-radius:8px;background:#f1f5f9;font-size:13px;font-weight:600}
+  .set-item button.danger{background:#fee2e2;color:var(--danger)}
+  .member-row{padding:10px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+  .member-row:last-child{border-bottom:0}
+  .member-row .nm{flex:1;font-weight:600}
+  .member-row input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;outline:none}
+
+  /* ---------- FAB ---------- */
+  .fab{position:fixed;right:max(16px,calc((100% - 560px)/2 + 16px));
+    bottom:calc(20px + var(--safe-bottom));width:56px;height:56px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:28px;box-shadow:0 6px 16px rgba(37,99,235,.4);
+    display:grid;place-items:center;z-index:20}
+  .fab:active{transform:scale(.95)}
+
+  /* ---------- sheet (modal) ---------- */
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;
+    display:none;align-items:flex-end;justify-content:center}
+  .sheet-backdrop.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;
+    padding:18px 16px calc(18px + var(--safe-bottom));max-height:92vh;overflow-y:auto;
+    animation:slideUp .25s ease}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .sheet h3{margin:0 0 14px;font-size:17px}
+  .sheet-close{position:absolute;top:18px;right:16px;width:32px;height:32px;border-radius:50%;
+    background:#f1f5f9;color:var(--mute);font-size:18px;display:grid;place-items:center}
+
+  .field{display:block;margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--mute);margin-bottom:4px;font-weight:600}
+  .field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid var(--line);
+    border-radius:10px;background:#fff;outline:none}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+  .field textarea{min-height:50px;resize:vertical}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .field-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .picker{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+  .picker button{padding:10px 4px;border:2px solid var(--line);background:#fff;
+    border-radius:10px;font-size:12px;font-weight:600;color:var(--mute)}
+  .picker button.on{border-color:var(--accent);color:var(--accent);background:#eff6ff}
+  .picker.cat button.on[data-v="照明器具"]{border-color:var(--cat-light);color:var(--cat-light);background:#fef3c7}
+  .picker.cat button.on[data-v="電気材料"]{border-color:var(--cat-elec);color:var(--cat-elec);background:#dbeafe}
+  .picker.cat button.on[data-v="水栓材料"]{border-color:var(--cat-water);color:var(--cat-water);background:#e0f2fe}
+  .picker.cat button.on[data-v="便座"]{border-color:var(--cat-toilet);color:var(--cat-toilet);background:#f3e8ff}
+  .picker.cat button.on[data-v="その他"]{border-color:var(--cat-other);color:var(--cat-other);background:#f1f5f9}
+  .picker.members{grid-template-columns:repeat(3,1fr)}
+  .qty-row{display:grid;grid-template-columns:40px 1fr 40px;gap:8px;align-items:center}
+  .qty-row button{background:#f1f5f9;height:44px;border-radius:10px;font-size:20px;font-weight:700;color:var(--ink)}
+  .qty-row input{text-align:center;font-size:18px;font-weight:700;height:44px}
+
+  .submit{width:100%;padding:14px;background:var(--accent);color:#fff;border-radius:12px;
+    font-weight:700;font-size:15px;margin-top:6px}
+  .submit:disabled{opacity:.4}
+  .submit.danger{background:var(--danger)}
+  .submit.secondary{background:#f1f5f9;color:var(--ink)}
+
+  /* ---------- detail view ---------- */
+  .detail-hero{background:#fff;padding:14px;border-bottom:1px solid var(--line)}
+  .detail-hero h2{margin:0 0 4px;font-size:18px;line-height:1.3;word-break:break-word}
+  .detail-hero .sub{color:var(--mute);font-size:13px}
+  .detail-hero .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:10px;font-size:13px}
+  .detail-hero .kv span:nth-child(odd){color:var(--mute);white-space:nowrap}
+  .detail-hero .kv span:nth-child(even){overflow-wrap:anywhere}
+  .detail-stockbox{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 14px;background:var(--bg)}
+  .detail-stockbox .s{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center}
+  .detail-stockbox .s .n{font-size:22px;font-weight:800;line-height:1}
+  .detail-stockbox .s .l{font-size:11px;color:var(--mute);margin-top:3px}
+  .detail-stockbox .s.low .n{color:var(--danger)}
+  .detail-actions{padding:10px 14px;display:flex;gap:8px}
+  .detail-actions button{flex:1;padding:12px;border-radius:10px;font-weight:700;font-size:14px}
+  .detail-actions .act-out{background:#fee2e2;color:var(--danger)}
+  .detail-actions .act-in{background:#dcfce7;color:var(--ok)}
+  .detail-actions .act-edit{background:#e0e7ff;color:var(--accent)}
+  .section-title{padding:12px 14px 6px;font-size:11px;color:var(--mute);
+    text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+
+  /* ---------- report view ---------- */
+  .rep-month{display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:14px;background:#fff;border-bottom:1px solid var(--line)}
+  .rep-month button{width:36px;height:36px;border-radius:10px;background:#f1f5f9;
+    font-size:18px;font-weight:700;color:var(--ink)}
+  .rep-month .m{font-size:18px;font-weight:800;min-width:110px;text-align:center}
+  .rep-month .ty{font-size:11px;color:var(--mute);font-weight:600}
+  .rep-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 14px;background:var(--bg)}
+  .rep-summary .s{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 6px;text-align:center}
+  .rep-summary .s .n{font-size:20px;font-weight:800;line-height:1}
+  .rep-summary .s .l{font-size:10px;color:var(--mute);margin-top:4px}
+  .rep-sec{background:#fff;margin:10px 14px;border-radius:12px;border:1px solid var(--line);overflow:hidden}
+  .rep-sec .st{padding:10px 14px;font-size:12px;color:var(--mute);font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;background:#f8fafc;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between}
+  .rep-sec .st b{color:var(--ink);font-size:13px}
+  .rep-row{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .rep-row:last-child{border-bottom:0}
+  .rep-row .rank{font-size:11px;font-weight:700;color:var(--mute);min-width:22px}
+  .rep-row .nm{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rep-row .sub{font-size:11px;color:var(--mute)}
+  .rep-row .v{font-size:14px;font-weight:800;color:var(--ink);text-align:right;min-width:50px}
+  .rep-row .bar-wrap{height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden;flex:1;min-width:30px;max-width:80px}
+  .rep-row .bar{height:100%;background:linear-gradient(90deg,var(--accent),#60a5fa);border-radius:3px}
+  .rep-empty{padding:20px;text-align:center;color:var(--mute);font-size:13px}
+
+  /* ---------- csv import preview ---------- */
+  .csv-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+  .csv-stats .cs{background:var(--bg);border-radius:8px;padding:8px 4px;text-align:center}
+  .csv-stats .cs .n{font-size:20px;font-weight:800;line-height:1}
+  .csv-stats .cs .l{font-size:10px;color:var(--mute);margin-top:3px}
+  .csv-stats .cs.add .n{color:var(--ok)}
+  .csv-stats .cs.upd .n{color:var(--accent)}
+  .csv-stats .cs.skip .n{color:var(--mute)}
+  .csv-preview{max-height:250px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;font-size:12px}
+  .csv-preview .pr{padding:7px 10px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+  .csv-preview .pr:last-child{border-bottom:0}
+  .csv-preview .tag{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;flex-shrink:0}
+  .csv-preview .tag.add{background:#dcfce7;color:var(--ok)}
+  .csv-preview .tag.upd{background:#dbeafe;color:var(--accent)}
+  .csv-preview .tag.skip{background:#f1f5f9;color:var(--mute)}
+  .csv-preview .sku{font-family:monospace;font-size:11px;color:var(--mute);flex-shrink:0}
+  .csv-preview .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .csv-err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
+
+  /* ---------- utils ---------- */
+  .hidden{display:none !important}
+  .diff-negative{color:var(--danger)}
+  .diff-positive{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- =================== HOME VIEW =================== -->
+  <div id="view-home">
+    <header class="bar">
+      <div class="title">在庫管理</div>
+      <button class="icon-btn" id="btn-sync" title="同期"><span id="sync-icon">☁</span><span id="sync-badge" class="hidden"></span></button>
+      <button class="icon-btn" id="btn-report" title="月次レポート">📊</button>
+      <button class="icon-btn" id="btn-settings" title="設定">⚙</button>
+    </header>
+
+    <div class="tabs">
+      <button class="on" data-tab="list">一覧</button>
+      <button data-tab="orders">発注中<span id="orders-tab-ct" style="margin-left:3px;font-size:10px;opacity:.8"></span></button>
+      <button data-tab="stocktake">棚卸</button>
+      <button data-tab="logs">ログ</button>
+    </div>
+
+    <!-- --------- TAB: LIST --------- -->
+    <div id="tab-list">
+      <div class="toolbar">
+        <div class="search-row">
+          <div class="search"><input id="search" placeholder="品番・品目名・メーカーで検索" /></div>
+          <button class="add-item-btn" id="btn-add-item" title="品目を追加"><span class="plus">＋</span>品目</button>
+        </div>
+        <div class="chips" id="cat-chips"></div>
+      </div>
+      <div id="order-summary"></div>
+      <div class="alerts" id="alerts"></div>
+      <div class="list" id="item-list"></div>
+    </div>
+
+    <!-- --------- TAB: STOCKTAKE --------- -->
+    <div id="tab-stocktake" class="hidden">
+      <div class="st-head">
+        <h2>週次棚卸</h2>
+        <p class="desc">各品目の実数を入力 → 差分を確認 → 記録で在庫修正</p>
+        <div class="st-stats">
+          <div class="st-stat"><div class="n" id="st-total">0</div><div class="l">品目数</div></div>
+          <div class="st-stat match"><div class="n" id="st-match">0</div><div class="l">一致</div></div>
+          <div class="st-stat diff"><div class="n" id="st-diff">0</div><div class="l">差分あり</div></div>
+        </div>
+      </div>
+      <div id="st-rows"></div>
+      <div class="st-footer">
+        <button class="cancel" id="st-reset">リセット</button>
+        <button class="commit" id="st-commit" disabled>記録して在庫修正</button>
+      </div>
+    </div>
+
+    <!-- --------- TAB: ORDERS --------- -->
+    <div id="tab-orders" class="hidden">
+      <div class="ord-stats">
+        <div class="ord-stat"><div class="n" id="ord-total">0</div><div class="l">発注中</div></div>
+        <div class="ord-stat soon"><div class="n" id="ord-soon">0</div><div class="l">3日以内</div></div>
+        <div class="ord-stat delayed"><div class="n" id="ord-delayed">0</div><div class="l">遅延</div></div>
+      </div>
+      <div id="orders-list"></div>
+    </div>
+
+    <!-- --------- TAB: LOGS --------- -->
+    <div id="tab-logs" class="hidden">
+      <div class="log-filter">
+        <select id="log-kind">
+          <option value="all">全種別</option>
+          <option value="out">消費のみ</option>
+          <option value="in">補充のみ</option>
+          <option value="chk">棚卸のみ</option>
+        </select>
+        <select id="log-member"><option value="">全メンバー</option></select>
+      </div>
+      <div class="logs" id="logs"></div>
+    </div>
+
+    <button class="fab" id="fab">+</button>
+  </div>
+
+  <!-- =================== REPORT VIEW =================== -->
+  <div id="view-report" class="hidden">
+    <header class="bar">
+      <button class="back" id="rep-back">←</button>
+      <div class="title">月次レポート</div>
+    </header>
+    <div class="rep-month">
+      <button id="rep-prev">‹</button>
+      <div>
+        <div class="m" id="rep-month-label">2026年 04月</div>
+        <div class="ty" id="rep-month-sub"></div>
+      </div>
+      <button id="rep-next">›</button>
+    </div>
+    <div class="rep-summary">
+      <div class="s"><div class="n" id="rep-out-cnt">0</div><div class="l">消費記録数</div></div>
+      <div class="s"><div class="n" id="rep-out-qty">0</div><div class="l">総消費数</div></div>
+      <div class="s"><div class="n" id="rep-out-amt">¥0</div><div class="l">推計金額</div></div>
+    </div>
+    <div id="rep-body"></div>
+  </div>
+
+  <!-- =================== DETAIL VIEW =================== -->
+  <div id="view-detail" class="hidden">
+    <header class="bar">
+      <button class="back" id="btn-back">←</button>
+      <div class="title" id="d-title">品目詳細</div>
+      <button class="icon-btn" id="btn-edit-item">✎</button>
+    </header>
+    <div class="detail-hero" id="d-hero"></div>
+    <div class="detail-stockbox" id="d-stockbox"></div>
+    <div class="detail-actions">
+      <button class="act-out" data-act="out">− 消費</button>
+      <button class="act-in" data-act="in">+ 補充</button>
+      <button class="act-edit" data-act="order">📦 発注</button>
+      <button class="act-edit" data-act="edit">編集</button>
+    </div>
+    <div id="d-orders"></div>
+    <div class="section-title">履歴（直近50件）</div>
+    <div class="logs" id="d-logs"></div>
+  </div>
+
+</div>
+
+<!-- =================== SHEETS (MODALS) =================== -->
+
+<!-- FAB quick action sheet -->
+<div class="sheet-backdrop" id="sheet-fab">
+  <div class="sheet">
+    <h3>新規記録</h3>
+    <div class="picker" style="grid-template-columns:1fr 1fr">
+      <button data-act="out" style="padding:18px 4px">− 消費<br><small style="font-weight:400;color:var(--mute);font-size:11px">使った品目を記録</small></button>
+      <button data-act="in" style="padding:18px 4px">+ 補充<br><small style="font-weight:400;color:var(--mute);font-size:11px">入荷・在庫追加</small></button>
+    </div>
+    <button class="submit secondary" style="margin-top:8px" data-act="order">📦 発注を記録<br><small style="font-weight:400;color:var(--mute);font-size:11px">届くまで発注中として管理</small></button>
+    <button class="submit secondary" style="margin-top:8px" data-act="new-item">＋ 新しい品目を追加</button>
+  </div>
+</div>
+
+<!-- Order sheet -->
+<div class="sheet-backdrop" id="sheet-order">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3 id="ord-title">発注を記録</h3>
+    <div class="field">
+      <label>品目</label>
+      <select id="ord-item"></select>
+    </div>
+    <div class="field">
+      <label>数量</label>
+      <div class="qty-row">
+        <button data-oqty="-1">−</button>
+        <input type="number" id="ord-qty" value="1" min="1" inputmode="numeric">
+        <button data-oqty="+1">＋</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>発注者</label>
+      <div class="picker members" id="ord-member"></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>発注日</label>
+        <input type="date" id="ord-date">
+      </div>
+      <div class="field">
+        <label>予定納期</label>
+        <input type="date" id="ord-due">
+      </div>
+    </div>
+    <div class="field">
+      <label>注文先</label>
+      <input id="ord-supplier" list="suppliers-list" placeholder="例: 楽天">
+    </div>
+    <div class="field">
+      <label>備考（任意）</label>
+      <textarea id="ord-note" placeholder="注文番号、割引など"></textarea>
+    </div>
+    <button class="submit" id="ord-submit">発注を登録</button>
+    <button class="submit danger hidden" id="ord-delete" style="margin-top:8px">この発注を削除</button>
+  </div>
+</div>
+
+<!-- Receive sheet -->
+<div class="sheet-backdrop" id="sheet-receive">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3>入荷を記録</h3>
+    <div id="rcv-info" style="background:var(--bg);padding:10px 12px;border-radius:10px;margin-bottom:12px;font-size:13px"></div>
+    <div class="field">
+      <label>入荷数量</label>
+      <div class="qty-row">
+        <button data-rqty="-1">−</button>
+        <input type="number" id="rcv-qty" value="1" min="1" inputmode="numeric">
+        <button data-rqty="+1">＋</button>
+      </div>
+      <div style="font-size:11px;color:var(--mute);margin-top:4px" id="rcv-hint"></div>
+    </div>
+    <div class="field">
+      <label>受領者</label>
+      <div class="picker members" id="rcv-member"></div>
+    </div>
+    <div class="field">
+      <label>入荷日</label>
+      <input type="date" id="rcv-date">
+    </div>
+    <div class="field">
+      <label>備考（任意）</label>
+      <textarea id="rcv-note" placeholder=""></textarea>
+    </div>
+    <button class="submit" id="rcv-submit">入荷処理する</button>
+  </div>
+</div>
+
+<!-- Consumption/Supply record sheet -->
+<div class="sheet-backdrop" id="sheet-record">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3 id="rec-title">消費記録</h3>
+    <div class="field">
+      <label>品目</label>
+      <select id="rec-item"></select>
+    </div>
+    <div class="field">
+      <label>数量</label>
+      <div class="qty-row">
+        <button data-qty="-1">−</button>
+        <input type="number" id="rec-qty" value="1" min="1" inputmode="numeric">
+        <button data-qty="+1">＋</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>担当者</label>
+      <div class="picker members" id="rec-member"></div>
+    </div>
+    <div id="rec-out-fields">
+      <div class="field">
+        <label>使用現場</label>
+        <input id="rec-site" list="sites-list" placeholder="例: 卸町マンションフタバ">
+        <datalist id="sites-list"></datalist>
+      </div>
+      <div class="field">
+        <label>号室</label>
+        <input id="rec-room" placeholder="例: 1010">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="rec-date">
+      </div>
+      <div class="field">
+        <label>時刻</label>
+        <input type="time" id="rec-time">
+      </div>
+    </div>
+    <div class="field">
+      <label>備考（任意）</label>
+      <textarea id="rec-note" placeholder=""></textarea>
+    </div>
+    <button class="submit" id="rec-submit">記録する</button>
+  </div>
+</div>
+
+<!-- Item edit sheet -->
+<div class="sheet-backdrop" id="sheet-item">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3 id="item-title">品目を追加</h3>
+    <div class="field-row">
+      <div class="field">
+        <label>品番 / SKU</label>
+        <input id="it-sku" placeholder="例: FY-25PM5">
+      </div>
+      <div class="field">
+        <label>メーカー</label>
+        <input id="it-maker" list="makers-list" placeholder="例: パナソニック">
+        <datalist id="makers-list"></datalist>
+      </div>
+    </div>
+    <div class="field">
+      <label>品目名</label>
+      <input id="it-name" placeholder="例: 壁付換気扇 25cm">
+    </div>
+    <div class="field">
+      <label>カテゴリ</label>
+      <div class="picker cat" id="it-cat"></div>
+    </div>
+    <div class="field-row3">
+      <div class="field">
+        <label>現在庫</label>
+        <input type="number" id="it-stock" value="0" min="0" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>最低在庫</label>
+        <input type="number" id="it-min" value="0" min="0" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>リードタイム(日)</label>
+        <input type="number" id="it-lead" value="" placeholder="7" min="0" inputmode="numeric">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>注文先</label>
+        <input id="it-supplier" list="suppliers-list" placeholder="楽天 / amazon / 小泉 など">
+        <datalist id="suppliers-list"></datalist>
+      </div>
+      <div class="field">
+        <label>仕入れ価格</label>
+        <input type="number" id="it-price" placeholder="8580" min="0" inputmode="numeric">
+      </div>
+    </div>
+    <div class="field">
+      <label>価格確認日</label>
+      <input type="date" id="it-pricedate">
+    </div>
+    <div class="field">
+      <label>備考</label>
+      <textarea id="it-note"></textarea>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="it-active" checked style="width:auto">
+        <span>使用中（チェックを外すと一覧から隠れる）</span>
+      </label>
+    </div>
+    <button class="submit" id="item-submit">保存</button>
+    <button class="submit danger hidden" id="item-delete" style="margin-top:8px">この品目を削除</button>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet-backdrop" id="sheet-settings">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3>設定</h3>
+
+    <div class="set-sec">
+      <div class="set-title">メンバー</div>
+      <div id="members-edit"></div>
+      <div class="set-item" style="border-top:1px solid var(--line)">
+        <input id="new-member" placeholder="メンバー名を追加" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+        <button id="add-member">追加</button>
+      </div>
+    </div>
+
+    <div class="set-sec">
+      <div class="set-title">データ</div>
+      <div class="set-item">
+        <div>
+          <div class="lbl">品目数</div>
+          <div class="val" id="info-items">-</div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div>
+          <div class="lbl">ログ件数</div>
+          <div class="val" id="info-logs">-</div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div class="lbl">エクスポート</div>
+        <button id="btn-export">JSON出力</button>
+      </div>
+      <div class="set-item">
+        <div class="lbl">インポート</div>
+        <button id="btn-import">JSON読込</button>
+      </div>
+      <div class="set-item">
+        <div class="lbl">品目CSV読込</div>
+        <button id="btn-csv-import">CSV読込</button>
+      </div>
+      <div class="set-item">
+        <div class="lbl" style="color:var(--danger)">全データリセット</div>
+        <button class="danger" id="btn-reset">リセット</button>
+      </div>
+    </div>
+
+    <div class="set-sec">
+      <div class="set-title">クラウド同期</div>
+      <div style="padding:12px 14px">
+        <div style="font-size:12px;color:var(--mute);margin-bottom:4px;font-weight:600">GAS Web App URL</div>
+        <input id="sync-url" placeholder="https://script.google.com/macros/s/.../exec"
+               style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-family:monospace" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="sync-save" style="flex:1;padding:10px;background:#f1f5f9;border-radius:8px;font-weight:600">保存</button>
+          <button id="sync-test" style="flex:1;padding:10px;background:#e0e7ff;color:var(--accent);border-radius:8px;font-weight:600">接続テスト</button>
+        </div>
+        <div id="sync-test-result" style="font-size:12px;margin-top:8px"></div>
+      </div>
+      <div class="set-item">
+        <div>
+          <div class="lbl">最終同期</div>
+          <div class="val" id="info-last-sync">未同期</div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div>
+          <div class="lbl">保留中の変更</div>
+          <div class="val" id="info-pending">0件</div>
+        </div>
+      </div>
+      <div class="set-item">
+        <div class="lbl">初回セットアップ（サーバーから取込）</div>
+        <button id="sync-pull-first">実行</button>
+      </div>
+      <div class="set-item">
+        <div class="lbl">全部同期（送信→取得）</div>
+        <button id="sync-full" style="background:#dbeafe;color:var(--accent)">同期</button>
+      </div>
+    </div>
+
+    <div class="set-sec">
+      <div class="set-title">アプリについて</div>
+      <div class="set-item">
+        <div>
+          <div class="lbl">バージョン</div>
+          <div class="val">STEP4 / クラウド同期</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="import-file" accept="application/json" class="hidden">
+<input type="file" id="csv-file" accept=".csv,text/csv" class="hidden">
+
+<!-- CSV import preview sheet -->
+<div class="sheet-backdrop" id="sheet-csv">
+  <div class="sheet">
+    <button class="sheet-close" data-close>×</button>
+    <h3>品目CSVインポート</h3>
+    <div id="csv-error-box"></div>
+    <div class="csv-stats">
+      <div class="cs add"><div class="n" id="csv-add">0</div><div class="l">新規追加</div></div>
+      <div class="cs upd"><div class="n" id="csv-upd">0</div><div class="l">更新</div></div>
+      <div class="cs skip"><div class="n" id="csv-skip">0</div><div class="l">スキップ</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--mute);margin-bottom:6px">プレビュー（最大100件表示）</div>
+    <div class="csv-preview" id="csv-preview-list"></div>
+    <div style="font-size:11px;color:var(--mute);margin-bottom:10px">
+      対応ヘッダー: <b>品番 / 品目名 / 種別</b>(=カテゴリ) / <b>メーカー</b> / <b>最低在庫(数)</b> / <b>注文先</b> / <b>単価</b> / <b>価格確認日</b> / <b>リードタイム</b> / <b>備考</b> / <b>使用中</b>。品番が一致すると更新、無ければ追加。
+    </div>
+    <button class="submit" id="csv-submit">このままインポート</button>
+    <button class="submit secondary" style="margin-top:8px" data-close>キャンセル</button>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// 在庫管理アプリ STEP1 — 単一HTML + localStorage
+// データは品目マスタ改定版 (2026-04-15) をシードとして初期化
+// =====================================================================
+
+// ---------- seed: 品目マスタ改定版 ----------
+const SEED_ITEMS = [
+  // [sku, name, category, active, min, supplier, price, priceDate, note]
+  ['OX9743LDR','ODELIC 6畳LEDシーリングライト','照明器具',true,4,'小泉','','2025-09-05','小泉欠品時は SH8351LDR を楽天で代替検討'],
+  ['PL8D-YA2','LEDペンダントライト','照明器具',true,2,'楽天',8580,'2026-01-20',''],
+  ['XLX410DENP-LE9','40Wベースライト','照明器具',true,15,'楽天','','',''],
+  ['XLX210AENC-LE9','20Wベースライト','照明器具',true,15,'楽天','','',''],
+  ['LSEB7112LE1','LED吊元灯','照明器具',true,15,'楽天','','',''],
+  ['LSEB7110LE1','LED吊元灯(ワイド)','照明器具',true,3,'楽天','','',''],
+  ['FY-25PM5','壁付換気扇 25cm','電気材料',true,2,'楽天','','','XPriceの方がちょっと安い'],
+  ['FY-20PM5','壁付換気扇 20cm','電気材料',true,2,'楽天',9300,'2025-11-08','11/8時点でAmazonが安かった'],
+  ['VD-10ZC','浴室換気扇 単室','電気材料',true,2,'楽天','','',''],
+  ['VD-10ZFC','浴室換気扇 親子','電気材料',true,2,'楽天','','','XPriceの方がちょっと安い'],
+  ['FY-17','浴室換気扇 単室(旧)','電気材料',false,0,'楽天','','',''],
+  ['FY-24CPS7','浴室換気扇 親子','電気材料',true,2,'楽天','','','FY-24CPS8が後継の可能性あり要確認'],
+  ['VL-SE31XL','テレビドアホン','電気材料',true,3,'楽天','','','VL-SE30XLA廃番の後継品'],
+  ['K77CEV-13','台所 台付デッキ水栓(幅狭)','水栓材料',true,3,'小泉','','',''],
+  ['SF-WM430SY','台所 台付デッキ水栓(幅広)','水栓材料',true,2,'小泉','','',''],
+  ['K87110JV-13','台所 ワンホール水栓','水栓材料',true,2,'amazon',8000,'2025-09-24','最安8000円'],
+  ['K1700D-4UR','台所 壁付水栓','水栓材料',true,3,'amazon',7200,'2025-09-24','最安7200円'],
+  ['BF-WM646TSG','浴室 デッキ水栓','水栓材料',true,3,'小泉','','',''],
+  ['BF-KA145TSG','浴室 壁付水栓','水栓材料',true,3,'小泉',14520,'',''],
+  ['PU3-75XS-40','浴室 壁付水栓 後付偏心管','水栓材料',true,2,'楽天','','',''],
+  ['CH941SPF','洗浄便座','便座',true,3,'楽天','','',''],
+  ['KF-3545A','防湿鏡 小','水栓材料',true,3,'小泉','','',''],
+  ['KF-4060A','防湿鏡 大','水栓材料',true,2,'小泉','','',''],
+  ['INT-ALPHA-LX','ALPHA edロック LX用','その他',true,2,'楽天','','','社内SKU'],
+  ['INT-ALPHA-LE','ALPHA edロック LE用','その他',true,2,'楽天','','','社内SKU'],
+  ['SPC-W','ホスクリーン','その他',true,3,'メルカリ(社長)','','',''],
+  ['INT-RYOBI-CLOSER','ドアクローザー RYOBI 取替用','その他',true,2,'楽天','','','社内SKU'],
+  ['VD-13ZC','浴室換気扇 単室','電気材料',true,2,'楽天','','',''],
+  ['OB255232','LED吊元灯(ヒモ式幅広)','照明器具',true,2,'amazon','','','スイッチ式入手不可時'],
+  ['BB210003B','LED吊元灯(ヒモ式幅狭)','照明器具',true,2,'amazon','','',''],
+  ['FY-08PD9','パイプファン(プラグコード)','電気材料',true,2,'amazon','','',''],
+  ['FY-08PD9D','パイプファン(速結端子)','電気材料',true,2,'amazon','','',''],
+  ['VD-15ZY14','三菱電機 VD-15ZY14','電気材料',true,1,'','','',''],
+  ['INT-SEKISUI-POST-GR','積水ハウス用ポスト(グレー)','その他',true,1,'光和工業から貰う','','','請求書から後日相殺'],
+  ['INT-SEKISUI-POST-WH','積水ハウス用ポスト(ホワイト)','その他',true,1,'光和工業から貰う','','','請求書から後日相殺'],
+  ['OB255182R','【一時的】LED吊元灯','照明器具',true,0,'','','','LSEB7112LE1納品待ち時の一時品'],
+  ['OB255181R','【一時的】LED吊元灯(ワイド)','照明器具',true,0,'','','','LSEB7110LE1納品待ち時の一時品'],
+];
+
+const SEED_MEMBERS = ['山田裕貴','木村優作','大村将史','南部大我','鈴木悠平','最上登生'];
+const CATEGORIES = ['照明器具','電気材料','水栓材料','便座','その他'];
+const CAT_CLASS = {'照明器具':'light','電気材料':'elec','水栓材料':'water','便座':'toilet','その他':'other'};
+
+const STORAGE_KEY = 'zaiko_v1';
+const SYNC_CONFIG_KEY = 'zaiko_sync_v1';
+
+// ---------- state ----------
+const state = {
+  items: [],   // {id, sku, name, maker, category, stock, minStock, supplier, price, priceDate, leadDays, note, active}
+  logs: [],    // {id, type:'out'|'in'|'chk', itemId, qty, member, site, room, datetime, note, diff?}
+  orders: [],  // {id, itemId, qty, receivedQty, orderDate, expectedDate, supplier, member, note, status:'ordered'|'received'|'canceled', receivedDate}
+  members: [],
+  ui: {
+    view: 'home',        // 'home' | 'detail' | 'report'
+    tab: 'list',         // 'list' | 'orders' | 'stocktake' | 'logs'
+    catFilter: 'all',
+    search: '',
+    selectedItemId: null,
+    stocktakeInputs: {}, // {itemId: realStock}
+    reportMonth: null,   // 'YYYY-MM' or null for current
+  },
+  pending: [],  // [{action, data, ts}] - 未同期の変更キュー
+};
+
+// ---------- sync config ----------
+const sync = {
+  url: '',
+  lastSyncAt: null,
+  get enabled(){ return !!this.url; },
+};
+function loadSyncConfig(){
+  try{
+    const raw = localStorage.getItem(SYNC_CONFIG_KEY);
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    sync.url = d.url || '';
+    sync.lastSyncAt = d.lastSyncAt || null;
+  }catch(e){}
+}
+function saveSyncConfig(){
+  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({url:sync.url, lastSyncAt:sync.lastSyncAt}));
+}
+
+// ---------- persistence ----------
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    items:state.items, logs:state.logs, orders:state.orders,
+    members:state.members, pending:state.pending, version:2
+  }));
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    state.items = d.items || [];
+    state.logs = d.logs || [];
+    state.orders = d.orders || [];
+    state.pending = d.pending || [];
+    state.members = d.members && d.members.length ? d.members : SEED_MEMBERS.slice();
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+
+// ---------- pending operations queue ----------
+function queueOp(action, data){
+  state.pending.push({ action, data: JSON.parse(JSON.stringify(data)), ts: new Date().toISOString() });
+  updateSyncBadge();
+}
+function seed(){
+  state.items = SEED_ITEMS.map((r,i)=>({
+    id: 'i_'+Date.now()+'_'+i,
+    sku: r[0], name: r[1], maker: '', category: r[2],
+    stock: 0, minStock: Number(r[4])||0,
+    supplier: r[5], price: r[6]===''?null:Number(r[6]),
+    priceDate: r[7]||'', leadDays: null,
+    note: r[8]||'', active: r[3]
+  }));
+  state.logs = [];
+  state.orders = [];
+  state.members = SEED_MEMBERS.slice();
+  save();
+}
+
+// ---------- utils ----------
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => 'x_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtDT(d){
+  if(!d) return '';
+  const dt = new Date(d);
+  if(isNaN(dt)) return String(d);
+  const m = n=>String(n).padStart(2,'0');
+  return `${dt.getFullYear()}/${m(dt.getMonth()+1)}/${m(dt.getDate())} ${m(dt.getHours())}:${m(dt.getMinutes())}`;
+}
+function fmtD(d){
+  if(!d) return '';
+  const dt = new Date(d);
+  if(isNaN(dt)) return String(d);
+  const m = n=>String(n).padStart(2,'0');
+  return `${dt.getFullYear()}/${m(dt.getMonth()+1)}/${m(dt.getDate())}`;
+}
+function nowLocal(){
+  const d = new Date(); const m = n=>String(n).padStart(2,'0');
+  return {
+    date:`${d.getFullYear()}-${m(d.getMonth()+1)}-${m(d.getDate())}`,
+    time:`${m(d.getHours())}:${m(d.getMinutes())}`
+  };
+}
+function todayISO(){
+  const d = new Date(); const m = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${m(d.getMonth()+1)}-${m(d.getDate())}`;
+}
+function addDays(isoDate, n){
+  const d = new Date(isoDate+'T00:00:00');
+  d.setDate(d.getDate()+Number(n));
+  const m = x=>String(x).padStart(2,'0');
+  return `${d.getFullYear()}-${m(d.getMonth()+1)}-${m(d.getDate())}`;
+}
+function daysBetween(isoA, isoB){
+  const a = new Date(isoA+'T00:00:00'); const b = new Date(isoB+'T00:00:00');
+  return Math.round((b-a)/86400000);
+}
+
+// ---------- order calculations ----------
+// 発注中: ステータス ordered で受領未完了の残数
+function onOrderQty(itemId){
+  return state.orders
+    .filter(o=>o.itemId===itemId && o.status==='ordered')
+    .reduce((s,o)=>s + Math.max(0,(o.qty||0)-(o.receivedQty||0)), 0);
+}
+function effectiveStock(item){
+  return (item.stock||0) + onOrderQty(item.id);
+}
+function orderStatus(o){ // 'delayed' | 'soon' | 'normal' | 'done'
+  if(o.status!=='ordered') return 'done';
+  if(!o.expectedDate) return 'normal';
+  const today = todayISO();
+  const d = daysBetween(today, o.expectedDate);
+  if(d<0) return 'delayed';
+  if(d<=3) return 'soon';
+  return 'normal';
+}
+// 直近3件の発注→入荷の実測から leadDays を平均で更新
+function learnLeadTime(itemId){
+  const done = state.orders
+    .filter(o=>o.itemId===itemId && o.status==='received' && o.orderDate && o.receivedDate)
+    .sort((a,b)=>(b.receivedDate||'').localeCompare(a.receivedDate||''))
+    .slice(0,3);
+  if(!done.length) return null;
+  const avg = Math.round(done.reduce((s,o)=>s + daysBetween(o.orderDate,o.receivedDate),0) / done.length);
+  const item = state.items.find(x=>x.id===itemId);
+  if(item){ item.leadDays = Math.max(0, avg); }
+  return avg;
+}
+
+// ---------- open/close sheets ----------
+function openSheet(id){ $('#'+id).classList.add('on'); }
+function closeSheet(id){ $('#'+id).classList.remove('on'); }
+function closeAllSheets(){ $$('.sheet-backdrop').forEach(e=>e.classList.remove('on')); }
+document.addEventListener('click', e=>{
+  if(e.target.matches('[data-close]')) closeSheet(e.target.closest('.sheet-backdrop').id);
+  if(e.target.classList.contains('sheet-backdrop')) e.target.classList.remove('on');
+});
+
+// ---------- render: home (list tab) ----------
+function renderCatChips(){
+  const counts = {all: state.items.filter(i=>i.active).length};
+  CATEGORIES.forEach(c=> counts[c] = state.items.filter(i=>i.active && i.category===c).length);
+  const chips = [['all','すべて']].concat(CATEGORIES.map(c=>[c,c]));
+  $('#cat-chips').innerHTML = chips.map(([v,label])=>{
+    const on = state.ui.catFilter===v?'on':'';
+    const ct = counts[v]||0;
+    return `<button class="chip ${on}" data-cat="${esc(v)}">${esc(label)}<span class="ct">${ct}</span></button>`;
+  }).join('');
+}
+
+function renderOrderSummary(){
+  const active = state.orders.filter(o=>o.status==='ordered');
+  const box = $('#order-summary');
+  if(!active.length){ box.innerHTML = ''; return; }
+  const totalQty = active.reduce((s,o)=>s + Math.max(0,(o.qty||0)-(o.receivedQty||0)), 0);
+  const delayed = active.filter(o=>orderStatus(o)==='delayed').length;
+  const soon = active.filter(o=>orderStatus(o)==='soon').length;
+  let pills = '';
+  if(delayed) pills += `<span class="pill delayed">遅延 ${delayed}</span>`;
+  if(soon) pills += `<span class="pill soon">3日以内 ${soon}</span>`;
+  box.innerHTML = `
+    <div class="ord-summary" data-goto-orders="1">
+      <span class="ico">📦</span>
+      <div class="body">
+        <div class="head">発注中</div>
+        <div class="line"><b>${active.length}</b>件 <span style="color:var(--mute);font-weight:600;font-size:12px">計 ${totalQty}個</span>${pills}</div>
+      </div>
+      <span class="arrow">›</span>
+    </div>`;
+}
+
+function renderAlerts(){
+  // 実効在庫ベースで判定（発注済みはダブル発注防止のためアラート対象外）
+  const low = state.items.filter(i=>i.active && i.minStock>0 && effectiveStock(i) < i.minStock);
+  const zero = state.items.filter(i=>i.active && i.minStock>0 && i.stock<=0 && onOrderQty(i.id)===0);
+  const delayed = state.orders.filter(o=>orderStatus(o)==='delayed');
+  const box = $('#alerts');
+  let html = '';
+  if(zero.length){
+    html += `<div class="alert"><span class="ico">🚨</span><span class="msg">在庫切れ（発注なし） <b>${zero.length}</b>件</span><button data-alert="zero">確認</button></div>`;
+  }
+  if(low.length){
+    html += `<div class="alert warn"><span class="ico">⚠️</span><span class="msg">要発注 <b>${low.length}</b>件</span><button data-alert="low">確認</button></div>`;
+  }
+  if(delayed.length){
+    html += `<div class="alert"><span class="ico">⏰</span><span class="msg">納品遅延 <b>${delayed.length}</b>件</span><button data-alert="delayed">確認</button></div>`;
+  }
+  box.innerHTML = html;
+}
+
+function renderItemList(){
+  const q = state.ui.search.trim().toLowerCase();
+  const cat = state.ui.catFilter;
+  let items = state.items.filter(i=> i.active);
+  if(cat!=='all') items = items.filter(i=>i.category===cat);
+  if(q) items = items.filter(i=>
+    (i.sku||'').toLowerCase().includes(q) ||
+    (i.name||'').toLowerCase().includes(q) ||
+    (i.maker||'').toLowerCase().includes(q)
+  );
+  // sort: alert severity (effective vs min ratio asc), then name
+  items.sort((a,b)=>{
+    const ea = effectiveStock(a); const eb = effectiveStock(b);
+    const ra = a.minStock>0 ? ea/a.minStock : 99;
+    const rb = b.minStock>0 ? eb/b.minStock : 99;
+    if(ra!==rb) return ra-rb;
+    return (a.name||'').localeCompare(b.name||'','ja');
+  });
+
+  if(!items.length){
+    $('#item-list').innerHTML = `<div class="empty">該当する品目はありません</div>`;
+    return;
+  }
+
+  $('#item-list').innerHTML = items.map(i=>{
+    const onOrd = onOrderQty(i.id);
+    const eff = effectiveStock(i);
+    const low = i.minStock>0 && eff < i.minStock;
+    const zero = i.stock<=0 && i.minStock>0 && onOrd===0;
+    const cls = zero ? 'zero' : (low ? 'low':'');
+    const catCls = CAT_CLASS[i.category]||'other';
+    return `
+      <div class="card ${cls}" data-id="${i.id}">
+        <div class="main">
+          <button class="edit-btn" data-edit="${i.id}" title="編集・削除">✎</button>
+          <div class="top" style="padding-right:30px">
+            <span class="cat-tag ${catCls}">${esc(i.category)}</span>
+            <span class="sku">${esc(i.sku)}</span>
+          </div>
+          <div class="name" style="padding-right:30px">${esc(i.name)}</div>
+          ${i.maker?`<div class="maker">${esc(i.maker)}</div>`:''}
+          <div class="meta">
+            ${i.supplier?`<span>注文先:<b>${esc(i.supplier)}</b></span>`:''}
+            ${i.price?`<span>¥<b>${Number(i.price).toLocaleString()}</b></span>`:''}
+          </div>
+        </div>
+        <div class="stockcol">
+          <div class="stockn">${i.stock}</div>
+          <div class="stockmin ${low?'low':''}">/ 最低 ${i.minStock||'-'}</div>
+          <div class="onorder ${onOrd===0?'zero':''}">📦 <b>${onOrd>0?'+':''}${onOrd}</b></div>
+          ${onOrd>0?`<div class="effective">実効 <b>${eff}</b></div>`:''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderHomeTabs(){
+  $$('.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===state.ui.tab));
+  $('#tab-list').classList.toggle('hidden', state.ui.tab!=='list');
+  $('#tab-orders').classList.toggle('hidden', state.ui.tab!=='orders');
+  $('#tab-stocktake').classList.toggle('hidden', state.ui.tab!=='stocktake');
+  $('#tab-logs').classList.toggle('hidden', state.ui.tab!=='logs');
+
+  // orders tab count badge
+  const activeOrders = state.orders.filter(o=>o.status==='ordered').length;
+  $('#orders-tab-ct').textContent = activeOrders>0 ? `(${activeOrders})` : '';
+
+  if(state.ui.tab==='list'){ renderCatChips(); renderOrderSummary(); renderAlerts(); renderItemList(); }
+  if(state.ui.tab==='orders') renderOrders();
+  if(state.ui.tab==='stocktake') renderStocktake();
+  if(state.ui.tab==='logs') renderLogs();
+}
+
+// ---------- render: orders tab ----------
+function renderOrders(){
+  const orders = state.orders
+    .filter(o=>o.status==='ordered')
+    .sort((a,b)=>{
+      // delayed first, then by expectedDate asc
+      const sa = orderStatus(a), sb = orderStatus(b);
+      const rank = {delayed:0, soon:1, normal:2};
+      if(rank[sa]!==rank[sb]) return rank[sa]-rank[sb];
+      return (a.expectedDate||'9999').localeCompare(b.expectedDate||'9999');
+    });
+
+  $('#ord-total').textContent = orders.length;
+  $('#ord-soon').textContent = orders.filter(o=>orderStatus(o)==='soon').length;
+  $('#ord-delayed').textContent = orders.filter(o=>orderStatus(o)==='delayed').length;
+
+  if(!orders.length){
+    $('#orders-list').innerHTML = `<div class="ord-empty">発注中の品目はありません<br><small>FAB ＋ から「📦 発注を記録」</small></div>`;
+    return;
+  }
+
+  const today = todayISO();
+  $('#orders-list').innerHTML = orders.map(o=>{
+    const item = state.items.find(i=>i.id===o.itemId);
+    const nm = item ? item.name : '(削除済品目)';
+    const sku = item ? item.sku : '';
+    const st = orderStatus(o);
+    const cls = st==='delayed' ? 'delayed' : (st==='soon' ? 'soon' : '');
+    const remaining = Math.max(0, (o.qty||0)-(o.receivedQty||0));
+    const partial = (o.receivedQty||0) > 0;
+    let dueLabel = '';
+    if(o.expectedDate){
+      const d = daysBetween(today, o.expectedDate);
+      if(d<0) dueLabel = `${d*-1}日遅延`;
+      else if(d===0) dueLabel = '本日';
+      else dueLabel = `あと${d}日`;
+    }
+    return `
+      <div class="ord-row ${cls}" data-oid="${o.id}">
+        <div class="ot">
+          <span class="sku">${esc(sku)}</span>
+          <span class="due ${cls}">${o.expectedDate?`${fmtD(o.expectedDate)} (${esc(dueLabel)})`:'納期未設定'}</span>
+        </div>
+        <div class="on">${esc(nm)}</div>
+        <div class="om">
+          <span>残 <b class="oq">${remaining}</b>${partial?`<span class="opart">/ ${o.qty}</span>`:''}</span>
+          <span>発注日 <b>${fmtD(o.orderDate)}</b></span>
+          ${o.supplier?`<span>注文先 <b>${esc(o.supplier)}</b></span>`:''}
+          ${o.member?`<span>発注者 <b>${esc(o.member)}</b></span>`:''}
+          ${o.note?`<span>${esc(o.note)}</span>`:''}
+        </div>
+        <div class="oacts">
+          <button class="recv" data-oact="receive">📥 入荷</button>
+          <button class="edit" data-oact="edit">編集</button>
+          <button class="cancel" data-oact="cancel">取消</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ---------- render: stocktake ----------
+function renderStocktake(){
+  const items = state.items.filter(i=>i.active).sort((a,b)=>
+    (a.category+a.name).localeCompare(b.category+b.name,'ja'));
+  const inputs = state.ui.stocktakeInputs;
+
+  let match=0, diff=0;
+  const rows = items.map(i=>{
+    const v = inputs[i.id];
+    const hasVal = v!==undefined && v!=='' && !isNaN(Number(v));
+    const real = hasVal ? Number(v) : null;
+    const d = real===null ? null : (real - i.stock);
+    if(hasVal){ if(d===0) match++; else diff++; }
+    const cls = d!==null && d!==0 ? 'diff' : '';
+    const badge = d===null ? '' :
+      (d===0 ? '' :
+      (d>0 ? `<span class="st-diffbadge plus">+${d}</span>` :
+             `<span class="st-diffbadge minus">${d}</span>`));
+    return `
+      <div class="st-row ${cls}" data-id="${i.id}">
+        <div class="info">
+          <div class="nm">${esc(i.name)}</div>
+          <div class="sub">${esc(i.sku)} · ${esc(i.category)}</div>
+        </div>
+        <div class="syss">記録<br><b>${i.stock}</b></div>
+        <input type="number" inputmode="numeric" min="0" placeholder="実数" value="${hasVal?v:''}" data-stk="${i.id}">
+        ${badge}
+      </div>`;
+  }).join('');
+
+  $('#st-total').textContent = items.length;
+  $('#st-match').textContent = match;
+  $('#st-diff').textContent = diff;
+  $('#st-rows').innerHTML = rows;
+  $('#st-commit').disabled = (match+diff)===0;
+}
+
+// ---------- render: logs ----------
+function renderLogs(){
+  const kind = $('#log-kind').value;
+  const member = $('#log-member').value;
+  let logs = state.logs.slice().sort((a,b)=> (b.datetime||'').localeCompare(a.datetime||''));
+  if(kind!=='all') logs = logs.filter(l=>l.type===kind);
+  if(member) logs = logs.filter(l=>l.member===member);
+  logs = logs.slice(0,200);
+
+  if(!logs.length){
+    $('#logs').innerHTML = `<div class="empty">ログはありません</div>`;
+    return;
+  }
+
+  $('#logs').innerHTML = logs.map(l=>{
+    const item = state.items.find(i=>i.id===l.itemId);
+    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':'棚卸');
+    const kindCls = l.type;
+    const itemName = item ? `${esc(item.name)} <span style="color:var(--mute);font-weight:400">${esc(item.sku)}</span>` : '<i>(削除済)</i>';
+    const qtyStr = l.type==='chk'
+      ? (l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '')
+      : `数量 <b>${l.qty}</b>`;
+    const siteStr = (l.type==='out' && l.site) ? `現場 <b>${esc(l.site)}${l.room?' '+esc(l.room):''}</b>` : '';
+    const noteStr = l.note ? `${esc(l.note)}` : '';
+    return `
+      <div class="log ${kindCls}">
+        <div class="lt"><span class="kind ${kindCls}">${kindLabel}</span><span>${esc(fmtDT(l.datetime))}</span></div>
+        <div class="ln">${itemName}</div>
+        <div class="lm">
+          ${qtyStr?`<span>${qtyStr}</span>`:''}
+          <span>担当 <b>${esc(l.member||'')}</b></span>
+          ${siteStr?`<span>${siteStr}</span>`:''}
+          ${noteStr?`<span>${noteStr}</span>`:''}
+        </div>
+        <button class="del" data-logdel="${l.id}">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function renderLogMembers(){
+  const opts = ['<option value="">全メンバー</option>'].concat(
+    state.members.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`));
+  $('#log-member').innerHTML = opts.join('');
+}
+
+// ---------- render: detail ----------
+function renderDetail(){
+  const id = state.ui.selectedItemId;
+  const i = state.items.find(x=>x.id===id);
+  if(!i){ showHome(); return; }
+  $('#d-title').textContent = i.name;
+
+  const catCls = CAT_CLASS[i.category]||'other';
+  $('#d-hero').innerHTML = `
+    <h2>${esc(i.name)}</h2>
+    <div class="sub"><span class="cat-tag ${catCls}">${esc(i.category)}</span> &nbsp; ${esc(i.sku)}${i.maker?' · '+esc(i.maker):''}</div>
+    <div class="kv">
+      <span>注文先</span><span>${esc(i.supplier||'-')}</span>
+      <span>単価</span><span>${i.price?'¥'+Number(i.price).toLocaleString():'-'}${i.priceDate?' <span style="color:var(--mute)">('+fmtD(i.priceDate)+'時点)</span>':''}</span>
+      <span>リードタイム</span><span>${i.leadDays?i.leadDays+'日':'-'}</span>
+      <span>備考</span><span>${esc(i.note||'-')}</span>
+    </div>`;
+
+  const onOrd = onOrderQty(i.id);
+  const eff = effectiveStock(i);
+  const low = i.minStock>0 && eff < i.minStock;
+  const shortage = i.minStock>0 ? Math.max(0,(i.minStock - eff)) : 0;
+  $('#d-stockbox').innerHTML = `
+    <div class="s ${low?'low':''}"><div class="n">${i.stock}</div><div class="l">現在庫</div></div>
+    <div class="s"><div class="n">${onOrd||'-'}</div><div class="l">発注中</div></div>
+    <div class="s ${low?'low':''}"><div class="n">${i.minStock>0 ? shortage : '-'}</div><div class="l">不足数</div></div>`;
+  // show pending orders for this item
+  const myOrders = state.orders.filter(o=>o.itemId===i.id && o.status==='ordered');
+  let ordersHtml = '';
+  if(myOrders.length){
+    ordersHtml = myOrders.map(o=>{
+      const st = orderStatus(o);
+      const cls = st==='delayed' ? 'delayed' : (st==='soon' ? 'soon' : '');
+      const remaining = Math.max(0, (o.qty||0)-(o.receivedQty||0));
+      return `
+        <div class="ord-row ${cls}" data-oid="${o.id}" style="margin:6px 14px">
+          <div class="ot">
+            <span class="oq">残${remaining}個</span>
+            <span class="due ${cls}">予定 ${o.expectedDate?fmtD(o.expectedDate):'-'}</span>
+          </div>
+          <div class="om">発注日 <b>${fmtD(o.orderDate)}</b>${o.supplier?` · ${esc(o.supplier)}`:''}</div>
+          <div class="oacts">
+            <button class="recv" data-oact="receive">📥 入荷</button>
+            <button class="edit" data-oact="edit">編集</button>
+            <button class="cancel" data-oact="cancel">取消</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+  // insert orders section right after stockbox (replaced each render via its own container)
+  const ordBox = $('#d-orders');
+  if(ordBox){
+    ordBox.innerHTML = myOrders.length
+      ? `<div class="section-title">発注中（${myOrders.length}件）</div>${ordersHtml}`
+      : '';
+  }
+
+  const myLogs = state.logs.filter(l=>l.itemId===i.id)
+    .sort((a,b)=>(b.datetime||'').localeCompare(a.datetime||''))
+    .slice(0,50);
+
+  if(!myLogs.length){
+    $('#d-logs').innerHTML = `<div class="empty" style="padding:30px">履歴はまだありません</div>`;
+    return;
+  }
+  $('#d-logs').innerHTML = myLogs.map(l=>{
+    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':'棚卸');
+    const qtyStr = l.type==='chk'
+      ? (l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '')
+      : `<b>${l.type==='in'?'+':'−'}${l.qty}</b>`;
+    const siteStr = (l.type==='out' && l.site) ? ` · ${esc(l.site)}${l.room?' '+esc(l.room):''}` : '';
+    return `
+      <div class="log ${l.type}">
+        <div class="lt"><span class="kind ${l.type}">${kindLabel}</span><span>${esc(fmtDT(l.datetime))}</span></div>
+        <div class="ln">${qtyStr} &nbsp; <span style="font-weight:400;font-size:13px;color:var(--mute)">${esc(l.member||'')}${siteStr}</span></div>
+        ${l.note?`<div class="lm">${esc(l.note)}</div>`:''}
+      </div>`;
+  }).join('');
+}
+
+// ---------- navigation ----------
+function showHome(){
+  state.ui.view='home';
+  $('#view-home').classList.remove('hidden');
+  $('#view-detail').classList.add('hidden');
+  $('#view-report').classList.add('hidden');
+  window.scrollTo(0,0);
+  renderAll();
+}
+function showDetail(id){
+  state.ui.view='detail';
+  state.ui.selectedItemId = id;
+  $('#view-home').classList.add('hidden');
+  $('#view-detail').classList.remove('hidden');
+  $('#view-report').classList.add('hidden');
+  window.scrollTo(0,0);
+  renderDetail();
+}
+function showReport(){
+  state.ui.view='report';
+  if(!state.ui.reportMonth){
+    const d = new Date();
+    const m = n=>String(n).padStart(2,'0');
+    state.ui.reportMonth = `${d.getFullYear()}-${m(d.getMonth()+1)}`;
+  }
+  $('#view-home').classList.add('hidden');
+  $('#view-detail').classList.add('hidden');
+  $('#view-report').classList.remove('hidden');
+  window.scrollTo(0,0);
+  renderReport();
+}
+
+function renderAll(){
+  renderHomeTabs();
+  renderLogMembers();
+  renderSuppliersAndSites();
+  renderSettingsInfo();
+}
+
+// ---------- datalists ----------
+function renderSuppliersAndSites(){
+  const suppliers = Array.from(new Set(state.items.map(i=>i.supplier).filter(Boolean)));
+  $('#suppliers-list').innerHTML = suppliers.map(s=>`<option value="${esc(s)}">`).join('');
+  const makers = Array.from(new Set(state.items.map(i=>i.maker).filter(Boolean)));
+  $('#makers-list').innerHTML = makers.map(s=>`<option value="${esc(s)}">`).join('');
+  const sites = Array.from(new Set(state.logs.filter(l=>l.site).map(l=>l.site)));
+  $('#sites-list').innerHTML = sites.map(s=>`<option value="${esc(s)}">`).join('');
+}
+
+// ---------- record sheet (consumption / supply) ----------
+let recMode = 'out';
+function openRecord(mode, itemId){
+  recMode = mode;
+  $('#rec-title').textContent = mode==='out'?'消費記録':'補充記録';
+  $('#rec-out-fields').style.display = mode==='out'?'':'none';
+
+  // fill item select
+  const items = state.items.filter(i=>i.active)
+    .sort((a,b)=>(a.category+a.name).localeCompare(b.category+b.name,'ja'));
+  $('#rec-item').innerHTML = items.map(i=>
+    `<option value="${i.id}">${esc(i.category)} | ${esc(i.sku)} | ${esc(i.name)}</option>`).join('');
+  if(itemId) $('#rec-item').value = itemId;
+
+  // member picker
+  $('#rec-member').innerHTML = state.members.map(m=>
+    `<button type="button" data-m="${esc(m)}">${esc(m)}</button>`).join('');
+
+  // defaults
+  const n = nowLocal();
+  $('#rec-date').value = n.date;
+  $('#rec-time').value = n.time;
+  $('#rec-qty').value = 1;
+  $('#rec-site').value = '';
+  $('#rec-room').value = '';
+  $('#rec-note').value = '';
+
+  openSheet('sheet-record');
+}
+function submitRecord(){
+  const itemId = $('#rec-item').value;
+  const qty = Math.max(1, Math.floor(Number($('#rec-qty').value)||1));
+  const member = $('#rec-member').querySelector('button.on')?.dataset.m;
+  if(!itemId) return alert('品目を選んでください');
+  if(!member) return alert('担当者を選んでください');
+
+  const item = state.items.find(i=>i.id===itemId);
+  if(!item) return alert('品目が見つかりません');
+
+  const dt = `${$('#rec-date').value}T${$('#rec-time').value||'00:00'}`;
+  const log = {
+    id: uid(),
+    type: recMode,
+    itemId,
+    qty,
+    member,
+    datetime: dt,
+    note: $('#rec-note').value.trim(),
+  };
+  if(recMode==='out'){
+    log.site = $('#rec-site').value.trim();
+    log.room = $('#rec-room').value.trim();
+    item.stock = Math.max(0, (item.stock||0) - qty);
+  }else{
+    item.stock = (item.stock||0) + qty;
+  }
+  state.logs.push(log);
+  queueOp('appendLog', log);
+  queueOp('upsertItem', item);
+  save();
+  closeSheet('sheet-record');
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+
+// ---------- report ----------
+function shiftMonth(ym, delta){
+  const [y,m] = ym.split('-').map(Number);
+  const d = new Date(y, m-1+delta, 1);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+}
+function renderReport(){
+  const ym = state.ui.reportMonth;
+  const [y,m] = ym.split('-').map(Number);
+  $('#rep-month-label').textContent = `${y}年 ${String(m).padStart(2,'0')}月`;
+
+  const now = new Date();
+  const curY = now.getFullYear(), curM = now.getMonth()+1;
+  let sub = '';
+  if(y===curY && m===curM) sub = '今月';
+  else if(y*100+m === curY*100+curM-1 || (curM===1 && y===curY-1 && m===12)) sub = '先月';
+  $('#rep-month-sub').textContent = sub;
+
+  // filter out-logs for this month
+  const prefix = ym;
+  const outLogs = state.logs.filter(l=> l.type==='out' && (l.datetime||'').startsWith(prefix));
+  const inLogs = state.logs.filter(l=> l.type==='in'  && (l.datetime||'').startsWith(prefix));
+
+  // summary
+  const totalQty = outLogs.reduce((s,l)=>s + (l.qty||0), 0);
+  let totalAmt = 0;
+  outLogs.forEach(l=>{
+    const it = state.items.find(x=>x.id===l.itemId);
+    if(it && it.price) totalAmt += it.price * (l.qty||0);
+  });
+  $('#rep-out-cnt').textContent = outLogs.length;
+  $('#rep-out-qty').textContent = totalQty;
+  $('#rep-out-amt').textContent = '¥'+Math.round(totalAmt).toLocaleString();
+
+  // groups
+  const groupBy = (arr, keyFn) => {
+    const map = new Map();
+    arr.forEach(l=>{
+      const k = keyFn(l);
+      if(k==null) return;
+      if(!map.has(k)) map.set(k, {qty:0, count:0});
+      const r = map.get(k);
+      r.qty += (l.qty||0); r.count++;
+    });
+    return Array.from(map.entries()).map(([k,v])=>({k,...v}));
+  };
+
+  const byItem = groupBy(outLogs, l=>l.itemId).sort((a,b)=>b.qty-a.qty);
+  const byMember = groupBy(outLogs, l=>l.member).sort((a,b)=>b.qty-a.qty);
+  const byCat = groupBy(outLogs, l=>{
+    const it = state.items.find(x=>x.id===l.itemId);
+    return it?.category;
+  }).sort((a,b)=>b.qty-a.qty);
+  const bySite = groupBy(outLogs.filter(l=>l.site), l=>l.site).sort((a,b)=>b.qty-a.qty);
+
+  const barRow = (label, sub, v, max, rank)=>{
+    const w = max>0 ? Math.round(v/max*100) : 0;
+    return `<div class="rep-row">
+      ${rank!=null?`<div class="rank">${rank}</div>`:''}
+      <div class="nm">${esc(label)}${sub?`<div class="sub">${esc(sub)}</div>`:''}</div>
+      <div class="bar-wrap"><div class="bar" style="width:${w}%"></div></div>
+      <div class="v">${v}</div>
+    </div>`;
+  };
+
+  let html = '';
+
+  // TOP items
+  if(byItem.length){
+    const max = byItem[0].qty;
+    html += `<div class="rep-sec"><div class="st">📊 品目別消費 <b>TOP ${Math.min(10,byItem.length)}</b></div>`;
+    html += byItem.slice(0,10).map((r,i)=>{
+      const it = state.items.find(x=>x.id===r.k);
+      return barRow(it?.name||'(削除済)', it?.sku||'', r.qty, max, i+1);
+    }).join('');
+    html += `</div>`;
+  } else {
+    html += `<div class="rep-sec"><div class="st">📊 品目別消費</div><div class="rep-empty">この月の消費記録なし</div></div>`;
+  }
+
+  // By member
+  if(byMember.length){
+    const max = byMember[0].qty;
+    html += `<div class="rep-sec"><div class="st">👥 担当者別</div>`;
+    html += byMember.map(r=>barRow(r.k, `${r.count}回`, r.qty, max)).join('');
+    html += `</div>`;
+  }
+
+  // By category
+  if(byCat.length){
+    const max = byCat[0].qty;
+    html += `<div class="rep-sec"><div class="st">🏷 カテゴリ別</div>`;
+    html += byCat.map(r=>barRow(r.k, `${r.count}回`, r.qty, max)).join('');
+    html += `</div>`;
+  }
+
+  // By site
+  if(bySite.length){
+    const max = bySite[0].qty;
+    html += `<div class="rep-sec"><div class="st">🏢 物件別</div>`;
+    html += bySite.slice(0,20).map(r=>barRow(r.k, `${r.count}回`, r.qty, max)).join('');
+    html += `</div>`;
+  }
+
+  // Orders analysis for this month
+  const ordThisMonth = state.orders.filter(o=>(o.orderDate||'').startsWith(prefix));
+  const recvThisMonth = state.orders.filter(o=>(o.receivedDate||'').startsWith(prefix));
+  const leadTimes = recvThisMonth
+    .filter(o=>o.orderDate && o.receivedDate)
+    .map(o=>daysBetween(o.orderDate,o.receivedDate));
+  const avgLead = leadTimes.length ? Math.round(leadTimes.reduce((s,x)=>s+x,0)/leadTimes.length) : null;
+  const inQty = inLogs.reduce((s,l)=>s + (l.qty||0), 0);
+
+  html += `<div class="rep-sec"><div class="st">📦 発注・入荷</div>
+    <div class="rep-row"><div class="nm">発注件数（今月）</div><div class="v">${ordThisMonth.length}件</div></div>
+    <div class="rep-row"><div class="nm">入荷件数（今月）</div><div class="v">${recvThisMonth.length}件</div></div>
+    <div class="rep-row"><div class="nm">補充合計数量</div><div class="v">${inQty}</div></div>
+    <div class="rep-row"><div class="nm">平均リードタイム</div><div class="v">${avgLead!=null?avgLead+'日':'-'}</div></div>
+  </div>`;
+
+  $('#rep-body').innerHTML = html;
+}
+
+// ---------- CSV import ----------
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  text = text.replace(/^\ufeff/, ''); // strip BOM
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(field || row.length){ row.push(field); rows.push(row); }
+        row = []; field = '';
+        if(c === '\r' && text[i+1] === '\n') i++;
+      } else field += c;
+    }
+  }
+  if(field || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+// header alias map
+const CSV_ALIAS = {
+  sku: ['品番','sku','SKU','商品コード','コード'],
+  name: ['品目名','品名','name','商品名'],
+  category: ['種別','カテゴリ','カテゴリー','category'],
+  maker: ['メーカー','maker','manufacturer','メーカ'],
+  minStock: ['最低在庫数','最低在庫','minStock','min','最少在庫'],
+  supplier: ['注文先','仕入先','supplier','購入先'],
+  price: ['単価','仕入価格','仕入れ価格','price','価格'],
+  priceDate: ['価格確認日','priceDate','確認日'],
+  leadDays: ['リードタイム','lead','leadDays','納期日数'],
+  note: ['備考','note','メモ','コメント'],
+  active: ['使用中','active','有効'],
+  stock: ['現在庫','在庫','stock','在庫数'],
+};
+function buildHeaderMap(headers){
+  const map = {};
+  headers.forEach((h,idx)=>{
+    const t = String(h).trim();
+    for(const [key,aliases] of Object.entries(CSV_ALIAS)){
+      if(aliases.includes(t)){ map[key] = idx; break; }
+    }
+  });
+  return map;
+}
+function normalizeBool(v){
+  const s = String(v).trim().toLowerCase();
+  if(['true','1','はい','yes','y','○','◯','o','使用中'].includes(s)) return true;
+  if(['false','0','いいえ','no','n','×','x','未使用','非使用中'].includes(s)) return false;
+  return null;
+}
+function normalizeDate(v){
+  if(!v) return '';
+  const s = String(v).trim().replace(/\(.+?\)/g,''); // strip weekday
+  // accept 2026-01-20, 2026/01/20, 2026/1/20
+  const m = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if(!m) return '';
+  return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+}
+
+let csvPreviewData = null;
+function startCSVImport(file){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const text = e.target.result;
+      const rows = parseCSV(text).filter(r=>r.some(c=>String(c).trim()!==''));
+      if(rows.length<2) throw new Error('データ行が見つかりません（ヘッダー+1行以上必要）');
+      const headers = rows[0].map(h=>String(h).trim());
+      const hm = buildHeaderMap(headers);
+      if(hm.sku===undefined) throw new Error('「品番」列が見つかりません');
+      if(hm.name===undefined) throw new Error('「品目名」列が見つかりません');
+
+      const parsed = rows.slice(1).map(r=>{
+        const get = k => hm[k]!==undefined ? String(r[hm[k]]||'').trim() : '';
+        const sku = get('sku');
+        if(!sku) return null;
+        const rec = { sku, name: get('name') };
+        if(hm.category!==undefined) rec.category = get('category') || 'その他';
+        if(hm.maker!==undefined) rec.maker = get('maker');
+        if(hm.minStock!==undefined){ const n=Number(get('minStock')); if(!isNaN(n)) rec.minStock = n; }
+        if(hm.supplier!==undefined) rec.supplier = get('supplier');
+        if(hm.price!==undefined){ const v=get('price'); rec.price = v==='' ? null : Number(v); }
+        if(hm.priceDate!==undefined) rec.priceDate = normalizeDate(get('priceDate'));
+        if(hm.leadDays!==undefined){ const n=Number(get('leadDays')); rec.leadDays = isNaN(n)?null:n; }
+        if(hm.note!==undefined) rec.note = get('note');
+        if(hm.active!==undefined){ const b=normalizeBool(get('active')); if(b!==null) rec.active = b; }
+        if(hm.stock!==undefined){ const n=Number(get('stock')); if(!isNaN(n)) rec.stock = n; }
+        return rec;
+      }).filter(x=>x);
+
+      // Categorize: add / update / skip
+      const report = { add:[], update:[], skip:[] };
+      parsed.forEach(p=>{
+        const existing = state.items.find(i=>i.sku===p.sku);
+        if(!existing) report.add.push({ rec:p });
+        else {
+          // only mark update if something actually differs
+          const willChange = Object.keys(p).some(k=>{
+            if(k==='sku') return false;
+            return (existing[k]||'') !== (p[k]||'');
+          });
+          if(willChange) report.update.push({ rec:p, existing });
+          else report.skip.push({ rec:p, existing });
+        }
+      });
+
+      csvPreviewData = { report, parsed };
+      showCSVPreview(report);
+    }catch(err){
+      alert('CSV読込失敗: '+err.message);
+    }
+  };
+  reader.readAsText(file,'utf-8');
+}
+function showCSVPreview(report){
+  $('#csv-error-box').innerHTML = '';
+  $('#csv-add').textContent = report.add.length;
+  $('#csv-upd').textContent = report.update.length;
+  $('#csv-skip').textContent = report.skip.length;
+  const all = [
+    ...report.add.slice(0,100).map(r=>({t:'add', r:r.rec})),
+    ...report.update.slice(0,100).map(r=>({t:'upd', r:r.rec})),
+    ...report.skip.slice(0,100).map(r=>({t:'skip', r:r.rec})),
+  ].slice(0,100);
+  $('#csv-preview-list').innerHTML = all.length ? all.map(a=>`
+    <div class="pr">
+      <span class="tag ${a.t}">${a.t==='add'?'追加':(a.t==='upd'?'更新':'同一')}</span>
+      <span class="sku">${esc(a.r.sku)}</span>
+      <span class="nm">${esc(a.r.name)}</span>
+    </div>`).join('') : '<div class="rep-empty">データなし</div>';
+  openSheet('sheet-csv');
+}
+function commitCSVImport(){
+  if(!csvPreviewData) return;
+  const { report } = csvPreviewData;
+  // apply updates
+  report.update.forEach(({rec, existing})=>{
+    Object.keys(rec).forEach(k=>{
+      if(k==='sku') return;
+      existing[k] = rec[k];
+    });
+  });
+  // apply adds
+  report.add.forEach(({rec})=>{
+    const newItem = {
+      id: uid(),
+      sku: rec.sku,
+      name: rec.name || '',
+      maker: rec.maker || '',
+      category: rec.category || 'その他',
+      stock: rec.stock ?? 0,
+      minStock: rec.minStock ?? 0,
+      leadDays: rec.leadDays ?? null,
+      supplier: rec.supplier || '',
+      price: rec.price ?? null,
+      priceDate: rec.priceDate || '',
+      note: rec.note || '',
+      active: rec.active ?? true,
+    };
+    state.items.push(newItem);
+    queueOp('upsertItem', newItem);
+  });
+  // queue updates too
+  report.update.forEach(({existing})=>{
+    queueOp('upsertItem', existing);
+  });
+  save();
+  closeSheet('sheet-csv');
+  alert(`インポート完了: 追加${report.add.length}件 / 更新${report.update.length}件 / スキップ${report.skip.length}件`);
+  renderAll();
+}
+
+// ---------- cloud sync ----------
+async function syncTest(){
+  if(!sync.url) throw new Error('URL未設定');
+  const res = await fetch(sync.url);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+  return data;
+}
+async function syncPull({ replace=false }={}){
+  if(!sync.url) throw new Error('URL未設定');
+  const res = await fetch(sync.url, { cache:'no-store' });
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if(data.error) throw new Error(data.error);
+
+  if(replace){
+    // full replace
+    state.items   = (data.items   || []).map(normalizeItem_);
+    state.logs    = (data.logs    || []).map(normalizeLog_);
+    state.orders  = (data.orders  || []).map(normalizeOrder_);
+    state.members = (data.members || []).map(m=>m.name||m).filter(Boolean);
+    if(!state.members.length) state.members = SEED_MEMBERS.slice();
+  } else {
+    // merge by id: server wins for existing, local-unique kept (they'll be pushed later)
+    mergeById_(state.items, (data.items||[]).map(normalizeItem_));
+    mergeById_(state.logs, (data.logs||[]).map(normalizeLog_));
+    mergeById_(state.orders, (data.orders||[]).map(normalizeOrder_));
+    if(data.members && data.members.length){
+      state.members = data.members.map(m=>m.name||m).filter(Boolean);
+    }
+  }
+  sync.lastSyncAt = new Date().toISOString();
+  saveSyncConfig();
+  save();
+  return data;
+}
+function mergeById_(localArr, serverArr){
+  const serverMap = new Map(serverArr.filter(x=>x && x.id).map(x=>[x.id, x]));
+  // replace or add server-side rows
+  for(let i=0; i<localArr.length; i++){
+    const lid = localArr[i].id;
+    if(serverMap.has(lid)){
+      localArr[i] = serverMap.get(lid);
+      serverMap.delete(lid);
+    }
+  }
+  // append rows only on server
+  serverMap.forEach(v=>localArr.push(v));
+}
+function normalizeItem_(x){
+  return {
+    id: x.id, sku: x.sku||'', name: x.name||'', maker: x.maker||'',
+    category: x.category||'その他',
+    stock: Number(x.stock)||0, minStock: Number(x.minStock)||0,
+    supplier: x.supplier||'', price: x.price==null?null:Number(x.price),
+    priceDate: (x.priceDate||'').slice(0,10),
+    leadDays: x.leadDays==null?null:Number(x.leadDays),
+    note: x.note||'', active: x.active!==false && x.active!==0 && x.active!=='FALSE',
+  };
+}
+function normalizeLog_(x){
+  return { id:x.id, type:x.type, itemId:x.itemId, qty:Number(x.qty)||0,
+    member:x.member||'', datetime:x.datetime||'', site:x.site||'', room:x.room||'',
+    note:x.note||'', diff: x.diff==null?undefined:Number(x.diff) };
+}
+function normalizeOrder_(x){
+  return { id:x.id, itemId:x.itemId, qty:Number(x.qty)||0, receivedQty:Number(x.receivedQty)||0,
+    orderDate:(x.orderDate||'').slice(0,10),
+    expectedDate:(x.expectedDate||'').slice(0,10),
+    supplier:x.supplier||'', member:x.member||'', note:x.note||'',
+    status:x.status||'ordered',
+    receivedDate:(x.receivedDate||'').slice(0,10) };
+}
+
+async function syncPush(){
+  if(!sync.url) throw new Error('URL未設定');
+  if(!state.pending.length) return { pushed: 0 };
+  const ops = state.pending.map(p=>({ action:p.action, data:p.data }));
+  const res = await fetch(sync.url, {
+    method:'POST',
+    body: JSON.stringify({ action:'bulkSync', data: ops }),
+    // Content-Typeを指定しないことでプリフライト回避
+  });
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'push failed');
+  state.pending = [];
+  save();
+  return { pushed: ops.length, result: data.result };
+}
+
+async function syncFull(){
+  setSyncIcon('syncing');
+  try{
+    const push = await syncPush();
+    const pull = await syncPull({ replace:false });
+    setSyncIcon('ok');
+    setTimeout(()=>setSyncIcon(''), 2000);
+    renderAll();
+    if(state.ui.view==='detail') renderDetail();
+    return { push, pull };
+  }catch(err){
+    setSyncIcon('err');
+    throw err;
+  }
+}
+
+function setSyncIcon(mode){
+  const icon = $('#sync-icon');
+  icon.classList.remove('syncing','ok','err');
+  if(mode) icon.classList.add(mode);
+}
+function updateSyncBadge(){
+  const n = state.pending.length;
+  const badge = $('#sync-badge');
+  if(!badge) return;
+  if(n>0){ badge.textContent = n; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+  // also update settings if open
+  const info = $('#info-pending'); if(info) info.textContent = `${n}件`;
+}
+
+// ---------- order sheet ----------
+let editingOrderId = null;
+function openOrder(itemId, orderId){
+  editingOrderId = orderId || null;
+  const existing = orderId ? state.orders.find(o=>o.id===orderId) : null;
+  $('#ord-title').textContent = existing ? '発注を編集' : '発注を記録';
+
+  const items = state.items.filter(i=>i.active)
+    .sort((a,b)=>(a.category+a.name).localeCompare(b.category+b.name,'ja'));
+  $('#ord-item').innerHTML = items.map(i=>
+    `<option value="${i.id}">${esc(i.category)} | ${esc(i.sku)} | ${esc(i.name)}</option>`).join('');
+
+  const targetItemId = existing?.itemId || itemId || items[0]?.id;
+  if(targetItemId) $('#ord-item').value = targetItemId;
+
+  $('#ord-member').innerHTML = state.members.map(m=>{
+    const on = existing?.member===m ? 'on' : '';
+    return `<button type="button" class="${on}" data-m="${esc(m)}">${esc(m)}</button>`;
+  }).join('');
+
+  const orderDate = existing?.orderDate || todayISO();
+  $('#ord-date').value = orderDate;
+  $('#ord-qty').value = existing?.qty || 1;
+  $('#ord-note').value = existing?.note || '';
+
+  const recomputeDefaults = ()=>{
+    const sel = $('#ord-item').value;
+    const it = state.items.find(x=>x.id===sel);
+    if(!existing && it){
+      $('#ord-supplier').value = it.supplier || '';
+      $('#ord-due').value = it.leadDays ? addDays($('#ord-date').value, it.leadDays) : '';
+    }
+  };
+  if(!existing) recomputeDefaults();
+  else {
+    $('#ord-supplier').value = existing.supplier || '';
+    $('#ord-due').value = existing.expectedDate || '';
+  }
+  $('#ord-item').onchange = ()=>{ if(!existing) recomputeDefaults(); };
+  $('#ord-date').onchange = ()=>{ if(!existing) recomputeDefaults(); };
+
+  $('#ord-delete').classList.toggle('hidden', !existing);
+  openSheet('sheet-order');
+}
+function submitOrder(){
+  const itemId = $('#ord-item').value;
+  const qty = Math.max(1, Math.floor(Number($('#ord-qty').value)||1));
+  const member = $('#ord-member').querySelector('button.on')?.dataset.m;
+  if(!itemId) return alert('品目を選んでください');
+  if(!member) return alert('発注者を選んでください');
+
+  const data = {
+    itemId, qty,
+    receivedQty: 0,
+    orderDate: $('#ord-date').value || todayISO(),
+    expectedDate: $('#ord-due').value || '',
+    supplier: $('#ord-supplier').value.trim(),
+    member,
+    note: $('#ord-note').value.trim(),
+    status: 'ordered',
+    receivedDate: null,
+  };
+
+  let saved;
+  if(editingOrderId){
+    const o = state.orders.find(x=>x.id===editingOrderId);
+    // keep receivedQty unchanged
+    Object.assign(o, data, { receivedQty: o.receivedQty||0 });
+    saved = o;
+  }else{
+    saved = { id: uid(), ...data };
+    state.orders.push(saved);
+  }
+  queueOp('upsertOrder', saved);
+  save();
+  closeSheet('sheet-order');
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+function deleteOrder(){
+  if(!editingOrderId) return;
+  if(!confirm('この発注を削除しますか？')) return;
+  queueOp('deleteOrder', { id: editingOrderId });
+  state.orders = state.orders.filter(o=>o.id!==editingOrderId);
+  save();
+  closeSheet('sheet-order');
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+function cancelOrder(orderId){
+  const o = state.orders.find(x=>x.id===orderId);
+  if(!o) return;
+  if(!confirm('この発注を取消にしますか？（履歴には残ります）')) return;
+  o.status = 'canceled';
+  queueOp('upsertOrder', o);
+  save();
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+
+// ---------- receive sheet ----------
+let receivingOrderId = null;
+function openReceive(orderId){
+  const o = state.orders.find(x=>x.id===orderId);
+  if(!o) return;
+  receivingOrderId = orderId;
+  const item = state.items.find(i=>i.id===o.itemId);
+  const remaining = Math.max(0, (o.qty||0)-(o.receivedQty||0));
+  $('#rcv-info').innerHTML = `
+    <div style="font-weight:700">${esc(item?.name||'(削除済)')}</div>
+    <div style="color:var(--mute);margin-top:3px">${esc(item?.sku||'')} · 発注日 ${fmtD(o.orderDate)}${o.expectedDate?` · 予定 ${fmtD(o.expectedDate)}`:''}</div>
+    <div style="margin-top:6px">発注数 <b>${o.qty}</b> / 既入荷 <b>${o.receivedQty||0}</b> / <b>残 ${remaining}</b></div>`;
+  $('#rcv-qty').value = remaining;
+  $('#rcv-hint').textContent = `残り${remaining}個まで入力可能。部分入荷はそのまま残数を減らして処理します。`;
+  $('#rcv-date').value = todayISO();
+  $('#rcv-note').value = '';
+  $('#rcv-member').innerHTML = state.members.map(m=>
+    `<button type="button" data-m="${esc(m)}">${esc(m)}</button>`).join('');
+  openSheet('sheet-receive');
+}
+function submitReceive(){
+  const o = state.orders.find(x=>x.id===receivingOrderId);
+  if(!o) return alert('発注が見つかりません');
+  const remaining = Math.max(0, (o.qty||0)-(o.receivedQty||0));
+  const qty = Math.max(1, Math.floor(Number($('#rcv-qty').value)||1));
+  if(qty>remaining) return alert(`入荷数量は残数 ${remaining} 以下にしてください`);
+  const member = $('#rcv-member').querySelector('button.on')?.dataset.m;
+  if(!member) return alert('受領者を選んでください');
+  const recvDate = $('#rcv-date').value || todayISO();
+
+  const item = state.items.find(i=>i.id===o.itemId);
+  if(!item) return alert('品目が見つかりません');
+
+  // update order
+  o.receivedQty = (o.receivedQty||0) + qty;
+  const fullyReceived = o.receivedQty >= o.qty;
+  if(fullyReceived){
+    o.status = 'received';
+    o.receivedDate = recvDate;
+  }
+
+  // increment stock
+  item.stock = (item.stock||0) + qty;
+
+  // auto-generate supply log
+  state.logs.push({
+    id: uid(),
+    type: 'in',
+    itemId: item.id,
+    qty,
+    member,
+    datetime: `${recvDate}T00:00`,
+    note: `発注${o.id.slice(-6)}から入荷${fullyReceived?'':'(部分)'}${$('#rcv-note').value.trim()?' · '+$('#rcv-note').value.trim():''}`,
+  });
+
+  // learn lead time on full receipt
+  if(fullyReceived) learnLeadTime(item.id);
+
+  queueOp('upsertOrder', o);
+  queueOp('upsertItem', item);
+  queueOp('appendLog', state.logs[state.logs.length-1]);
+  save();
+  closeSheet('sheet-receive');
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+
+// ---------- item edit sheet ----------
+let editingItemId = null;
+function openItemEdit(id){
+  editingItemId = id||null;
+  const i = id ? state.items.find(x=>x.id===id) : null;
+  $('#item-title').textContent = i?'品目を編集':'品目を追加';
+  $('#it-sku').value = i?.sku||'';
+  $('#it-maker').value = i?.maker||'';
+  $('#it-name').value = i?.name||'';
+  $('#it-stock').value = i?.stock??0;
+  $('#it-min').value = i?.minStock??0;
+  $('#it-lead').value = i?.leadDays||'';
+  $('#it-supplier').value = i?.supplier||'';
+  $('#it-price').value = i?.price||'';
+  $('#it-pricedate').value = i?.priceDate||'';
+  $('#it-note').value = i?.note||'';
+  $('#it-active').checked = i?i.active:true;
+
+  // category picker
+  const cat = i?.category || 'その他';
+  $('#it-cat').innerHTML = CATEGORIES.map(c=>
+    `<button type="button" data-v="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('');
+
+  $('#item-delete').classList.toggle('hidden', !i);
+  openSheet('sheet-item');
+}
+function submitItem(){
+  const sku = $('#it-sku').value.trim();
+  const name = $('#it-name').value.trim();
+  const cat = $('#it-cat').querySelector('button.on')?.dataset.v || 'その他';
+  if(!sku) return alert('品番を入力してください');
+  if(!name) return alert('品目名を入力してください');
+
+  const data = {
+    sku, name,
+    maker: $('#it-maker').value.trim(),
+    category: cat,
+    stock: Math.max(0, Math.floor(Number($('#it-stock').value)||0)),
+    minStock: Math.max(0, Math.floor(Number($('#it-min').value)||0)),
+    leadDays: $('#it-lead').value ? Math.max(0, Math.floor(Number($('#it-lead').value))) : null,
+    supplier: $('#it-supplier').value.trim(),
+    price: $('#it-price').value ? Number($('#it-price').value) : null,
+    priceDate: $('#it-pricedate').value || '',
+    note: $('#it-note').value.trim(),
+    active: $('#it-active').checked,
+  };
+
+  let saved;
+  if(editingItemId){
+    const i = state.items.find(x=>x.id===editingItemId);
+    Object.assign(i, data);
+    saved = i;
+  }else{
+    saved = { id: uid(), ...data };
+    state.items.push(saved);
+  }
+  queueOp('upsertItem', saved);
+  save();
+  closeSheet('sheet-item');
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+}
+function deleteItem(){
+  if(!editingItemId) return;
+  const used = state.logs.some(l=>l.itemId===editingItemId);
+  const msg = used
+    ? 'この品目には履歴があります。削除するとログから品目名が参照できなくなります。続行しますか？'
+    : 'この品目を削除しますか？';
+  if(!confirm(msg)) return;
+  queueOp('deleteItem', { id: editingItemId });
+  state.items = state.items.filter(i=>i.id!==editingItemId);
+  save();
+  closeSheet('sheet-item');
+  if(state.ui.view==='detail') showHome(); else renderAll();
+}
+
+// ---------- settings ----------
+function renderSettingsInfo(){
+  $('#info-items').textContent = `${state.items.filter(i=>i.active).length}件（非使用中 ${state.items.filter(i=>!i.active).length}件）`;
+  const active = state.orders.filter(o=>o.status==='ordered').length;
+  const done = state.orders.filter(o=>o.status==='received').length;
+  $('#info-logs').textContent = `ログ ${state.logs.length}件 / 発注台帳 ${state.orders.length}件（発注中 ${active} · 入荷済 ${done}）`;
+  $('#members-edit').innerHTML = state.members.map((m,idx)=>`
+    <div class="member-row">
+      <div class="nm">${esc(m)}</div>
+      <button data-mdel="${idx}" style="color:var(--danger);background:#fee2e2">削除</button>
+    </div>`).join('');
+  // sync
+  if($('#sync-url')) $('#sync-url').value = sync.url||'';
+  $('#info-last-sync').textContent = sync.lastSyncAt ? fmtDT(sync.lastSyncAt) : '未同期';
+  $('#info-pending').textContent = `${state.pending.length}件`;
+}
+
+function addMember(){
+  const v = $('#new-member').value.trim();
+  if(!v) return;
+  if(state.members.includes(v)) return alert('既に存在します');
+  state.members.push(v);
+  $('#new-member').value='';
+  queueOp('setMembers', state.members.slice());
+  save(); renderSettingsInfo(); renderLogMembers();
+}
+function delMember(idx){
+  const nm = state.members[idx];
+  if(!confirm(`${nm} を削除しますか？（過去ログには残ります）`)) return;
+  state.members.splice(idx,1);
+  queueOp('setMembers', state.members.slice());
+  save(); renderSettingsInfo(); renderLogMembers();
+}
+
+function doExport(){
+  const data = { items:state.items, logs:state.logs, orders:state.orders, members:state.members, exportedAt:new Date().toISOString(), version:2};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `zaiko_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function doImport(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const d = JSON.parse(e.target.result);
+      if(!d.items || !Array.isArray(d.items)) throw new Error('items が見つかりません');
+      if(!confirm(`インポートすると現在のデータは上書きされます。\n品目 ${d.items.length}件 / ログ ${(d.logs||[]).length}件 / 発注 ${(d.orders||[]).length}件\n続行しますか？`)) return;
+      state.items = d.items;
+      state.logs = d.logs || [];
+      state.orders = d.orders || [];
+      state.members = d.members && d.members.length ? d.members : SEED_MEMBERS.slice();
+      save();
+      closeSheet('sheet-settings');
+      showHome();
+    }catch(err){ alert('インポート失敗: '+err.message); }
+  };
+  reader.readAsText(file);
+}
+function doReset(){
+  if(!confirm('全データをリセットして初期状態に戻します。元に戻せません。続行しますか？')) return;
+  if(!confirm('本当によろしいですか？（最終確認）')) return;
+  seed();
+  closeSheet('sheet-settings');
+  showHome();
+}
+
+// ---------- stocktake commit ----------
+function commitStocktake(){
+  const inputs = state.ui.stocktakeInputs;
+  const entries = Object.entries(inputs).filter(([id,v])=> v!=='' && !isNaN(Number(v)));
+  if(!entries.length) return;
+
+  const member = prompt('実施者を選んでください\n('+state.members.join(' / ')+')', state.members[0]||'');
+  if(!member) return;
+
+  const now = new Date().toISOString();
+  let diffCount = 0;
+  entries.forEach(([itemId,v])=>{
+    const item = state.items.find(i=>i.id===itemId);
+    if(!item) return;
+    const real = Number(v);
+    const diff = real - item.stock;
+    if(diff!==0){
+      item.stock = real;
+      diffCount++;
+      queueOp('upsertItem', item);
+    }
+    const log = {
+      id: uid(), type:'chk', itemId, member,
+      datetime: now,
+      diff,
+      note: diff===0 ? '一致' : ''
+    };
+    state.logs.push(log);
+    queueOp('appendLog', log);
+  });
+  state.ui.stocktakeInputs = {};
+  save();
+  alert(`棚卸記録完了。差分 ${diffCount}件 を修正しました。`);
+  renderAll();
+}
+
+// ---------- events ----------
+function bindEvents(){
+  // header / tabs
+  $('#btn-settings').onclick = ()=>{ renderSettingsInfo(); openSheet('sheet-settings'); };
+  $('#btn-report').onclick = showReport;
+  $('#btn-sync').onclick = async ()=>{
+    if(!sync.url){
+      alert('設定で GAS Web App URL を登録してください');
+      renderSettingsInfo(); openSheet('sheet-settings'); return;
+    }
+    try{
+      const r = await syncFull();
+      const msg = `同期完了: 送信 ${r.push.pushed}件`;
+      if(r.push.pushed===0) console.log('no pending');
+      // soft toast via badge colors
+    }catch(err){ alert('同期失敗: '+err.message); }
+  };
+  $$('.tabs button').forEach(b=>b.onclick = ()=>{ state.ui.tab = b.dataset.tab; renderHomeTabs(); });
+  $('#btn-back').onclick = showHome;
+  $('#rep-back').onclick = showHome;
+  $('#rep-prev').onclick = ()=>{ state.ui.reportMonth = shiftMonth(state.ui.reportMonth, -1); renderReport(); };
+  $('#rep-next').onclick = ()=>{ state.ui.reportMonth = shiftMonth(state.ui.reportMonth, +1); renderReport(); };
+
+  // search
+  $('#search').oninput = e=>{ state.ui.search = e.target.value; renderItemList(); };
+
+  // cat chips
+  $('#cat-chips').onclick = e=>{
+    const b = e.target.closest('.chip');
+    if(!b) return;
+    state.ui.catFilter = b.dataset.cat;
+    renderCatChips(); renderItemList();
+  };
+
+  // order summary tap → orders tab
+  $('#order-summary').onclick = e=>{
+    if(e.target.closest('[data-goto-orders]')){
+      state.ui.tab = 'orders';
+      renderHomeTabs();
+      window.scrollTo(0,0);
+    }
+  };
+
+  // alert button
+  $('#alerts').onclick = e=>{
+    const b = e.target.closest('[data-alert]');
+    if(!b) return;
+    if(b.dataset.alert==='delayed'){
+      state.ui.tab='orders'; renderHomeTabs(); window.scrollTo(0,0); return;
+    }
+    state.ui.catFilter = 'all';
+    state.ui.search = '';
+    $('#search').value = '';
+    renderCatChips();
+    renderItemList();
+    window.scrollTo({top: 200, behavior:'smooth'});
+  };
+
+  // item card tap (and per-card edit button)
+  $('#item-list').onclick = e=>{
+    const edit = e.target.closest('[data-edit]');
+    if(edit){ e.stopPropagation(); openItemEdit(edit.dataset.edit); return; }
+    const c = e.target.closest('.card');
+    if(!c) return;
+    showDetail(c.dataset.id);
+  };
+
+  // Add item button (toolbar)
+  $('#btn-add-item').onclick = ()=> openItemEdit(null);
+
+  // FAB
+  $('#fab').onclick = ()=> openSheet('sheet-fab');
+  $('#sheet-fab').onclick = e=>{
+    const b = e.target.closest('[data-act]');
+    if(!b) return;
+    closeSheet('sheet-fab');
+    const act = b.dataset.act;
+    if(act==='out' || act==='in') openRecord(act);
+    if(act==='order') openOrder(null, null);
+    if(act==='new-item') openItemEdit(null);
+  };
+
+  // record sheet
+  $('#sheet-record .qty-row').onclick = e=>{
+    const b = e.target.closest('[data-qty]');
+    if(!b) return;
+    const inp = $('#rec-qty');
+    let v = Number(inp.value)||1;
+    v += Number(b.dataset.qty);
+    inp.value = Math.max(1,v);
+  };
+  $('#rec-member').onclick = e=>{
+    const b = e.target.closest('button');
+    if(!b) return;
+    $$('#rec-member button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  $('#rec-submit').onclick = submitRecord;
+
+  // item sheet
+  $('#it-cat').onclick = e=>{
+    const b = e.target.closest('button');
+    if(!b) return;
+    $$('#it-cat button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  $('#item-submit').onclick = submitItem;
+  $('#item-delete').onclick = deleteItem;
+
+  // order sheet
+  $('#sheet-order .qty-row').onclick = e=>{
+    const b = e.target.closest('[data-oqty]');
+    if(!b) return;
+    const inp = $('#ord-qty');
+    let v = Number(inp.value)||1;
+    v += Number(b.dataset.oqty);
+    inp.value = Math.max(1,v);
+  };
+  $('#ord-member').onclick = e=>{
+    const b = e.target.closest('button');
+    if(!b) return;
+    $$('#ord-member button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  $('#ord-submit').onclick = submitOrder;
+  $('#ord-delete').onclick = deleteOrder;
+
+  // receive sheet
+  $('#sheet-receive .qty-row').onclick = e=>{
+    const b = e.target.closest('[data-rqty]');
+    if(!b) return;
+    const inp = $('#rcv-qty');
+    let v = Number(inp.value)||1;
+    v += Number(b.dataset.rqty);
+    inp.value = Math.max(1,v);
+  };
+  $('#rcv-member').onclick = e=>{
+    const b = e.target.closest('button');
+    if(!b) return;
+    $$('#rcv-member button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  $('#rcv-submit').onclick = submitReceive;
+
+  // detail actions
+  $('.detail-actions').onclick = e=>{
+    const b = e.target.closest('[data-act]');
+    if(!b) return;
+    const act = b.dataset.act;
+    if(act==='out' || act==='in') openRecord(act, state.ui.selectedItemId);
+    if(act==='order') openOrder(state.ui.selectedItemId, null);
+    if(act==='edit') openItemEdit(state.ui.selectedItemId);
+  };
+  // order row actions (from detail view and orders tab)
+  function handleOrderRowClick(e){
+    const b = e.target.closest('[data-oact]');
+    if(!b) return;
+    const row = b.closest('[data-oid]');
+    if(!row) return;
+    const oid = row.dataset.oid;
+    const act = b.dataset.oact;
+    if(act==='receive') openReceive(oid);
+    if(act==='edit') openOrder(null, oid);
+    if(act==='cancel') cancelOrder(oid);
+  }
+  $('#orders-list').onclick = handleOrderRowClick;
+  $('#d-orders').onclick = handleOrderRowClick;
+
+  // alert button → jump to orders tab on delayed
+  $('#btn-edit-item').onclick = ()=> openItemEdit(state.ui.selectedItemId);
+
+  // logs
+  $('#log-kind').onchange = renderLogs;
+  $('#log-member').onchange = renderLogs;
+  $('#logs').onclick = e=>{
+    const b = e.target.closest('[data-logdel]');
+    if(!b) return;
+    if(!confirm('このログを削除しますか？ 在庫数の自動修正はされません（必要なら棚卸で調整）')) return;
+    state.logs = state.logs.filter(l=>l.id!==b.dataset.logdel);
+    save();
+    renderLogs();
+  };
+
+  // stocktake
+  $('#st-rows').oninput = e=>{
+    const inp = e.target.closest('[data-stk]');
+    if(!inp) return;
+    state.ui.stocktakeInputs[inp.dataset.stk] = inp.value;
+    renderStocktake();
+    // keep focus on the input
+    setTimeout(()=>{
+      const nextInp = $('#st-rows [data-stk="'+inp.dataset.stk+'"]');
+      if(nextInp){ nextInp.focus(); nextInp.setSelectionRange(nextInp.value.length,nextInp.value.length); }
+    },0);
+  };
+  $('#st-reset').onclick = ()=>{
+    if(!confirm('入力中の棚卸データを全てクリアしますか？')) return;
+    state.ui.stocktakeInputs = {};
+    renderStocktake();
+  };
+  $('#st-commit').onclick = commitStocktake;
+
+  // settings
+  $('#add-member').onclick = addMember;
+  $('#new-member').onkeydown = e=>{ if(e.key==='Enter') addMember(); };
+  $('#members-edit').onclick = e=>{
+    const b = e.target.closest('[data-mdel]');
+    if(!b) return;
+    delMember(Number(b.dataset.mdel));
+  };
+  $('#btn-export').onclick = doExport;
+  $('#btn-import').onclick = ()=> $('#import-file').click();
+  $('#import-file').onchange = e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=''; };
+  $('#btn-csv-import').onclick = ()=> $('#csv-file').click();
+  $('#csv-file').onchange = e=>{ if(e.target.files[0]) startCSVImport(e.target.files[0]); e.target.value=''; };
+  $('#csv-submit').onclick = commitCSVImport;
+  $('#btn-reset').onclick = doReset;
+
+  // sync UI
+  $('#sync-save').onclick = ()=>{
+    sync.url = $('#sync-url').value.trim();
+    saveSyncConfig();
+    $('#sync-test-result').innerHTML = '<span style="color:var(--ok)">✓ URL保存しました</span>';
+  };
+  $('#sync-test').onclick = async ()=>{
+    sync.url = $('#sync-url').value.trim();
+    saveSyncConfig();
+    $('#sync-test-result').textContent = '接続中…';
+    try{
+      const data = await syncTest();
+      const nItems = (data.items||[]).length;
+      const nLogs = (data.logs||[]).length;
+      const nOrders = (data.orders||[]).length;
+      $('#sync-test-result').innerHTML =
+        `<span style="color:var(--ok)">✓ 接続OK</span> items:${nItems} / logs:${nLogs} / orders:${nOrders}`;
+    }catch(err){
+      $('#sync-test-result').innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`;
+    }
+  };
+  $('#sync-pull-first').onclick = async ()=>{
+    if(!sync.url){ alert('URLを先に保存してください'); return; }
+    if(state.pending.length && !confirm(`未同期の変更が${state.pending.length}件あります。サーバーから取り込むと消えます。続行しますか？`)) return;
+    if(!confirm('サーバーのデータをローカルに完全上書きします。ローカルの変更は失われます。続行しますか？')) return;
+    try{
+      await syncPull({ replace:true });
+      state.pending = [];
+      save();
+      alert(`取り込み完了: items:${state.items.length} / logs:${state.logs.length} / orders:${state.orders.length}`);
+      closeSheet('sheet-settings');
+      renderAll();
+    }catch(err){ alert('失敗: '+err.message); }
+  };
+  $('#sync-full').onclick = async ()=>{
+    if(!sync.url){ alert('URLを先に保存してください'); return; }
+    try{
+      const r = await syncFull();
+      alert(`同期完了: 送信 ${r.push.pushed}件`);
+      renderSettingsInfo();
+    }catch(err){ alert('失敗: '+err.message); }
+  };
+}
+
+// ---------- init ----------
+(function init(){
+  if(!load()) seed();
+  loadSyncConfig();
+  bindEvents();
+  updateSyncBadge();
+  showHome();
+})();
+</script>
+</body>
+</html>

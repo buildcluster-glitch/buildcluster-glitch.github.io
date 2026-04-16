@@ -1,0 +1,2125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>工事タスクマネージャー</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --ink:#0f172a; --mute:#64748b; --line:#e5e7eb;
+    --accent:#2563eb; --accent-ink:#fff;
+    --st-todo:#94a3b8; --st-wip:#2563eb; --st-done:#16a34a; --st-hold:#f59e0b;
+    --cat-out:#7c3aed; --cat-in:#0ea5e9; --cat-red:#9ca3af;
+    --danger:#dc2626; --warn-bg:#fef9c3;
+    --safe-top:env(safe-area-inset-top,0);
+    --safe-bottom:env(safe-area-inset-bottom,0);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+  input,select,textarea{font:inherit;color:inherit}
+
+  /* ---------- layout ---------- */
+  .app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);
+    padding-bottom:calc(96px + var(--safe-bottom));position:relative}
+  header.bar{position:sticky;top:0;z-index:10;background:#0f172a;color:#fff;
+    padding:calc(14px + var(--safe-top)) 14px 14px;display:flex;align-items:center;gap:10px}
+  header.bar .title{font-weight:700;font-size:17px;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  header.bar .back{color:#fff;padding:4px 4px 4px 0;font-size:22px}
+  header.bar .icon-btn{background:rgba(255,255,255,.1);color:#fff;
+    width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px}
+
+  /* ---------- search + filter bar ---------- */
+  .toolbar{padding:12px 14px 4px;display:flex;flex-direction:column;gap:10px;background:var(--bg);
+    position:sticky;top:calc(56px + var(--safe-top));z-index:5}
+  .search{position:relative}
+  .search input{width:100%;padding:11px 14px 11px 38px;border:1px solid var(--line);
+    border-radius:12px;background:#fff;outline:none}
+  .search input:focus{border-color:var(--accent)}
+  .search::before{content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);
+    font-size:13px;opacity:.6}
+  .chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;padding:7px 13px;border-radius:999px;background:#fff;border:1px solid var(--line);
+    font-size:13px;white-space:nowrap;color:var(--mute)}
+  .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
+
+  /* ---------- property cards ---------- */
+  .list{padding:10px 14px}
+  .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);border:1px solid var(--line);cursor:pointer}
+  .card:active{transform:scale(.99)}
+  .card .row{display:flex;align-items:flex-start;gap:10px}
+  .card .name{font-weight:700;font-size:16px;flex:1;min-width:0}
+  .card .sub{font-size:12px;color:var(--mute);margin-top:2px}
+  .card .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--mute)}
+  .card .meta b{color:var(--ink);font-weight:600}
+  .progress-label{margin-top:10px;font-size:11px;color:var(--mute);font-weight:600}
+  .progress-label b{color:var(--ink);font-weight:700;font-size:12px}
+  .bar-wrap{margin-top:4px;height:6px;background:#eef2f7;border-radius:999px;overflow:hidden}
+  .bar-inner{height:100%;background:linear-gradient(90deg,#2563eb,#16a34a);border-radius:999px;transition:width .3s}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+    font-size:11px;font-weight:600;line-height:1.4}
+  .pill.todo{background:#f1f5f9;color:var(--st-todo)}
+  .pill.wip{background:#dbeafe;color:var(--st-wip)}
+  .pill.done{background:#dcfce7;color:var(--st-done)}
+  .pill.hold{background:#fef3c7;color:var(--st-hold)}
+
+  /* ---------- detail view ---------- */
+  .detail .hero{background:#fff;padding:14px;border-bottom:1px solid var(--line)}
+  .detail .hero h2{margin:0 0 4px;font-size:19px;line-height:1.3}
+  .detail .hero .sub{color:var(--mute);font-size:13px}
+  .detail .hero .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:12px;font-size:13px}
+  .detail .hero .kv span:nth-child(odd){color:var(--mute);white-space:nowrap}
+  .detail .hero .kv span:nth-child(even){overflow-wrap:anywhere}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 14px;background:var(--bg)}
+  .summary .s{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center}
+  .summary .s .n{font-size:20px;font-weight:700;line-height:1}
+  .summary .s .l{font-size:10px;color:var(--mute);margin-top:4px}
+  .summary .s.todo .n{color:var(--st-todo)}
+  .summary .s.wip .n{color:var(--st-wip)}
+  .summary .s.done .n{color:var(--st-done)}
+  .summary .s.hold .n{color:var(--st-hold)}
+
+  .section-title{padding:14px 14px 6px;font-size:12px;color:var(--mute);
+    text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+    display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .section-title .st-l{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  .section-title .st-tag{padding:3px 8px;border-radius:6px;font-size:11px;color:#fff;letter-spacing:0}
+  .section-title .st-tag.out{background:var(--cat-out)}
+  .section-title .st-tag.in{background:var(--cat-in)}
+  .section-title .st-tag.red{background:var(--cat-red)}
+  .section-title .st-total{color:var(--ink);font-weight:600}
+  .section-title button.add{color:var(--accent);font-size:12px;font-weight:700;padding:4px 6px}
+
+  /* ---------- task rows ---------- */
+  .tasks{padding:2px 14px}
+  .task{background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:12px;margin-bottom:8px;position:relative}
+  .task.reduced{background:#f8fafc;opacity:.7}
+  .task.reduced .t-name{text-decoration:line-through}
+  .task .t-top{display:flex;gap:10px;align-items:flex-start}
+  .task .check{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);
+    display:grid;place-items:center;flex-shrink:0;background:#fff;font-size:15px;color:transparent;font-weight:700}
+  .task.done .check{border-color:var(--st-done);background:var(--st-done);color:#fff}
+  .task.wip .check{border-color:var(--st-wip);background:var(--st-wip);color:#fff}
+  .task.hold .check{border-color:var(--st-hold);background:var(--st-hold);color:#fff}
+  .task .body{flex:1;min-width:0}
+  .task .t-head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+  .task .t-room{font-size:11px;font-weight:700;padding:2px 7px;background:#f1f5f9;color:var(--mute);border-radius:5px;flex-shrink:0}
+  .task .t-name{font-weight:600;font-size:15px;line-height:1.3}
+  .task .t-qty{font-size:12px;color:var(--mute);margin-left:auto;white-space:nowrap}
+  .task .t-sub{font-size:12px;color:var(--mute);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 10px}
+  .task .t-sub .sep{color:#cbd5e1}
+  .task .t-amount{font-weight:700;color:var(--ink);font-size:13px}
+  .task .t-contractor{display:inline-flex;align-items:center;gap:3px;font-weight:600;color:var(--cat-out)}
+  .task .t-more{color:var(--mute);padding:4px 6px;font-size:18px;align-self:center}
+
+  /* outsource checks */
+  .chk-row{display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+  .chk{flex:1;display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;
+    background:#f8fafc;border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--mute)}
+  .chk.on{background:#dcfce7;border-color:#86efac;color:#15803d}
+  .chk .box{width:16px;height:16px;border-radius:4px;border:2px solid currentColor;display:grid;place-items:center;font-size:12px}
+  .chk.on .box::after{content:"✓"}
+
+  /* logs */
+  .t-logs{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+  .t-log{font-size:12px;color:var(--mute);display:flex;gap:8px;padding:3px 0;flex-wrap:wrap;align-items:center}
+  .t-log .d{color:var(--st-wip);font-weight:600;white-space:nowrap}
+  .t-log .by{color:var(--ink);font-weight:700;white-space:nowrap}
+  .t-log .text{flex:1;min-width:0;word-break:break-word}
+  .t-log .rm{background:none;color:var(--mute);padding:2px 8px;font-size:13px;border-radius:4px;line-height:1}
+  .t-log .rm:hover{color:var(--danger);background:#fee2e2}
+  .t-log-img{width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:pointer;margin-top:4px}
+  .t-log-add .photo-btn{background:var(--accent);color:#fff;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;flex-shrink:0}
+  .t-log-add .photo-preview{width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
+  .photo-zoom-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;display:none;align-items:center;justify-content:center;cursor:pointer}
+  .photo-zoom-backdrop.on{display:flex}
+  .photo-zoom-backdrop img{max-width:95vw;max-height:90vh;border-radius:8px}
+  .t-log-add{display:flex;gap:6px;margin-top:6px}
+  .t-log-add input{flex:1;padding:6px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:12px;outline:none}
+  .t-log-add button{padding:6px 12px;background:var(--accent);color:#fff;border-radius:7px;font-size:12px;font-weight:700}
+
+  /* ---------- comments ---------- */
+  .comments{padding:2px 14px 20px}
+  .comment{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+  .comment .ch{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin-bottom:4px}
+  .comment .ch b{color:var(--ink)}
+  .comment .ct{white-space:pre-wrap;font-size:14px}
+
+  /* ---------- FAB ---------- */
+  .fab{position:fixed;right:max(16px,calc((100% - 560px)/2 + 16px));
+    bottom:calc(20px + var(--safe-bottom));width:56px;height:56px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:28px;box-shadow:0 6px 16px rgba(37,99,235,.4);
+    display:grid;place-items:center;z-index:20}
+  .fab:active{transform:scale(.95)}
+
+  /* ---------- modal / sheet ---------- */
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;
+    display:none;align-items:flex-end;justify-content:center}
+  .sheet-backdrop.on{display:flex}
+  .sheet{background:#fff;width:100%;max-width:560px;border-radius:20px 20px 0 0;
+    padding:18px 16px calc(18px + var(--safe-bottom));max-height:92vh;overflow-y:auto;
+    animation:slideUp .25s ease}
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .sheet h3{margin:0 0 14px;font-size:17px}
+  .field{display:block;margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--mute);margin-bottom:4px;font-weight:600}
+  .field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1px solid var(--line);
+    border-radius:10px;background:#fff;outline:none}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+  .field textarea{min-height:60px;resize:vertical}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .field-row3{display:grid;grid-template-columns:1fr 70px 70px;gap:8px}
+  .status-picker{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .status-picker button{padding:10px 4px;border:2px solid var(--line);background:#fff;
+    border-radius:10px;font-size:12px;font-weight:600;color:var(--mute)}
+  .status-picker button.on.todo{border-color:var(--st-todo);color:var(--st-todo);background:#f1f5f9}
+  .status-picker button.on.wip{border-color:var(--st-wip);color:var(--st-wip);background:#dbeafe}
+  .status-picker button.on.done{border-color:var(--st-done);color:var(--st-done);background:#dcfce7}
+  .status-picker button.on.hold{border-color:var(--st-hold);color:var(--st-hold);background:#fef3c7}
+  .cat-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .cat-picker button{padding:10px 4px;border:2px solid var(--line);background:#fff;
+    border-radius:10px;font-size:12px;font-weight:600;color:var(--mute)}
+  .cat-picker button.on.outsource{border-color:var(--cat-out);color:var(--cat-out);background:#f3e8ff}
+  .cat-picker button.on.inhouse{border-color:var(--cat-in);color:var(--cat-in);background:#e0f2fe}
+  .cat-picker button.on.reduced{border-color:var(--cat-red);color:var(--cat-red);background:#f1f5f9}
+  .cat-picker button[data-s="山一地所"].on{border-color:#0ea5e9;color:#0369a1;background:#e0f2fe}
+  .cat-picker button[data-s="みどり不動産"].on{border-color:#16a34a;color:#15803d;background:#dcfce7}
+  .cat-picker button[data-s="自社工事"].on{border-color:#f59e0b;color:#b45309;background:#fef3c7}
+  .cat-picker button[data-s="その他"].on{border-color:#64748b;color:#334155;background:#f1f5f9}
+  .group-header{font-size:12px;font-weight:700;color:var(--mute);padding:14px 4px 6px;
+    text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+  .group-header .gh-tag{padding:3px 10px;border-radius:6px;font-size:11px;color:#fff;letter-spacing:0}
+  .group-header .gh-tag.c1{background:#0ea5e9}
+  .group-header .gh-tag.c2{background:#16a34a}
+  .group-header .gh-tag.c3{background:#f59e0b}
+  .group-header .gh-tag.c4{background:#64748b}
+  .group-header .gh-count{color:var(--ink);font-weight:600}
+  .contractor-head{background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;
+    padding:8px 10px;margin:6px 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .contractor-head .ch-name{font-weight:700;color:var(--cat-out);font-size:13px;flex:1;min-width:0}
+  .contractor-head .ch-meta{font-size:11px;color:var(--mute);font-weight:500}
+  .contractor-head .ch-actions{display:flex;gap:6px}
+  .contractor-head .bulk-btn{padding:6px 10px;border-radius:7px;background:#fff;
+    border:1px solid var(--line);font-size:11px;font-weight:700;color:var(--mute);white-space:nowrap}
+  .contractor-head .bulk-btn.on{background:#dcfce7;border-color:#86efac;color:#15803d}
+  .contractor-head .bulk-btn.partial{background:#fef3c7;border-color:#fcd34d;color:#b45309}
+  .contractor-head .ch-by{flex-basis:100%;font-size:10px;color:var(--mute);margin-top:4px}
+  .contractor-head .ch-by b{color:var(--ink)}
+  .summary .s{cursor:pointer;transition:transform .1s}
+  .summary .s:active{transform:scale(.96)}
+  .summary .s.active{box-shadow:0 0 0 2px var(--ink);border-color:var(--ink)}
+  .filter-bar{margin:4px 14px 0;padding:8px 12px;background:#0f172a;color:#fff;border-radius:10px;
+    display:flex;align-items:center;gap:8px;font-size:12px}
+  .filter-bar .clear{margin-left:auto;background:rgba(255,255,255,.15);color:#fff;
+    padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700}
+  .btn-user{width:auto!important;padding:0 10px!important;display:inline-flex!important;gap:4px;font-size:12px}
+  .btn-user .btn-user-label{font-size:12px;font-weight:600;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chk{flex-wrap:wrap}
+  .chk .box{flex-shrink:0}
+  .chk .chk-label{flex:1;text-align:left}
+  .chk .chk-by{flex-basis:100%;font-size:10px;font-weight:500;color:var(--mute);margin-left:22px;margin-top:3px}
+  .chk.on .chk-by{color:#15803d}
+  .user-item{display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;border:1px solid var(--line);
+    border-radius:10px;background:#fff;margin-bottom:6px;font-size:14px;font-weight:600;text-align:left}
+  .user-item.on{background:#dbeafe;border-color:var(--accent);color:var(--accent)}
+  .user-item .rm{margin-left:auto;color:var(--danger);background:none;padding:4px 8px;font-size:12px}
+  .actions{display:flex;gap:8px;margin-top:14px}
+  .actions button{flex:1;padding:13px;border-radius:10px;font-weight:700}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-ghost{background:#f1f5f9;color:var(--ink)}
+  .btn-danger{background:#fee2e2;color:var(--danger)}
+
+  .empty{padding:28px 20px;text-align:center;color:var(--mute);font-size:13px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ========== LIST VIEW ========== -->
+  <section id="view-list">
+    <header class="bar">
+      <div class="title">工事タスクマネージャー</div>
+      <button class="icon-btn btn-user" title="チェック者切替">👤<span class="btn-user-label">未設定</span></button>
+      <button class="icon-btn" id="btn-import" title="スプシから取込">⬇</button>
+      <button class="icon-btn" id="btn-refresh" title="GAS同期">↻</button>
+    </header>
+    <div class="toolbar">
+      <div class="search"><input id="search" placeholder="物件・業者・工事名で検索"></div>
+      <div class="chips" id="filter-chips">
+        <button class="chip on" data-f="all">すべて</button>
+        <button class="chip" data-f="todo">未対応</button>
+        <button class="chip" data-f="wip">進行中</button>
+        <button class="chip" data-f="done">完了</button>
+        <button class="chip" data-f="archived">アーカイブ</button>
+      </div>
+      <div class="chips" id="client-chips">
+        <button class="chip on" data-c="all">全元請け</button>
+        <button class="chip" data-c="山一地所">山一地所</button>
+        <button class="chip" data-c="みどり不動産">みどり不動産</button>
+        <button class="chip" data-c="自社工事">自社工事</button>
+      </div>
+    </div>
+    <div class="list" id="property-list"></div>
+  </section>
+
+  <!-- ========== DETAIL VIEW ========== -->
+  <section id="view-detail" class="detail hide">
+    <header class="bar">
+      <button class="back" id="btn-back">‹</button>
+      <div class="title" id="d-title">—</div>
+      <button class="icon-btn btn-user" title="チェック者切替">👤<span class="btn-user-label">未設定</span></button>
+      <button class="icon-btn" id="btn-edit-prop" title="物件編集">✎</button>
+    </header>
+    <div class="hero">
+      <h2 id="d-name"></h2>
+      <div class="sub" id="d-sub"></div>
+      <div class="kv" id="d-kv"></div>
+    </div>
+
+    <!-- 現場メモ（物件情報の直下） -->
+    <div class="section-title">
+      <div class="st-l"><span class="st-total">📋 現場メモ・添付</span></div>
+      <button class="add" id="btn-add-comment">+ 追加</button>
+    </div>
+    <div class="comments" id="comment-list"></div>
+
+    <div class="summary" id="d-summary"></div>
+    <div class="filter-bar hide" id="task-filter-bar"></div>
+
+    <!-- 外注 -->
+    <div class="section-title">
+      <div class="st-l"><span class="st-tag out">外注</span><span class="st-total" id="sum-out">—</span></div>
+      <button class="add" data-add="outsource">+ 追加</button>
+    </div>
+    <div class="tasks" id="task-list-out"></div>
+
+    <!-- 自社 -->
+    <div class="section-title">
+      <div class="st-l"><span class="st-tag in">自社</span><span class="st-total" id="sum-in">—</span></div>
+      <button class="add" data-add="inhouse">+ 追加</button>
+    </div>
+    <div class="tasks" id="task-list-in"></div>
+
+    <!-- 減工事 -->
+    <div class="section-title">
+      <div class="st-l"><span class="st-tag red">減工事</span><span class="st-total" id="sum-red">—</span></div>
+      <button class="add" data-add="reduced">+ 追加</button>
+    </div>
+    <div class="tasks" id="task-list-red"></div>
+
+    <!-- ゴミ箱 -->
+    <div class="section-title" id="trash-title">
+      <div class="st-l">
+        <span class="st-tag" style="background:#64748b">🗑 ゴミ箱</span>
+        <span class="st-total" id="sum-trash">—</span>
+      </div>
+      <button class="add" id="btn-toggle-trash">▼ 開く</button>
+    </div>
+    <div class="tasks hide" id="task-list-trash"></div>
+
+    <!-- 完全完了確認ボタン -->
+    <div style="padding:14px">
+      <button class="btn-danger" id="btn-complete-prop" style="width:100%;padding:14px;font-size:15px;border-radius:12px">✅ 完全完了確認</button>
+    </div>
+  </section>
+
+  <button class="fab hide" id="fab">+</button>
+</div>
+
+<!-- ========== TASK SHEET ========== -->
+<div class="sheet-backdrop" id="sheet-task">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3 id="ts-title">タスク追加</h3>
+
+    <div class="field"><label>種別</label>
+      <div class="cat-picker" id="ts-cat">
+        <button data-s="outsource">外注</button>
+        <button data-s="inhouse">自社</button>
+        <button data-s="reduced">減工事</button>
+      </div>
+    </div>
+
+    <div class="field"><label>工事名称 <span style="color:#dc2626">*</span></label>
+      <input id="ts-name" placeholder="例: クロス貼替"></div>
+
+    <div class="field-row">
+      <div class="field"><label>室名</label><input id="ts-room" placeholder="例: 洋室" list="rooms"></div>
+      <div class="field"><label>施工面</label><input id="ts-surface" placeholder="例: 壁北・南面"></div>
+    </div>
+    <datalist id="rooms"></datalist>
+
+    <div class="field-row3">
+      <div class="field"><label>数量</label><input id="ts-qty" type="number" inputmode="decimal" step="0.1"></div>
+      <div class="field"><label>単位</label><input id="ts-unit" placeholder="式" list="units"></div>
+      <div class="field"><label>　</label><div></div></div>
+    </div>
+    <datalist id="units">
+      <option value="式"><option value="箇所"><option value="㎡"><option value="m"><option value="個"><option value="枚"><option value="本"><option value="面">
+    </datalist>
+
+    <div class="field"><label>特記事項</label>
+      <input id="ts-spec" placeholder="例: 無地量産クロス / HM-12070 / ※材支給"></div>
+
+    <div class="field-row" id="ts-out-row">
+      <div class="field"><label>担当業者</label><input id="ts-contractor" list="contractors"></div>
+      <div class="field"><label>金額（円）</label><input id="ts-amount" type="number" inputmode="numeric"></div>
+    </div>
+    <datalist id="contractors"></datalist>
+
+    <div class="field"><label>工期</label><input id="ts-schedule" placeholder="例: 4/16〜23"></div>
+
+    <div class="field"><label>ステータス</label>
+      <div class="status-picker" id="ts-status" style="grid-template-columns:repeat(3,1fr)">
+        <button data-s="todo">未対応</button>
+        <button data-s="wip">進行中</button>
+        <button data-s="done">完了</button>
+      </div>
+    </div>
+
+    <div class="field"><label>備考メモ</label>
+      <textarea id="ts-note" placeholder="例: 材料注文中 / 4/12入荷予定"></textarea></div>
+
+    <div class="actions">
+      <button class="btn-ghost" id="ts-cancel">キャンセル</button>
+      <button class="btn-danger hide" id="ts-delete">削除</button>
+      <button class="btn-primary" id="ts-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== PROPERTY SHEET ========== -->
+<div class="sheet-backdrop" id="sheet-prop">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3 id="ps-title">物件追加</h3>
+    <div class="field"><label>元請けカテゴリ</label>
+      <div class="cat-picker" id="ps-clientcat" style="grid-template-columns:repeat(4,1fr)">
+        <button data-s="山一地所">山一地所</button>
+        <button data-s="みどり不動産">みどり不動産</button>
+        <button data-s="自社工事">自社工事</button>
+        <button data-s="その他">その他</button>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>物件名 *</label><input id="ps-name"></div>
+      <div class="field"><label>号室</label><input id="ps-room"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>間取り</label><input id="ps-layout" placeholder="1LDK"></div>
+      <div class="field"><label>元請け</label><input id="ps-client" placeholder="山一地所"></div>
+    </div>
+    <div class="field"><label>住所</label><input id="ps-address"></div>
+    <div class="field"><label>管理No</label><input id="ps-mgmt"></div>
+    <div class="field-row">
+      <div class="field"><label>退去月</label><input id="ps-moveout" placeholder="令和8年3月"></div>
+      <div class="field"><label>発注日</label><input id="ps-orderdate" type="date"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>入居日</label><input id="ps-movein" placeholder="未定"></div>
+      <div class="field"><label>除菌日</label><input id="ps-disinfect" type="date"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>鍵交換日</label><input id="ps-keychange" type="date"></div>
+      <div class="field"><label>鍵業者</label><input id="ps-keycon"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>玄関鍵</label><input id="ps-entkey" placeholder="ジョイナー・417"></div>
+      <div class="field"><label>エントランス開錠</label><input id="ps-entcode" placeholder="※3492呼"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>担当者</label><input id="ps-pic"></div>
+      <div class="field"><label>電話</label><input id="ps-tel" type="tel"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>空き駐車場</label><input id="ps-parking"></div>
+      <div class="field"><label>水道・電気</label><input id="ps-utility" placeholder="4/14〜"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>最終確認日</label><input id="ps-finaldate" type="date"></div>
+      <div class="field"><label>最終確認者</label><input id="ps-finalby"></div>
+    </div>
+    <div class="field"><label>完全完了日</label><input id="ps-completedate" type="date"></div>
+    <div class="actions">
+      <button class="btn-ghost" id="ps-cancel">キャンセル</button>
+      <button class="btn-danger hide" id="ps-delete">削除</button>
+      <button class="btn-primary" id="ps-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== IMPORT SHEET ========== -->
+<div class="sheet-backdrop" id="sheet-import">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3>スプシから物件情報を取込</h3>
+
+    <!-- GAS Web App 同期 -->
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:13px;color:#0369a1;margin-bottom:6px">🔗 GAS同期（推奨）</div>
+      <p style="font-size:11px;color:var(--mute);margin:0 0 8px">
+        全社管理表のApps Scriptに <code>WebApi.gs</code> をデプロイして得たURLを貼り付け。<br>
+        <b>スプシ→アプリの片方向取込</b>で、既存のタスク進捗・ログ・チェックは保持されます。
+      </p>
+      <div class="field" style="margin-bottom:8px"><label>GAS Web App URL</label>
+        <input id="im-gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <div class="actions" style="margin:0">
+        <button class="btn-ghost" id="im-gas-test">疎通確認</button>
+        <button class="btn-primary" id="im-gas-sync">GAS同期</button>
+      </div>
+    </div>
+
+    <!-- 従来のCSV取込 -->
+    <details style="margin-bottom:10px">
+      <summary style="font-size:12px;color:var(--mute);cursor:pointer;padding:4px 0">📄 CSV手動取込（オフライン時のフォールバック）</summary>
+      <p style="font-size:11px;color:var(--mute);margin:6px 0">
+        スプレッドシートで範囲コピー or 「ウェブに公開 → CSV」URLを使用。
+      </p>
+      <div class="field"><label>CSV URL（任意）</label>
+        <input id="im-url" type="url" placeholder="https://docs.google.com/spreadsheets/.../pub?output=csv">
+      </div>
+      <div class="field"><label>または CSV / タブ区切りテキストを貼り付け</label>
+        <textarea id="im-text" rows="5" placeholder="物件名,号室,入居日,除菌,鍵交換日,鍵業者,担当者,電話..."></textarea>
+      </div>
+      <div class="actions" style="margin-bottom:12px">
+        <button class="btn-ghost" id="im-parse">解析</button>
+      </div>
+      <div id="im-preview" class="hide" style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#f8fafc">
+        <div style="font-size:12px;color:var(--mute);margin-bottom:6px" id="im-summary"></div>
+        <div id="im-mapping" style="font-size:11px;color:var(--mute);margin-bottom:10px"></div>
+        <div id="im-rows" style="max-height:30vh;overflow-y:auto"></div>
+        <div class="actions" style="margin-top:10px">
+          <button class="btn-ghost" id="im-back">やり直し</button>
+          <button class="btn-primary" id="im-apply">取込実行</button>
+        </div>
+      </div>
+    </details>
+
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <button class="btn-danger" id="im-reset" style="width:100%;padding:12px">🗑 ローカルデータをクリア（この端末のみ）</button>
+      <p style="font-size:10px;color:var(--mute);margin:6px 0 0">古いサンプルデータが残っている場合に使用。クリア後にGAS同期で最新データを取り込みます。</p>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost" id="im-cancel">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== USER SHEET ========== -->
+<div class="sheet-backdrop" id="sheet-user">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3>チェック者を選択</h3>
+    <p style="font-size:12px;color:var(--mute);margin:0 0 12px">
+      選択した人物は この端末 に保存され、施工OK / 金額OK を押したタスクに自動で記録されます。
+    </p>
+    <div id="user-list" style="margin-bottom:10px"></div>
+    <div class="field"><label>新しいユーザーを追加</label>
+      <input id="us-new" placeholder="例: 最上 登生">
+    </div>
+    <div class="actions">
+      <button class="btn-ghost" id="us-cancel">閉じる</button>
+      <button class="btn-primary" id="us-add">追加して選択</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== COMMENT SHEET ========== -->
+<div class="sheet-backdrop" id="sheet-comment">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3>現場メモ・添付追加</h3>
+    <div class="field"><label>投稿者</label><input id="cs-author" placeholder="例: 最上登生"></div>
+    <div class="field"><label>内容</label><textarea id="cs-text" rows="4"></textarea></div>
+    <div class="field"><label>写真添付（任意）</label>
+      <input type="file" accept="image/*" id="cs-photo-input" style="display:none">
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-ghost" id="cs-photo-btn" style="flex-shrink:0">📷 写真を選択</button>
+        <img id="cs-photo-preview" style="display:none;width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--line)" src="">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn-ghost" id="cs-cancel">キャンセル</button>
+      <button class="btn-primary" id="cs-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- photo zoom overlay -->
+<div class="photo-zoom-backdrop" id="photo-zoom" onclick="this.classList.remove('on')"><img id="photo-zoom-img" src=""></div>
+
+<script>
+/* ===== state ===== */
+const STORAGE_KEY = 'kouji-task-mgr-v2';
+const SETTINGS_KEY = 'kouji-settings-v1';
+const STATUSES = {todo:'未対応', wip:'進行中', done:'完了'};
+const CATS = {outsource:'外注', inhouse:'自社', reduced:'減工事'};
+function loadSettings(){ try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}; }catch(e){ return {}; } }
+function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+let settings = loadSettings();
+if(!settings.users) settings.users = ['木村 優作','大村 将史','南部 大我','鈴木 悠平','最上 登生','山田 裕貴'];
+if(settings.currentUser===undefined) settings.currentUser = '';
+if(settings.gasUrl===undefined) settings.gasUrl = '';
+saveSettings();
+let state = load() || seed();
+let currentPropId = null;
+let currentFilter = 'all';
+let currentClientCat = 'all';
+let currentTaskStatusFilter = null; // 詳細画面内のステータス絞り込み（null=絞込なし）
+let searchQ = '';
+
+const CLIENT_CATS = ['山一地所','みどり不動産','自社工事','その他'];
+function autoDetectClientCat(p){
+  const c = String(p.client||'');
+  if(c.includes('山一')) return '山一地所';
+  if(c.includes('みどり')) return 'みどり不動産';
+  if(c.includes('自社') || c.includes('光和')) return '自社工事';
+  return 'その他';
+}
+function migrateClientCat(){
+  let changed = false;
+  state.properties.forEach(p=>{
+    if(!p.clientCat){ p.clientCat = autoDetectClientCat(p); changed = true; }
+  });
+  if(changed) save();
+}
+function matchesClientCat(p){
+  if(currentClientCat==='all') return true;
+  return (p.clientCat||autoDetectClientCat(p))===currentClientCat;
+}
+
+function load(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch(e){ return null; } }
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  // 詳細画面にいる場合、進捗をサーバーにプッシュ（デバウンス2秒）
+  if(currentPropId) pushProgressDebounced(currentPropId);
+}
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+/* ===== seed data (empty - all data comes from GAS sync) ===== */
+function seed(){
+  return { properties: [] };
+}
+
+/* ===== status / trash / archive helpers ===== */
+const TRASH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function applyStatusChange(t, newStatus){
+  const old = t.status;
+  if(newStatus==='done' && old!=='done') t.doneAt = Date.now();
+  if(newStatus!=='done' && old==='done') t.doneAt = null;
+  t.status = newStatus;
+  t.statusBy = settings.currentUser || '';
+  t.statusAt = Date.now();
+}
+function migrateStatus(){
+  let changed = false;
+  state.properties.forEach(p=>{
+    p.tasks.forEach(t=>{
+      // 旧 hold → todo
+      if(t.status==='hold'){ t.status = 'todo'; changed = true; }
+      // 自社タスクが wip になっていたら todo に戻す（外注のみ wip がデフォ）
+      if(t.category==='inhouse' && t.status==='wip'){ t.status = 'todo'; changed = true; }
+    });
+  });
+  if(changed) save();
+}
+function isArchived(p){ return !!(p.completeDate && String(p.completeDate).trim()); }
+function isTrashed(t){ return t.status==='done'; }
+function trashRemainingDays(t){
+  if(!t.doneAt) return 10;
+  return Math.max(0, Math.ceil((t.doneAt + TRASH_TTL_MS - Date.now()) / 86400000));
+}
+function cleanupTrash(){
+  const now = Date.now();
+  let changed = false;
+  state.properties.forEach(p=>{
+    const before = p.tasks.length;
+    p.tasks = p.tasks.filter(t=>{
+      if(t.status==='done'){
+        if(!t.doneAt){ t.doneAt = now; changed = true; }
+        if(now - t.doneAt > TRASH_TTL_MS) return false;
+      }
+      return true;
+    });
+    if(p.tasks.length !== before) changed = true;
+  });
+  if(changed) save();
+}
+function restoreTask(taskId){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = p.tasks.find(x=>x.id===taskId);
+  applyStatusChange(t, 'todo');
+  save(); renderDetail();
+}
+function permanentDeleteTask(taskId){
+  if(!confirm('このタスクを完全に削除します。よろしいですか？')) return;
+  const p = state.properties.find(x=>x.id===currentPropId);
+  p.tasks = p.tasks.filter(x=>x.id!==taskId);
+  save(); renderDetail();
+}
+
+/* ===== helpers ===== */
+function activeTasks(p){ return p.tasks.filter(t=>t.category!=='reduced'); }
+// 進捗バー・進捗率は「自社工事項目」のみを対象にする
+function propProgress(p){
+  const inhouse = p.tasks.filter(t=>t.category==='inhouse');
+  const total = inhouse.length;
+  const done  = inhouse.filter(t=>t.status==='done').length;
+  return { total, done, pct: total ? Math.round(done/total*100) : 0 };
+}
+function dominantStatus(p){
+  const at = activeTasks(p);
+  if(!at.length) return 'todo';
+  const c = {todo:0,wip:0,done:0};
+  at.forEach(t=>{ if(c[t.status]!==undefined) c[t.status]++; });
+  if(c.wip) return 'wip';
+  if(c.todo) return 'todo';
+  if(c.done===at.length) return 'done';
+  return 'todo';
+}
+function matchesFilter(p){
+  if(currentFilter==='archived') return isArchived(p);
+  if(isArchived(p)) return false;
+  if(currentFilter==='all') return true;
+  return dominantStatus(p)===currentFilter;
+}
+function matchesSearch(p){
+  if(!searchQ) return true;
+  const q = searchQ.toLowerCase();
+  if((p.name+' '+(p.room||'')+' '+(p.address||'')+' '+(p.client||'')).toLowerCase().includes(q)) return true;
+  return p.tasks.some(t=>(t.name+' '+(t.contractor||'')+' '+(t.room||'')).toLowerCase().includes(q));
+}
+function allContractors(){
+  const s = new Set();
+  state.properties.forEach(p=>p.tasks.forEach(t=>t.contractor&&s.add(t.contractor)));
+  return [...s];
+}
+function allRooms(){
+  const s = new Set(['全室','LDK','DK','台所','洋室','和室','洗面所','浴室','トイレ','廊下','玄関','バルコニー','各室']);
+  state.properties.forEach(p=>p.tasks.forEach(t=>t.room&&s.add(t.room)));
+  return [...s];
+}
+
+/* ===== render: list view ===== */
+function propertyCardHTML(p){
+  const pr = propProgress(p);
+  const st = dominantStatus(p);
+  const roomStr = p.room ? esc(p.room)+(/^\d+$/.test(p.room)?'号室':'') : '';
+  const progressLabel = pr.total
+    ? `自社工事項目進捗率　<b>${pr.done}/${pr.total}</b>（${pr.pct}%）`
+    : '自社工事項目 <b>未登録</b>';
+  return `
+    <div class="card" data-id="${p.id}">
+      <div class="row">
+        <div class="name">
+          ${esc(p.name)} <span style="color:#64748b;font-weight:500;font-size:13px">${roomStr}</span>
+          <div class="sub">${esc(p.client||'')}${p.layout?' ・ '+esc(p.layout):''}</div>
+        </div>
+        <span class="pill ${st}">${STATUSES[st]}</span>
+      </div>
+      <div class="progress-label">${progressLabel}</div>
+      <div class="bar-wrap"><div class="bar-inner" style="width:${pr.pct}%"></div></div>
+      <div class="meta">
+        ${p.finalDate?`<span>最終確認: <b>${fmtDate(p.finalDate)}</b></span>`:''}
+        ${p.moveout?`<span>退去: <b>${esc(p.moveout)}</b></span>`:''}
+      </div>
+    </div>`;
+}
+
+function renderList(){
+  const el = document.getElementById('property-list');
+  const items = state.properties.filter(p=>matchesFilter(p)&&matchesSearch(p)&&matchesClientCat(p))
+    .sort((a,b)=>{
+      // 発注日の新しい順（降順）。空は後ろへ
+      const da = a.orderDate || '0000';
+      const db = b.orderDate || '0000';
+      return db.localeCompare(da);
+    });
+  if(!items.length){
+    el.innerHTML = '<div class="empty">📋 該当する物件がありません</div>';
+    return;
+  }
+  // group by clientCat
+  const groups = {};
+  items.forEach(p=>{
+    const cat = p.clientCat || autoDetectClientCat(p);
+    (groups[cat] = groups[cat] || []).push(p);
+  });
+  const tagClass = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
+  el.innerHTML = CLIENT_CATS.filter(c=>groups[c]).map(cat=>{
+    const rows = groups[cat].map(propertyCardHTML).join('');
+    // 1カテゴリにフィルタ中ならヘッダを省略しない（分かりやすく残す）
+    return `<div class="group-header"><span class="gh-tag ${tagClass[cat]||'c4'}">${esc(cat)}</span><span class="gh-count">${groups[cat].length}件</span></div>${rows}`;
+  }).join('');
+  el.querySelectorAll('.card').forEach(c=>{
+    c.onclick = ()=>openDetail(c.dataset.id);
+  });
+}
+
+/* ===== render: detail view ===== */
+function renderDetail(){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  if(!p) return;
+  const roomStr = p.room ? p.room+(/^\d+$/.test(p.room)?'号室':'') : '';
+  document.getElementById('d-title').textContent = p.name + (p.room?' '+p.room:'');
+  document.getElementById('d-name').textContent  = p.name + (roomStr?' '+roomStr:'');
+  document.getElementById('d-sub').textContent   = [p.client,p.layout,p.address].filter(Boolean).join(' ・ ');
+
+  const kv = [];
+  if(p.mgmt)          kv.push(['管理No', p.mgmt]);
+  if(p.orderDate)     kv.push(['発注日', fmtDate(p.orderDate)]);
+  if(p.moveout)       kv.push(['退去月', p.moveout]);
+  if(p.movein)        kv.push(['入居日', p.movein]);
+  if(p.utility)       kv.push(['水道・電気', p.utility]);
+  if(p.parking)       kv.push(['空き駐車場', p.parking]);
+  if(p.entCode)       kv.push(['ｴﾝﾄﾗﾝｽ', p.entCode]);
+  if(p.entKey)        kv.push(['玄関鍵', p.entKey]);
+  if(p.disinfect)     kv.push(['除菌日', fmtDate(p.disinfect)]);
+  if(p.keyChange)     kv.push(['鍵交換日', fmtDate(p.keyChange)]);
+  if(p.keyCon)        kv.push(['鍵業者', p.keyCon]);
+  if(p.pic)           kv.push(['担当者', p.pic + (p.tel?' / '+p.tel:'')]);
+  if(p.finalDate)     kv.push(['最終確認日', fmtDate(p.finalDate) + (p.finalBy?' / '+p.finalBy:'')]);
+  if(p.completeDate)  kv.push(['完全完了日', fmtDate(p.completeDate)]);
+  const totalAmt = p.tasks.filter(t=>t.category==='outsource').reduce((s,t)=>s+(+t.amount||0),0);
+  if(totalAmt)        kv.push(['合計(外注)', `¥${totalAmt.toLocaleString()}`]);
+  document.getElementById('d-kv').innerHTML = kv.map(([k,v])=>`<span>${esc(k)}</span><span>${esc(v)}</span>`).join('');
+
+  // summary (active tasks only)
+  const c = {todo:0,wip:0,done:0};
+  activeTasks(p).forEach(t=>{ if(c[t.status]!==undefined) c[t.status]++; });
+  const act = s=>currentTaskStatusFilter===s?' active':'';
+  document.getElementById('d-summary').innerHTML = `
+    <div class="s todo${act('todo')}" data-status="todo"><div class="n">${c.todo}</div><div class="l">未対応</div></div>
+    <div class="s wip${act('wip')}" data-status="wip"><div class="n">${c.wip}</div><div class="l">進行中</div></div>
+    <div class="s done" data-status="done"><div class="n">${c.done}</div><div class="l">完了</div></div>
+  `;
+  document.querySelectorAll('#d-summary .s').forEach(sEl=>{
+    sEl.onclick = ()=>handleSummaryClick(sEl.dataset.status);
+  });
+  // filter bar
+  const fb = document.getElementById('task-filter-bar');
+  if(currentTaskStatusFilter){
+    fb.innerHTML = `🔎 フィルタ中: <b>${STATUSES[currentTaskStatusFilter]}</b> のみ表示<button class="clear">✕ クリア</button>`;
+    fb.classList.remove('hide');
+    fb.querySelector('.clear').onclick = ()=>{ currentTaskStatusFilter = null; renderDetail(); };
+  } else {
+    fb.classList.add('hide');
+    fb.innerHTML = '';
+  }
+
+  // render each category
+  renderTaskGroup(p, 'outsource', 'task-list-out', 'sum-out');
+  renderTaskGroup(p, 'inhouse',   'task-list-in',  'sum-in');
+  renderTaskGroup(p, 'reduced',   'task-list-red', 'sum-red');
+  renderTrash(p);
+
+  // comments（新しいのが上）
+  const cl = document.getElementById('comment-list');
+  if(!p.comments.length){
+    cl.innerHTML = '<div class="empty">メモなし</div>';
+  } else {
+    cl.innerHTML = p.comments.slice().reverse().map(c=>{
+      const photoHtml = c.photo ? `<img class="t-log-img" src="${c.photo}" onclick="showPhotoZoom(this.src)" alt="添付写真" style="margin-top:6px">` : '';
+      return `<div class="comment" data-cid="${c.id}">
+        <div class="ch">
+          <b>${esc(c.author||'—')}</b><span>${fmtDate(c.date)}</span>
+          <span style="margin-left:auto;display:flex;gap:4px">
+            <button class="rm" data-role="edit-comment" style="color:var(--accent);font-size:11px">✎ 編集</button>
+            <button class="rm" data-role="delete-comment" style="font-size:11px">× 削除</button>
+          </span>
+        </div>
+        <div class="ct">${esc(c.text)}</div>
+        ${photoHtml}
+      </div>`;
+    }).join('');
+    cl.querySelectorAll('.comment').forEach(el=>{
+      const cid = el.dataset.cid;
+      el.querySelector('[data-role="edit-comment"]').onclick = ()=>editComment(cid);
+      el.querySelector('[data-role="delete-comment"]').onclick = ()=>deleteComment(cid);
+    });
+  }
+
+  // datalists
+  document.getElementById('contractors').innerHTML =
+    allContractors().map(c=>`<option value="${esc(c)}">`).join('');
+  document.getElementById('rooms').innerHTML =
+    allRooms().map(r=>`<option value="${esc(r)}">`).join('');
+}
+
+function renderTaskGroup(p, cat, listId, sumId){
+  const all = p.tasks.filter(t=>t.category===cat);
+  // 完了はゴミ箱に行くので一覧から除外（減工事はそのまま）
+  let tasks = cat==='reduced' ? all : all.filter(t=>t.status!=='done');
+  // 詳細画面のステータス絞り込みを適用
+  if(currentTaskStatusFilter && cat!=='reduced'){
+    tasks = tasks.filter(t=>t.status===currentTaskStatusFilter);
+  }
+  if(currentTaskStatusFilter && cat==='reduced'){
+    // 絞り込み中は減工事を隠す
+    document.getElementById(listId).innerHTML = '';
+    document.getElementById(sumId).textContent = '—';
+    return;
+  }
+  const el = document.getElementById(listId);
+  const sum = document.getElementById(sumId);
+  const doneCount = all.filter(t=>t.status==='done').length;
+  const amt = cat==='outsource' ? all.reduce((s,t)=>s+(+t.amount||0),0) : 0;
+  sum.textContent = cat==='reduced'
+    ? `${all.length}件`
+    : `${doneCount}/${all.length} 完了${amt?`　¥${amt.toLocaleString()}`:''}`;
+
+  if(!tasks.length){
+    el.innerHTML = '<div class="empty" style="padding:12px">'+(all.length>doneCount?'なし':'全て完了（ゴミ箱へ）')+'</div>';
+    return;
+  }
+
+  // 外注は業者ごとにグループ化してヘッダで一括チェックできるようにする
+  if(cat==='outsource'){
+    const groups = {};
+    tasks.forEach(t=>{
+      const key = t.contractor || '（業者未設定）';
+      (groups[key] = groups[key] || []).push(t);
+    });
+    el.innerHTML = Object.entries(groups).map(([name, ts])=>{
+      const subtotal = ts.reduce((s,t)=>s+(+t.amount||0),0);
+      const workOn = ts.filter(t=>t.checkWork).length;
+      const amtOn  = ts.filter(t=>t.checkAmount).length;
+      const workCls = workOn===ts.length ? 'on' : (workOn>0 ? 'partial' : '');
+      const amtCls  = amtOn===ts.length  ? 'on' : (amtOn>0  ? 'partial' : '');
+      // 最終チェック者
+      const lastWork = ts.filter(t=>t.checkWorkAt).sort((a,b)=>b.checkWorkAt-a.checkWorkAt)[0];
+      const lastAmt  = ts.filter(t=>t.checkAmountAt).sort((a,b)=>b.checkAmountAt-a.checkAmountAt)[0];
+      const byLine = (lastWork || lastAmt) ? `
+        <div class="ch-by">
+          ${lastWork?`施工: <b>${esc(lastWork.checkWorkBy||'（未設定）')}</b> ${fmtDateTime(lastWork.checkWorkAt)}`:''}
+          ${lastWork&&lastAmt?' ・ ':''}
+          ${lastAmt?`金額: <b>${esc(lastAmt.checkAmountBy||'（未設定）')}</b> ${fmtDateTime(lastAmt.checkAmountAt)}`:''}
+        </div>` : '';
+      const header = `
+        <div class="contractor-head" data-contractor="${esc(name)}">
+          <div class="ch-name">👷 ${esc(name)}
+            <span class="ch-meta">　${ts.length}件${subtotal?` ・ ¥${subtotal.toLocaleString()}`:''}</span>
+          </div>
+          <div class="ch-actions">
+            <button class="bulk-btn ${workCls}" data-bulk="work">施工 ${workOn}/${ts.length}</button>
+            <button class="bulk-btn ${amtCls}" data-bulk="amount">金額 ${amtOn}/${ts.length}</button>
+          </div>
+          ${byLine}
+        </div>`;
+      return header + ts.map(t=>renderTaskRow(t, cat)).join('');
+    }).join('');
+    wireTaskRows(el);
+    // wire bulk buttons
+    el.querySelectorAll('.contractor-head').forEach(head=>{
+      const name = head.dataset.contractor;
+      head.querySelectorAll('[data-bulk]').forEach(btn=>{
+        btn.onclick = e=>{
+          e.stopPropagation();
+          bulkToggleContractor(name, btn.dataset.bulk);
+        };
+      });
+    });
+    return;
+  }
+
+  el.innerHTML = tasks.map(t=>renderTaskRow(t, cat)).join('');
+  wireTaskRows(el);
+}
+
+function handleSummaryClick(status){
+  if(status==='done'){
+    // 完了カードは ゴミ箱を開いてスクロール
+    const trashEl = document.getElementById('task-list-trash');
+    const btn = document.getElementById('btn-toggle-trash');
+    if(trashEl.classList.contains('hide')){
+      trashEl.classList.remove('hide');
+      btn.textContent = '▲ 閉じる';
+    }
+    trashEl.scrollIntoView({block:'start', behavior:'smooth'});
+    return;
+  }
+  currentTaskStatusFilter = (currentTaskStatusFilter===status) ? null : status;
+  renderDetail();
+}
+
+function bulkToggleContractor(contractor, field){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const realName = contractor==='（業者未設定）' ? '' : contractor;
+  const targets = p.tasks.filter(t=>t.category==='outsource' && (t.contractor||'')===realName && t.status!=='done');
+  if(!targets.length) return;
+  const key = field==='work' ? 'checkWork' : 'checkAmount';
+  const byField = field==='work' ? 'checkWorkBy' : 'checkAmountBy';
+  const atField = field==='work' ? 'checkWorkAt' : 'checkAmountAt';
+  const allOn = targets.every(t=>t[key]);
+  const now = Date.now();
+  const user = settings.currentUser || '';
+  targets.forEach(t=>{
+    t[key] = !allOn;
+    if(t[key]){ t[byField] = user; t[atField] = now; }
+    else { t[byField] = ''; t[atField] = null; }
+  });
+  save(); renderDetail();
+}
+
+function renderTaskRow(t, cat){
+  const qtyStr = t.qty ? `${t.qty}${t.unit||''}` : (t.unit||'');
+  const sub = [];
+  if(t.surface) sub.push(esc(t.surface));
+  if(t.spec)    sub.push(esc(t.spec));
+  if(t.schedule)sub.push('📅 '+esc(t.schedule));
+  if(t.amount)  sub.push(`<span class="t-amount">¥${(+t.amount).toLocaleString()}</span>`);
+
+  // 外注タスクの個別チェックは廃止。業者ヘッダの一括ボタンで統一的に管理する。
+  let checksHtml = '';
+
+  // logs for inhouse + outsource
+  let logsHtml = '';
+  if(cat!=='reduced'){
+    const logList = (t.logs||[]).map((l,idx)=>{
+      const when = l.at ? fmtDateTime(l.at) : fmtDate(l.date);
+      const who = l.by ? `<span class="by">${esc(l.by)}</span>` : '';
+      const photoHtml = l.photo ? `<img class="t-log-img" src="${l.photo}" data-role="photo-zoom" alt="写真">` : '';
+      return `<div class="t-log">
+        <span class="d">${when}</span>${who}
+        <span class="text">${esc(l.text)}</span>
+        <button class="rm" data-log-idx="${idx}" title="削除">×</button>
+        ${photoHtml}
+      </div>`;
+    }).join('');
+    logsHtml = `
+      <div class="t-logs">
+        ${logList}
+        <div class="t-log-add">
+          <input type="text" placeholder="作業ログ追加" data-role="log-input">
+          <input type="file" accept="image/*" data-role="log-photo-input" style="display:none">
+          <img class="photo-preview" data-role="log-photo-preview" style="display:none" src="">
+          <button class="photo-btn" data-role="log-photo-btn" title="写真">📷</button>
+          <button data-role="log-add">追加</button>
+        </div>
+      </div>`;
+  }
+  const noteHtml = t.note ? `<div class="t-sub" style="margin-top:6px;background:var(--warn-bg);padding:6px 10px;border-radius:6px;display:block">📝 ${esc(t.note)}</div>` : '';
+
+  return `
+    <div class="task ${t.status} ${cat==='reduced'?'reduced':''}" data-id="${t.id}">
+      <div class="t-top">
+        ${cat==='reduced' ? '<div class="check" style="opacity:.3">—</div>' :
+          `<button class="check" data-role="toggle" title="${t.statusBy?esc(t.statusBy)+' '+fmtDateTime(t.statusAt):''}">${t.status==='done'?'✓':t.status==='wip'?'◐':''}</button>`}
+        <div class="body" data-role="edit">
+          <div class="t-head">
+            ${t.room?`<span class="t-room">${esc(t.room)}</span>`:''}
+            <span class="t-name">${esc(t.name)}</span>
+            ${qtyStr?`<span class="t-qty">${esc(qtyStr)}</span>`:''}
+          </div>
+          ${sub.length?`<div class="t-sub">${sub.join('<span class="sep">·</span>')}</div>`:''}
+          ${t.statusBy?`<div class="t-sub" style="font-size:10px;color:var(--st-wip)">${esc(STATUSES[t.status]||t.status)} : ${esc(t.statusBy)} ${fmtDateTime(t.statusAt)}</div>`:''}
+          ${noteHtml}
+        </div>
+        <button class="t-more" data-role="edit">›</button>
+      </div>
+      ${checksHtml}
+      ${logsHtml}
+    </div>`;
+}
+
+function wireTaskRows(el){
+  el.querySelectorAll('.task').forEach(row=>{
+    const id = row.dataset.id;
+    const tog = row.querySelector('[data-role="toggle"]');
+    if(tog) tog.onclick = e=>{ e.stopPropagation(); cycleStatus(id); };
+    row.querySelectorAll('[data-role="edit"]').forEach(x=>x.onclick = ()=>openTaskSheet(id));
+    const cw = row.querySelector('[data-role="chk-work"]');
+    if(cw) cw.onclick = e=>{ e.stopPropagation(); toggleCheck(id,'checkWork'); };
+    const ca = row.querySelector('[data-role="chk-amount"]');
+    if(ca) ca.onclick = e=>{ e.stopPropagation(); toggleCheck(id,'checkAmount'); };
+    const logAdd = row.querySelector('[data-role="log-add"]');
+    const logIn  = row.querySelector('[data-role="log-input"]');
+    if(logAdd && logIn){
+      logAdd.onclick = async e=>{
+        e.stopPropagation();
+        const txt = logIn.value.trim();
+        const preview = row.querySelector('[data-role="log-photo-preview"]');
+        const compressed = preview && preview.dataset.compressed ? preview.dataset.compressed : null;
+        if(!txt && !compressed) return;
+        let photo = compressed;
+        if(compressed && settings.gasUrl && !compressed.startsWith('https://')){
+          logAdd.textContent = '⏳';
+          const p = state.properties.find(x=>x.id===currentPropId);
+          const result = await uploadToDrive(compressed, p?.name, p?.room);
+          if(result.ok) photo = result.url;
+          logAdd.textContent = '追加';
+        }
+        addLog(id, txt, photo);
+        if(preview){ preview.style.display='none'; preview.src=''; delete preview.dataset.compressed; }
+        const fileInput = row.querySelector('[data-role="log-photo-input"]');
+        if(fileInput) fileInput.value = '';
+      };
+      logIn.onkeydown = e=>{
+        if(e.key==='Enter'){ e.preventDefault(); logAdd.click(); }
+      };
+      logIn.onclick = e=>e.stopPropagation();
+    }
+    row.querySelectorAll('.t-log .rm[data-log-idx]').forEach(btn=>{
+      btn.onclick = e=>{
+        e.stopPropagation();
+        removeLog(id, parseInt(btn.dataset.logIdx, 10));
+      };
+    });
+    row.querySelectorAll('[data-role="photo-zoom"]').forEach(img=>{
+      img.onclick = e=>{ e.stopPropagation(); showPhotoZoom(img.src); };
+    });
+    // photo capture
+    const photoBtn = row.querySelector('[data-role="log-photo-btn"]');
+    const photoInput = row.querySelector('[data-role="log-photo-input"]');
+    const photoPreview = row.querySelector('[data-role="log-photo-preview"]');
+    if(photoBtn && photoInput){
+      photoBtn.onclick = e=>{ e.stopPropagation(); photoInput.click(); };
+      photoInput.onclick = e=>e.stopPropagation();
+      photoInput.onchange = async e=>{
+        e.stopPropagation();
+        const file = photoInput.files[0];
+        if(!file) return;
+        const compressed = await compressImage(file, 500000);
+        photoPreview.src = compressed;
+        photoPreview.style.display = 'block';
+        photoPreview.dataset.compressed = compressed;
+      };
+    }
+  });
+}
+
+function renderTrash(p){
+  const el = document.getElementById('task-list-trash');
+  const sum = document.getElementById('sum-trash');
+  const items = p.tasks
+    .filter(t=>t.status==='done' && t.category!=='reduced')
+    .slice()
+    .sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+  if(!items.length){
+    sum.textContent = '空';
+    el.innerHTML = '<div class="empty" style="padding:12px">ゴミ箱は空です</div>';
+    return;
+  }
+  // 直近で完了したものの残り日数をヘッダに
+  const minRem = Math.min(...items.map(trashRemainingDays));
+  sum.textContent = `${items.length}件 ・ 最短 あと${minRem}日`;
+  el.innerHTML = items.map(t=>{
+    const rem = trashRemainingDays(t);
+    const cat = CATS[t.category];
+    const qtyStr = t.qty ? `${t.qty}${t.unit||''}` : (t.unit||'');
+    const doneDate = t.doneAt ? fmtDate(new Date(t.doneAt - (new Date()).getTimezoneOffset()*60000).toISOString().slice(0,10)) : '';
+    const remColor = rem<=3 ? 'var(--danger)' : 'var(--mute)';
+    return `
+      <div class="task done reduced" data-id="${t.id}" style="opacity:.8">
+        <div class="t-top">
+          <div class="check" style="background:var(--st-done);color:#fff;border-color:var(--st-done)">✓</div>
+          <div class="body">
+            <div class="t-head">
+              <span class="t-room" style="background:#ede9fe;color:#6b21a8">${esc(cat)}</span>
+              ${t.room?`<span class="t-room">${esc(t.room)}</span>`:''}
+              <span class="t-name">${esc(t.name)}</span>
+              ${qtyStr?`<span class="t-qty">${esc(qtyStr)}</span>`:''}
+            </div>
+            <div class="t-sub" style="color:${remColor};font-weight:600">
+              🗑 削除まで あと ${rem}日${doneDate?` ・ 完了: ${doneDate}`:''}
+            </div>
+            ${t.statusBy?`<div class="t-sub" style="font-size:10px;color:var(--st-done)">完了 : ${esc(t.statusBy)} ${fmtDateTime(t.statusAt)}</div>`:''}
+          </div>
+        </div>
+        <div class="chk-row">
+          <button class="chk" data-role="restore"><span>↺ 復元</span></button>
+          <button class="chk" data-role="perma-delete" style="color:var(--danger);border-color:#fecaca;background:#fef2f2"><span>🗑 今すぐ削除</span></button>
+        </div>
+      </div>`;
+  }).join('');
+  el.querySelectorAll('.task').forEach(row=>{
+    const id = row.dataset.id;
+    row.querySelector('[data-role="restore"]').onclick = e=>{ e.stopPropagation(); restoreTask(id); };
+    row.querySelector('[data-role="perma-delete"]').onclick = e=>{ e.stopPropagation(); permanentDeleteTask(id); };
+  });
+}
+
+/* ===== actions ===== */
+function cycleStatus(taskId){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = p.tasks.find(x=>x.id===taskId);
+  const order = ['todo','wip','done'];
+  const idx = order.indexOf(t.status);
+  applyStatusChange(t, order[(idx<0?0:idx+1) % order.length]);
+  save(); renderDetail();
+}
+function toggleCheck(taskId, field){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = p.tasks.find(x=>x.id===taskId);
+  t[field] = !t[field];
+  const byField = field==='checkWork' ? 'checkWorkBy' : 'checkAmountBy';
+  const atField = field==='checkWork' ? 'checkWorkAt' : 'checkAmountAt';
+  if(t[field]){
+    t[byField] = settings.currentUser || '';
+    t[atField] = Date.now();
+  } else {
+    t[byField] = '';
+    t[atField] = null;
+  }
+  save(); renderDetail();
+}
+function compressImage(file, maxBytes){
+  return new Promise(function(resolve){
+    maxBytes = maxBytes || 30000;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var canvas = document.createElement('canvas');
+        var maxDim = 1600;
+        var w = img.width, h = img.height;
+        if(w > h){ if(w > maxDim){ h = h*maxDim/w; w = maxDim; } }
+        else { if(h > maxDim){ w = w*maxDim/h; h = maxDim; } }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        var quality = 0.7;
+        var dataUrl = canvas.toDataURL('image/jpeg', quality);
+        while(dataUrl.length > maxBytes * 1.37 && quality > 0.1){
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function showPhotoZoom(src){
+  document.getElementById('photo-zoom-img').src = src;
+  document.getElementById('photo-zoom').classList.add('on');
+}
+// iframe Bridge 方式で Drive にアップロード（CORS回避）
+var _uploadIframe = null;
+var _uploadReady = false;
+var _uploadCallbacks = {};
+var _uploadQueue = [];
+
+function initUploadBridge(){
+  if(_uploadIframe) return;
+  if(!settings.gasUrl) return;
+  _uploadIframe = document.createElement('iframe');
+  _uploadIframe.style.display = 'none';
+  _uploadIframe.src = settings.gasUrl + '?action=uploadPage';
+  document.body.appendChild(_uploadIframe);
+  window.addEventListener('message', function(e){
+    if(!e.data) return;
+    if(e.data.type === 'uploadReady'){
+      _uploadReady = true;
+      _uploadQueue.forEach(function(q){ _uploadIframe.contentWindow.postMessage(q,'*'); });
+      _uploadQueue = [];
+    }
+    if(e.data.type === 'uploadResult'){
+      var cb = _uploadCallbacks[e.data.id];
+      if(cb){ cb(e.data.result); delete _uploadCallbacks[e.data.id]; }
+    }
+  });
+}
+
+function uploadToDrive(base64Data, propName, roomNo, fileName, mimeType){
+  return new Promise(function(resolve){
+    if(!settings.gasUrl){ resolve({ok:false, error:'GAS URL未設定'}); return; }
+    initUploadBridge();
+    var id = uid();
+    var msg = {
+      action:'upload', id:id,
+      propertyName: propName||'', roomNumber: roomNo||'',
+      fileName: fileName||('photo_'+Date.now()+'.jpg'),
+      mimeType: mimeType||'image/jpeg',
+      data: base64Data
+    };
+    _uploadCallbacks[id] = resolve;
+    if(_uploadReady && _uploadIframe){
+      _uploadIframe.contentWindow.postMessage(msg, '*');
+    } else {
+      _uploadQueue.push(msg);
+    }
+    setTimeout(function(){
+      if(_uploadCallbacks[id]){
+        resolve({ok:false, error:'タイムアウト（30秒）'});
+        delete _uploadCallbacks[id];
+      }
+    }, 30000);
+  });
+}
+function removeLog(taskId, idx){
+  if(!confirm('この作業ログを削除しますか？')) return;
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = p.tasks.find(x=>x.id===taskId);
+  if(!t.logs || !t.logs[idx]) return;
+  t.logs.splice(idx, 1);
+  save(); renderDetail();
+}
+function addLog(taskId, text, photo){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = p.tasks.find(x=>x.id===taskId);
+  t.logs = t.logs || [];
+  const entry = {
+    date: new Date().toISOString().slice(0,10),
+    text: text || '',
+    by: settings.currentUser || '',
+    at: Date.now()
+  };
+  if(photo) entry.photo = photo;
+  t.logs.push(entry);
+  save(); renderDetail();
+}
+
+/* ===== nav ===== */
+function showList(){
+  document.getElementById('view-list').classList.remove('hide');
+  document.getElementById('view-detail').classList.add('hide');
+  currentPropId = null;
+  renderList();
+  window.scrollTo(0,0);
+}
+function openDetail(id){
+  currentPropId = id;
+  document.getElementById('view-list').classList.add('hide');
+  document.getElementById('view-detail').classList.remove('hide');
+  renderDetail();
+  window.scrollTo(0,0);
+}
+
+/* ===== task sheet ===== */
+let editingTaskId = null;
+let editingTaskCat = 'outsource';
+function openTaskSheet(taskId, cat){
+  editingTaskId = taskId || null;
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const t = taskId ? p.tasks.find(x=>x.id===taskId) :
+    {category:cat||'outsource',name:'',room:'',surface:'',spec:'',qty:'',unit:'式',contractor:'',amount:'',schedule:'',status:(cat==='outsource'?'wip':'todo'),note:''};
+  editingTaskCat = t.category;
+  document.getElementById('ts-title').textContent = taskId?'タスク編集':'タスク追加';
+  val('ts-name',t.name);
+  val('ts-room',t.room||'');
+  val('ts-surface',t.surface||'');
+  val('ts-qty',t.qty||'');
+  val('ts-unit',t.unit||'');
+  val('ts-spec',t.spec||'');
+  val('ts-contractor',t.contractor||'');
+  val('ts-amount',t.amount||'');
+  val('ts-schedule',t.schedule||'');
+  val('ts-note',t.note||'');
+  setPicker('ts-cat', t.category, newCat=>{ editingTaskCat = newCat; });
+  setPicker('ts-status', t.status||'todo');
+  document.getElementById('ts-delete').classList.toggle('hide', !taskId);
+  document.getElementById('sheet-task').classList.add('on');
+}
+function closeTaskSheet(){ document.getElementById('sheet-task').classList.remove('on'); }
+function saveTaskSheet(){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const newStatus = getPicker('ts-status') || 'todo';
+  const data = {
+    category: editingTaskCat,
+    name: val('ts-name').trim(),
+    room: val('ts-room').trim(),
+    surface: val('ts-surface').trim(),
+    qty: +val('ts-qty')||0,
+    unit: val('ts-unit').trim(),
+    spec: val('ts-spec').trim(),
+    contractor: val('ts-contractor').trim(),
+    amount: +val('ts-amount')||0,
+    schedule: val('ts-schedule').trim(),
+    note: val('ts-note').trim(),
+  };
+  if(!data.name){ alert('工事名称を入力してください'); return; }
+  if(editingTaskId){
+    const t = p.tasks.find(x=>x.id===editingTaskId);
+    Object.assign(t, data);
+    applyStatusChange(t, newStatus);
+  } else {
+    const defaultStatus = (data.category==='outsource') ? 'wip' : 'todo';
+    const t = {id:uid(),logs:[],checkWork:false,checkAmount:false,status:defaultStatus,doneAt:null,...data};
+    applyStatusChange(t, newStatus);
+    p.tasks.push(t);
+  }
+  save(); closeTaskSheet(); renderDetail();
+}
+function deleteTask(){
+  if(!editingTaskId) return;
+  if(!confirm('このタスクを削除しますか？')) return;
+  const p = state.properties.find(x=>x.id===currentPropId);
+  p.tasks = p.tasks.filter(x=>x.id!==editingTaskId);
+  save(); closeTaskSheet(); renderDetail();
+}
+
+/* ===== property sheet ===== */
+let editingPropId = null;
+function openPropSheet(propId){
+  editingPropId = propId || null;
+  const p = propId ? state.properties.find(x=>x.id===propId) :
+    {name:'',room:'',layout:'',address:'',client:'',clientCat:'山一地所',mgmt:'',moveout:'',orderDate:'',movein:'',disinfect:'',keyChange:'',keyCon:'',entKey:'',entCode:'',pic:'',tel:'',parking:'',utility:'',finalDate:'',finalBy:'',completeDate:''};
+  document.getElementById('ps-title').textContent = propId?'物件編集':'物件追加';
+  const map = {name:'ps-name',room:'ps-room',layout:'ps-layout',address:'ps-address',client:'ps-client',
+    mgmt:'ps-mgmt',moveout:'ps-moveout',orderDate:'ps-orderdate',movein:'ps-movein',disinfect:'ps-disinfect',
+    keyChange:'ps-keychange',keyCon:'ps-keycon',entKey:'ps-entkey',entCode:'ps-entcode',
+    pic:'ps-pic',tel:'ps-tel',parking:'ps-parking',utility:'ps-utility',
+    finalDate:'ps-finaldate',finalBy:'ps-finalby',completeDate:'ps-completedate'};
+  Object.entries(map).forEach(([k,id])=>val(id, p[k]||''));
+  setPicker('ps-clientcat', p.clientCat||autoDetectClientCat(p));
+  document.getElementById('ps-delete').classList.toggle('hide', !propId);
+  document.getElementById('sheet-prop').classList.add('on');
+}
+function closePropSheet(){ document.getElementById('sheet-prop').classList.remove('on'); }
+function savePropSheet(){
+  const data = {
+    name:val('ps-name').trim(), room:val('ps-room').trim(), layout:val('ps-layout').trim(),
+    address:val('ps-address').trim(), client:val('ps-client').trim(),
+    clientCat: getPicker('ps-clientcat') || '山一地所',
+    mgmt:val('ps-mgmt').trim(), moveout:val('ps-moveout').trim(), orderDate:val('ps-orderdate'),
+    movein:val('ps-movein').trim(), disinfect:val('ps-disinfect'),
+    keyChange:val('ps-keychange'), keyCon:val('ps-keycon').trim(),
+    entKey:val('ps-entkey').trim(), entCode:val('ps-entcode').trim(),
+    pic:val('ps-pic').trim(), tel:val('ps-tel').trim(),
+    parking:val('ps-parking').trim(), utility:val('ps-utility').trim(),
+    finalDate:val('ps-finaldate'), finalBy:val('ps-finalby').trim(),
+    completeDate:val('ps-completedate'),
+  };
+  if(!data.name){ alert('物件名を入力してください'); return; }
+  if(editingPropId){
+    Object.assign(state.properties.find(x=>x.id===editingPropId), data);
+  } else {
+    state.properties.unshift({id:uid(),...data,tasks:[],comments:[]});
+  }
+  save(); closePropSheet();
+  currentPropId ? renderDetail() : renderList();
+}
+function deleteProp(){
+  if(!editingPropId) return;
+  if(!confirm('この物件を削除しますか？タスクも全て削除されます。')) return;
+  state.properties = state.properties.filter(x=>x.id!==editingPropId);
+  save(); closePropSheet(); showList();
+}
+
+/* ===== comment sheet ===== */
+function openCommentSheet(){
+  _editingCommentId = null;
+  document.querySelector('#sheet-comment h3').textContent='現場メモ・添付追加';
+  val('cs-author', settings.currentUser || localStorage.getItem('lastAuthor')||'');
+  val('cs-text','');
+  document.getElementById('cs-photo-preview').style.display='none';
+  document.getElementById('cs-photo-preview').src='';
+  document.getElementById('cs-photo-input').value='';
+  delete document.getElementById('cs-photo-preview').dataset.compressed;
+  document.getElementById('sheet-comment').classList.add('on');
+}
+function closeCommentSheet(){ document.getElementById('sheet-comment').classList.remove('on'); }
+var _editingCommentId = null;
+function editComment(cid){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const c = p.comments.find(x=>x.id===cid);
+  if(!c) return;
+  _editingCommentId = cid;
+  val('cs-author', c.author||'');
+  val('cs-text', c.text||'');
+  const preview = document.getElementById('cs-photo-preview');
+  if(c.photo){ preview.src=c.photo; preview.style.display='block'; preview.dataset.compressed=c.photo; }
+  else { preview.src=''; preview.style.display='none'; delete preview.dataset.compressed; }
+  document.getElementById('cs-photo-input').value='';
+  document.querySelector('#sheet-comment h3').textContent='現場メモ編集';
+  document.getElementById('sheet-comment').classList.add('on');
+}
+function deleteComment(cid){
+  if(!confirm('この現場メモを削除しますか？')) return;
+  const p = state.properties.find(x=>x.id===currentPropId);
+  p.comments = p.comments.filter(x=>x.id!==cid);
+  save(); renderDetail();
+}
+async function saveComment(){
+  const p = state.properties.find(x=>x.id===currentPropId);
+  const author = val('cs-author').trim();
+  const text = val('cs-text').trim();
+  const preview = document.getElementById('cs-photo-preview');
+  const compressed = preview.dataset.compressed || null;
+  if(!text && !compressed){ alert('内容または写真を入力してください'); return; }
+  localStorage.setItem('lastAuthor', author);
+  let photo = null;
+  if(compressed && compressed.startsWith('https://')){
+    photo = compressed;
+  } else if(compressed && settings.gasUrl){
+    document.getElementById('cs-save').textContent = '⏳ アップロード中...';
+    const result = await uploadToDrive(compressed, p?.name, p?.room);
+    document.getElementById('cs-save').textContent = '保存';
+    if(result.ok) photo = result.url;
+    else photo = compressed;
+  } else if(compressed) {
+    photo = compressed;
+  }
+  if(_editingCommentId){
+    // 編集モード
+    const c = p.comments.find(x=>x.id===_editingCommentId);
+    if(c){ c.author=author; c.text=text; if(photo) c.photo=photo; else if(!compressed) delete c.photo; }
+    _editingCommentId = null;
+    document.querySelector('#sheet-comment h3').textContent='現場メモ・添付追加';
+  } else {
+    // 新規
+    const entry = {id:uid(),author,text,date:new Date().toISOString().slice(0,10)};
+    if(photo) entry.photo = photo;
+    p.comments.push(entry);
+  }
+  save(); closeCommentSheet(); renderDetail();
+}
+
+/* ===== pickers ===== */
+function setPicker(wrapId, value, onChange){
+  const w = document.getElementById(wrapId);
+  w.querySelectorAll('button').forEach(b=>{
+    b.className = b.dataset.s===value ? 'on '+b.dataset.s : '';
+  });
+  w.onclick = e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    w.querySelectorAll('button').forEach(x=>x.className='');
+    b.className = 'on '+b.dataset.s;
+    if(onChange) onChange(b.dataset.s);
+  };
+}
+function getPicker(wrapId){
+  const b = document.querySelector('#'+wrapId+' button.on');
+  return b ? b.dataset.s : null;
+}
+
+/* ===== utils ===== */
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function val(id, v){
+  const el = document.getElementById(id);
+  if(arguments.length>1){ el.value = v==null?'':v; return; }
+  return el.value;
+}
+function fmtDate(s){
+  if(!s) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${+m[2]}/${+m[3]}` : s;
+}
+function fmtDateTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+/* ===== user selector ===== */
+function updateUserLabel(){
+  document.querySelectorAll('.btn-user-label').forEach(el=>{
+    el.textContent = settings.currentUser || '未設定';
+  });
+}
+function openUserSheet(){
+  const list = document.getElementById('user-list');
+  list.innerHTML = settings.users.map(u=>`
+    <button class="user-item ${u===settings.currentUser?'on':''}" data-u="${esc(u)}">
+      👤 ${esc(u)}
+      <button class="rm" data-rm="${esc(u)}">削除</button>
+    </button>
+  `).join('') || '<div class="empty" style="padding:10px">ユーザー未登録</div>';
+  list.querySelectorAll('.user-item').forEach(b=>{
+    b.onclick = e=>{
+      if(e.target.closest('[data-rm]')) return;
+      settings.currentUser = b.dataset.u;
+      saveSettings(); updateUserLabel(); closeUserSheet();
+      if(currentPropId) renderDetail();
+    };
+    const rm = b.querySelector('[data-rm]');
+    if(rm) rm.onclick = e=>{
+      e.stopPropagation();
+      const name = rm.dataset.rm;
+      if(!confirm(`ユーザー「${name}」を削除しますか？（既存のチェック記録は残ります）`)) return;
+      settings.users = settings.users.filter(x=>x!==name);
+      if(settings.currentUser===name) settings.currentUser = '';
+      saveSettings(); updateUserLabel(); openUserSheet();
+    };
+  });
+  val('us-new','');
+  document.getElementById('sheet-user').classList.add('on');
+}
+function closeUserSheet(){ document.getElementById('sheet-user').classList.remove('on'); }
+function addUser(){
+  const name = val('us-new').trim();
+  if(!name){ alert('名前を入力してください'); return; }
+  if(!settings.users.includes(name)) settings.users.push(name);
+  settings.currentUser = name;
+  saveSettings(); updateUserLabel(); closeUserSheet();
+  if(currentPropId) renderDetail();
+}
+
+/* ===== GAS Web App 同期 (双方向) ===== */
+// ====================================================
+// 進捗データ双方向同期
+// ====================================================
+
+function buildProgressPayload(prop){
+  // タスクのユーザー変更データだけ抽出
+  var tasks = {};
+  (prop.tasks||[]).forEach(function(t){
+    var key = (t.category||'')+'|'+(t.contractor||'')+'|'+(t.room||'')+'|'+(t.name||'');
+    tasks[key] = {
+      status: t.status, doneAt: t.doneAt||null, statusBy: t.statusBy||'', statusAt: t.statusAt||null,
+      checkWork: t.checkWork||false, checkWorkBy: t.checkWorkBy||'', checkWorkAt: t.checkWorkAt||null,
+      checkAmount: t.checkAmount||false, checkAmountBy: t.checkAmountBy||'', checkAmountAt: t.checkAmountAt||null,
+      logs: t.logs||[], note: t.note||''
+    };
+  });
+  return { tasks: tasks, comments: prop.comments||[], updatedAt: Date.now(), updatedBy: settings.currentUser||'' };
+}
+
+var _pushTimer = {};
+function pushProgressDebounced(propId){
+  if(_pushTimer[propId]) clearTimeout(_pushTimer[propId]);
+  _pushTimer[propId] = setTimeout(function(){ pushProgressNow(propId); }, 2000);
+}
+
+async function pushProgressNow(propId){
+  if(!settings.gasUrl) return;
+  var prop = state.properties.find(function(x){return x.id===propId;});
+  if(!prop) return;
+  var progress = buildProgressPayload(prop);
+  try {
+    await fetch(settings.gasUrl, {
+      method:'POST', redirect:'follow',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'saveProgress', propertyName:prop.name, roomNumber:prop.room, progress:progress })
+    });
+  } catch(e) { console.warn('pushProgress failed', e); }
+}
+
+function applyProgressFromServer(prop, serverProgress){
+  if(!serverProgress) return;
+  // コメントをサーバーから適用（サーバーが正）
+  if(serverProgress.comments && serverProgress.comments.length) {
+    prop.comments = serverProgress.comments;
+  }
+  // タスク進捗をマージ
+  if(serverProgress.tasks){
+    (prop.tasks||[]).forEach(function(t){
+      var key = (t.category||'')+'|'+(t.contractor||'')+'|'+(t.room||'')+'|'+(t.name||'');
+      var sp = serverProgress.tasks[key];
+      if(!sp) return;
+      t.status = sp.status || t.status;
+      t.doneAt = sp.doneAt || t.doneAt;
+      t.statusBy = sp.statusBy || t.statusBy || '';
+      t.statusAt = sp.statusAt || t.statusAt || null;
+      t.checkWork = sp.checkWork || false;
+      t.checkWorkBy = sp.checkWorkBy || '';
+      t.checkWorkAt = sp.checkWorkAt || null;
+      t.checkAmount = sp.checkAmount || false;
+      t.checkAmountBy = sp.checkAmountBy || '';
+      t.checkAmountAt = sp.checkAmountAt || null;
+      t.logs = sp.logs && sp.logs.length ? sp.logs : (t.logs||[]);
+      t.note = sp.note || t.note;
+    });
+  }
+}
+
+async function gasFetchSync(url){
+  const u = url.replace(/\/+$/,'') + '?action=sync';
+  const res = await fetch(u, {method:'GET', redirect:'follow'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const txt = await res.text();
+  let json;
+  try { json = JSON.parse(txt); }
+  catch(e){ throw new Error('JSON解析失敗: '+txt.slice(0,200)); }
+  if(json.error) throw new Error(json.error);
+  return json;
+}
+async function gasPing(url){
+  const u = url.replace(/\/+$/,'') + '?action=ping';
+  const res = await fetch(u, {method:'GET', redirect:'follow'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const json = await res.json();
+  return json;
+}
+
+function applyGasSync(payload){
+  let upd=0, add=0;
+  payload.properties.forEach(p=>{
+    // 物件No優先、なければ 物件名+号室 でマッチ
+    // 名前+号室でマッチング（mgmtNo重複があるためNoは使わない）
+    let existing = state.properties.find(x=>
+      x.name.replace(/\s+/g,'')===p.name.replace(/\s+/g,'') &&
+      String(x.room||'').trim() === String(p.room||'').trim()
+    );
+    const data = {
+      mgmtNo:       p.no,
+      clientCat:    p.clientCat,
+      client:       p.clientRaw || existing?.client || '',
+      name:         p.name,
+      room:         p.room,
+      orderDate:    p.orderDate || p.document_date || '',
+      movein:       p.movein,
+      finalDate:    p.finalDate,
+      completeDate: p.completeDate,
+      keyChange:    p.keyChange || p.key_exchange_date || '',
+      keyCon:       p.keyCon || p.key_vendor || '',
+      disinfect:    p.disinfect || p.disinfection_date || '',
+      pic:          p.pic || p.person_in_charge || '',
+      utility:      p.water,
+      // 物件情報メタから取得（Phase 2）
+      entKey:       p.entrance_key || existing?.entKey || '',
+      entCode:      p.entrance_code || existing?.entCode || '',
+      tel:          p.phone_number || existing?.tel || '',
+      address:      p.address || existing?.address || '',
+      layout:       p.floor_plan || existing?.layout || '',
+      moveout:      p.move_out_month || existing?.moveout || '',
+    };
+    if(existing){
+      Object.assign(existing, data);
+      syncTasks(existing, p.tasks || [], p.contractors || []);
+      if(p.progress) applyProgressFromServer(existing, p.progress);
+      upd++;
+    } else {
+      const np = Object.assign(
+        {id:uid(),layout:'',address:'',mgmt:'',moveout:'',entKey:'',entCode:'',tel:'',parking:'',finalBy:'',tasks:[],comments:[]},
+        data
+      );
+      syncTasks(np, p.tasks || [], p.contractors || []);
+      if(p.progress) applyProgressFromServer(np, p.progress);
+      state.properties.unshift(np);
+      add++;
+    }
+  });
+  save();
+  renderList();
+  return {upd, add};
+}
+
+// カテゴリ正規化（GAS側が「外注/自社/減工事」の日本語ラベルで返してくる）
+function normalizeCategory(s){
+  const v = String(s||'').trim();
+  if(v==='外注' || v==='outsource') return 'outsource';
+  if(v==='自社' || v==='inhouse') return 'inhouse';
+  if(v==='減工事' || v==='reduced') return 'reduced';
+  return 'outsource';
+}
+function fmtSchedule(a,b){
+  if(a && b) return `${fmtDate(a)}〜${fmtDate(b)}`;
+  if(a) return fmtDate(a);
+  return '';
+}
+
+/**
+ * タスク明細 (p.tasks) が来ている場合はそれで物件タスクを再構築
+ * タスク明細が空（Phase 1のみデプロイ済みの場合）は業者サマリーでプレースホルダ作成
+ * 既存の進捗・チェック・ログ・メモは可能な限り保持する
+ */
+function syncTasks(prop, serverTasks, contractors){
+  // タスク明細がある → 明細ベースで再構築
+  if(serverTasks && serverTasks.length){
+    // 既存タスクの状態を key で引けるようにしておく
+    const preserved = new Map();
+    (prop.tasks||[]).forEach(t=>{
+      const k = `${t.category}|${(t.contractor||'').trim()}|${(t.room||'').trim()}|${(t.name||'').trim()}`;
+      if(!preserved.has(k)) preserved.set(k, []);
+      preserved.get(k).push(t);
+    });
+
+    const newTasks = serverTasks.map(st=>{
+      const cat = normalizeCategory(st.category);
+      const contractor = (st.contractor||'').trim();
+      const room = (st.room||'').trim();
+      const name = (st.workName||'').trim();
+      const schedule = fmtSchedule(st.periodStart, st.periodEnd);
+      const key = `${cat}|${contractor}|${room}|${name}`;
+
+      // 既存からキーマッチで1件取り出す（同一キーが複数ある場合は順に消費）
+      const bucket = preserved.get(key);
+      const kept = bucket && bucket.length ? bucket.shift() : null;
+
+      return {
+        id: kept?.id || uid(),
+        category: cat,
+        contractor: contractor,
+        name: name,
+        room: room,
+        surface: kept?.surface || '',
+        spec: kept?.spec || '',
+        qty: Number(st.quantity) || 0,
+        unit: st.unit || '',
+        amount: Number(st.amount) || 0,
+        schedule: schedule || (kept?.schedule || ''),
+        // ↓ ここから保持
+        status: kept?.status || (cat==='outsource' ? 'wip' : 'todo'),
+        doneAt: kept?.doneAt || null,
+        checkWork: kept?.checkWork || false,
+        checkWorkBy: kept?.checkWorkBy || '',
+        checkWorkAt: kept?.checkWorkAt || null,
+        checkAmount: kept?.checkAmount || false,
+        checkAmountBy: kept?.checkAmountBy || '',
+        checkAmountAt: kept?.checkAmountAt || null,
+        logs: kept?.logs || [],
+        note: kept?.note || ''
+      };
+    });
+    prop.tasks = newTasks;
+    return;
+  }
+
+  // タスク明細が空 → プレースホルダは作らない（PDFアップロード後にタスクが入る）
+}
+
+async function runGasSync(){
+  const url = (val('im-gas-url')||'').trim();
+  if(!url){ alert('GAS Web App URLを入力してください'); return; }
+  settings.gasUrl = url; saveSettings();
+  try {
+    const payload = await gasFetchSync(url);
+    if(!payload.properties || !payload.properties.length){
+      alert('物件データが0件でした。シートを確認してください。');
+      return;
+    }
+    if(!confirm(`${payload.count}件の物件を取込みます。よろしいですか？`)) return;
+    const {upd, add} = applyGasSync(payload);
+    closeImportSheet();
+    alert(`GAS同期完了: 更新 ${upd}件 / 新規 ${add}件`);
+  } catch(e) {
+    alert('同期失敗: '+e.message+'\n\nURLが正しいか、デプロイのアクセス権限が「リンクを知っている全員」になっているか確認してください。');
+  }
+}
+async function runGasPing(){
+  const url = (val('im-gas-url')||'').trim();
+  if(!url){ alert('URLを入力してください'); return; }
+  try {
+    const r = await gasPing(url);
+    if(r.ok) alert('疎通OK (' + r.at + ')');
+    else alert('疎通NG: '+JSON.stringify(r));
+  } catch(e){
+    alert('疎通失敗: '+e.message);
+  }
+}
+
+/* ===== CSV import (A案: sheet → app one-way) ===== */
+const FIELD_ALIASES = {
+  name:         ['物件名','物件','AP名','AP','name','building'],
+  room:         ['号室','部屋','room','号'],
+  layout:       ['間取り','間取','layout'],
+  address:      ['住所','所在地','address'],
+  client:       ['元請','元請け','client','発注元','管理'],
+  mgmt:         ['管理no','管理No','管理番号'],
+  moveout:      ['退去月','退去日','退去','moveout'],
+  orderDate:    ['発注日','order','発注'],
+  movein:       ['入居日','入居','movein'],
+  disinfect:    ['除菌日','除菌','除菌有無','除菌有り','disinfect'],
+  keyChange:    ['鍵交換日','鍵交換'],
+  keyCon:       ['鍵業者','鍵交換業者','鍵屋'],
+  entKey:       ['玄関鍵','鍵種'],
+  entCode:      ['エントランス','エントランス開錠','オートロック'],
+  pic:          ['担当者','担当','PIC'],
+  tel:          ['電話','電話番号','TEL','tel'],
+  parking:      ['駐車場','空き駐車場','parking'],
+  utility:      ['水道','水道・電気','水道電気','ライフライン'],
+  finalDate:    ['最終確認日','最終確認','final'],
+  finalBy:      ['最終確認者'],
+  completeDate: ['完全完了日','完了日','complete'],
+};
+
+function parseCSV(text){
+  // handle CSV or TSV (tab-separated)
+  text = text.replace(/^\ufeff/,'').replace(/\r\n?/g,'\n');
+  if(!text.trim()) return [];
+  const firstLine = text.split('\n')[0];
+  const sep = firstLine.includes('\t') && !firstLine.includes(',') ? '\t' : ',';
+  const rows = [];
+  let row = [], cell = '', inQ = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if(inQ){
+      if(c==='"' && n==='"'){ cell+='"'; i++; }
+      else if(c==='"'){ inQ=false; }
+      else cell+=c;
+    } else {
+      if(c==='"'){ inQ=true; }
+      else if(c===sep){ row.push(cell); cell=''; }
+      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else cell+=c;
+    }
+  }
+  if(cell.length || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(x=>String(x||'').trim()));
+}
+
+function detectColumns(headers){
+  const map = {};
+  const hs = headers.map(h=>String(h||'').trim().toLowerCase());
+  for(const [field, aliases] of Object.entries(FIELD_ALIASES)){
+    for(const a of aliases){
+      const al = a.toLowerCase();
+      const idx = hs.findIndex(h=>h===al || h.includes(al));
+      if(idx>=0){ map[field] = idx; break; }
+    }
+  }
+  return map;
+}
+
+let importParsed = null;
+function openImportSheet(){
+  val('im-url','');
+  val('im-text','');
+  val('im-gas-url', settings.gasUrl||'');
+  document.getElementById('im-preview').classList.add('hide');
+  importParsed = null;
+  document.getElementById('sheet-import').classList.add('on');
+}
+function closeImportSheet(){ document.getElementById('sheet-import').classList.remove('on'); }
+
+async function parseImport(){
+  let text = val('im-text').trim();
+  const url = val('im-url').trim();
+  if(!text && url){
+    try{
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      text = await res.text();
+    } catch(e){
+      alert('URL取得に失敗しました: '+e.message+'\n\nCORS制限でブラウザから取得できない場合があります。その場合はスプシで「ファイル→共有→ウェブに公開→CSV」で公開URLを作成するか、セルをコピー＆ペーストしてください。');
+      return;
+    }
+  }
+  if(!text){ alert('CSVを貼り付けるか、URLを入力してください'); return; }
+
+  const rows = parseCSV(text);
+  if(rows.length<2){ alert('ヘッダー行＋データ行が必要です（2行以上）'); return; }
+
+  const headers = rows[0];
+  const map = detectColumns(headers);
+  if(map.name==null){
+    alert('物件名の列が見つかりません。ヘッダー行に「物件名」「AP名」などを含めてください。');
+    return;
+  }
+  const dataRows = rows.slice(1).map(r=>{
+    const obj = {};
+    for(const [field, idx] of Object.entries(map)){
+      obj[field] = String(r[idx]||'').trim();
+    }
+    return obj;
+  }).filter(r=>r.name);
+
+  // match against existing properties
+  const result = dataRows.map(d=>{
+    const existing = state.properties.find(p=>
+      p.name.replace(/\s+/g,'')===d.name.replace(/\s+/g,'') &&
+      String(p.room||'').trim() === String(d.room||'').trim()
+    );
+    return { data:d, matched: existing?existing.id:null };
+  });
+
+  importParsed = { headers, map, result };
+
+  // render preview
+  const detected = Object.entries(map).map(([f,i])=>
+    `<code style="background:#fff;padding:1px 4px;border-radius:3px">${f}</code>→${esc(headers[i]||'')}`
+  ).join(' ・ ');
+  document.getElementById('im-mapping').innerHTML = '検出: '+detected;
+
+  const newCount = result.filter(r=>!r.matched).length;
+  const updCount = result.filter(r=>r.matched).length;
+  document.getElementById('im-summary').innerHTML =
+    `<b>${result.length}</b>件解析 ・ 更新 <b>${updCount}</b> ・ 新規 <b>${newCount}</b>`;
+
+  document.getElementById('im-rows').innerHTML = result.map(r=>{
+    const badge = r.matched
+      ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 6px;border-radius:4px;font-size:10px">更新</span>'
+      : '<span style="background:#dcfce7;color:#15803d;padding:1px 6px;border-radius:4px;font-size:10px">新規</span>';
+    const fields = Object.entries(r.data).filter(([k,v])=>v&&k!=='name'&&k!=='room').slice(0,4)
+      .map(([k,v])=>`${k}:${esc(v).slice(0,14)}`).join(' / ');
+    return `<div style="padding:6px 4px;border-bottom:1px solid var(--line);font-size:12px">
+      ${badge} <b>${esc(r.data.name)}</b> ${esc(r.data.room||'')}
+      <div style="color:var(--mute);font-size:11px;margin-top:2px">${fields}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('im-preview').classList.remove('hide');
+}
+
+function applyImport(){
+  if(!importParsed) return;
+  const MASTER_FIELDS = Object.keys(FIELD_ALIASES);
+  let upd=0, add=0;
+  importParsed.result.forEach(r=>{
+    const data = {};
+    MASTER_FIELDS.forEach(f=>{
+      if(r.data[f]!==undefined && r.data[f]!=='') data[f] = r.data[f];
+    });
+    if(r.matched){
+      const p = state.properties.find(x=>x.id===r.matched);
+      Object.assign(p, data);  // preserves tasks, comments, progress, logs, checks
+      upd++;
+    } else {
+      state.properties.unshift({
+        id: uid(),
+        ...{name:'',room:'',layout:'',address:'',client:'',mgmt:'',moveout:'',orderDate:'',movein:'',disinfect:'',keyChange:'',keyCon:'',entKey:'',entCode:'',pic:'',tel:'',parking:'',utility:'',finalDate:'',finalBy:'',completeDate:''},
+        ...data,
+        tasks:[], comments:[]
+      });
+      add++;
+    }
+  });
+  save(); closeImportSheet();
+  alert(`取込完了: 更新 ${upd}件 / 新規 ${add}件`);
+  currentPropId ? renderDetail() : renderList();
+}
+
+/* ===== wire-up ===== */
+document.getElementById('search').oninput = e=>{ searchQ = e.target.value; renderList(); };
+document.getElementById('filter-chips').onclick = e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  document.querySelectorAll('#filter-chips .chip').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentFilter = b.dataset.f; renderList();
+};
+document.getElementById('client-chips').onclick = e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  document.querySelectorAll('#client-chips .chip').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentClientCat = b.dataset.c; renderList();
+};
+document.getElementById('btn-back').onclick = showList;
+document.getElementById('btn-edit-prop').onclick = ()=>openPropSheet(currentPropId);
+document.getElementById('btn-add-comment').onclick = openCommentSheet;
+document.querySelectorAll('[data-add]').forEach(b=>{
+  b.onclick = ()=>openTaskSheet(null, b.dataset.add);
+});
+
+// user sheet
+document.querySelectorAll('.btn-user').forEach(b=>b.onclick = openUserSheet);
+document.getElementById('us-cancel').onclick = closeUserSheet;
+document.getElementById('us-add').onclick = addUser;
+document.getElementById('sheet-user').onclick = closeUserSheet;
+document.getElementById('us-new').onkeydown = e=>{
+  if(e.key==='Enter'){ e.preventDefault(); addUser(); }
+};
+
+// import sheet
+document.getElementById('btn-import').onclick = openImportSheet;
+document.getElementById('im-cancel').onclick = closeImportSheet;
+document.getElementById('sheet-import').onclick = closeImportSheet;
+document.getElementById('im-parse').onclick = parseImport;
+document.getElementById('im-apply').onclick = applyImport;
+document.getElementById('im-back').onclick = ()=>{
+  document.getElementById('im-preview').classList.add('hide');
+  importParsed = null;
+};
+document.getElementById('im-gas-sync').onclick = runGasSync;
+document.getElementById('im-gas-test').onclick = runGasPing;
+document.getElementById('im-reset').onclick = ()=>{
+  if(!confirm('この端末のローカルデータを全てクリアします。\nGAS URLと設定は保持されます。\n\nよろしいですか？')) return;
+  var gasUrl = settings.gasUrl;
+  var currentUser = settings.currentUser;
+  localStorage.removeItem(STORAGE_KEY);
+  state = seed();
+  settings.gasUrl = gasUrl;
+  settings.currentUser = currentUser;
+  saveSettings();
+  save();
+  closeImportSheet();
+  showList();
+  alert('クリア完了。↻ボタンでGAS同期してください。');
+};
+
+document.getElementById('btn-refresh').onclick = async ()=>{
+  if(!settings.gasUrl){
+    alert('GAS URLが未設定です。⬇ ボタンからURLを設定してください。');
+    return;
+  }
+  try {
+    const btn = document.getElementById('btn-refresh');
+    btn.style.opacity = '0.5';
+    btn.style.pointerEvents = 'none';
+    const payload = await gasFetchSync(settings.gasUrl);
+    if(!payload.properties || !payload.properties.length){
+      alert('物件データが0件でした。');
+      return;
+    }
+    const {upd, add} = applyGasSync(payload);
+    alert(`同期完了: 更新 ${upd}件 / 新規 ${add}件`);
+  } catch(e) {
+    alert('同期失敗: ' + e.message);
+  } finally {
+    const btn = document.getElementById('btn-refresh');
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+  }
+};
+
+// FAB: list=add property, detail=add task
+const fab = document.getElementById('fab');
+fab.onclick = ()=>{ currentPropId ? openTaskSheet(null,'outsource') : openPropSheet(); };
+
+// task sheet
+document.getElementById('ts-cancel').onclick = closeTaskSheet;
+document.getElementById('ts-save').onclick = saveTaskSheet;
+document.getElementById('ts-delete').onclick = deleteTask;
+document.getElementById('sheet-task').onclick = closeTaskSheet;
+// prop sheet
+document.getElementById('ps-cancel').onclick = closePropSheet;
+document.getElementById('ps-save').onclick = savePropSheet;
+document.getElementById('ps-delete').onclick = deleteProp;
+document.getElementById('sheet-prop').onclick = closePropSheet;
+// comment sheet
+document.getElementById('cs-cancel').onclick = closeCommentSheet;
+document.getElementById('cs-save').onclick = saveComment;
+document.getElementById('sheet-comment').onclick = closeCommentSheet;
+document.getElementById('cs-photo-btn').onclick = ()=>document.getElementById('cs-photo-input').click();
+document.getElementById('cs-photo-input').onchange = async function(){
+  const file = this.files[0];
+  if(!file) return;
+  const compressed = await compressImage(file, 500000);
+  const preview = document.getElementById('cs-photo-preview');
+  preview.src = compressed;
+  preview.style.display = 'block';
+  preview.dataset.compressed = compressed;
+};
+
+// ゴミ箱 toggle
+document.getElementById('btn-complete-prop').onclick = async ()=>{
+  const p = state.properties.find(x=>x.id===currentPropId);
+  if(!p) return;
+  const today = new Date().toISOString().slice(0,10);
+  if(!confirm(`「${p.name} ${p.room||''}」を完全完了にしますか？\n\n完了日: ${today}\n一覧から消えてアーカイブに移動します。\nスプシの完了日(H列)にも反映されます。`)) return;
+  p.completeDate = today;
+  save();
+  // スプシにも完了日を書き込む（GETリクエスト）
+  if(settings.gasUrl && p.mgmtNo){
+    try {
+      var url = settings.gasUrl + '?action=setCompleteDate&no=' + encodeURIComponent(p.mgmtNo) + '&date=' + encodeURIComponent(today);
+      var res = await fetch(url, {method:'GET', redirect:'follow'});
+      var txt = await res.text();
+      alert('スプシ書込結果: ' + txt.substring(0, 200));
+    } catch(e) {
+      alert('スプシ書込エラー: ' + e.message);
+    }
+  } else {
+    alert('書込スキップ: gasUrl=' + (settings.gasUrl?'あり':'なし') + ' mgmtNo=' + (p.mgmtNo||'なし'));
+  }
+  alert('完全完了しました。アーカイブに移動します。');
+  showList();
+};
+
+document.getElementById('btn-toggle-trash').onclick = e=>{
+  e.stopPropagation();
+  const el = document.getElementById('task-list-trash');
+  const btn = document.getElementById('btn-toggle-trash');
+  const hidden = el.classList.toggle('hide');
+  btn.textContent = hidden ? '▼ 開く' : '▲ 閉じる';
+};
+
+fab.classList.remove('hide');
+
+// 起動時に10日経過した完了タスクを自動削除
+cleanupTrash();
+// 元請けカテゴリを自動判定して埋める
+migrateClientCat();
+// 旧ステータス（todo）→ wip に統合
+migrateStatus();
+// ヘッダーのチェック者ラベルを反映
+updateUserLabel();
+
+showList();
+</script>
+</body>
+</html>

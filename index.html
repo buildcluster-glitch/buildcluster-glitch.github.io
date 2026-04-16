@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>ビルドクラスタ 業務アプリ</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --ink:#0f172a; --mute:#64748b; --line:#e5e7eb; --accent:#2563eb;
+    --safe-top:env(safe-area-inset-top,0);
+    --safe-bottom:env(safe-area-inset-bottom,0);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);
+    padding-bottom:calc(40px + var(--safe-bottom))}
+  header{background:#0f172a;color:#fff;padding:calc(28px + var(--safe-top)) 18px 28px}
+  header h1{margin:0 0 6px;font-size:22px;font-weight:800;letter-spacing:-0.01em}
+  header .sub{font-size:13px;color:#94a3b8}
+  .section-title{padding:14px 18px 6px;font-size:11px;color:var(--mute);
+    text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .grid{padding:0 16px;display:flex;flex-direction:column;gap:10px}
+  .app-card{background:#fff;border-radius:14px;padding:18px 16px;
+    border:1px solid var(--line);text-decoration:none;color:inherit;
+    display:flex;align-items:center;gap:14px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);transition:transform .1s}
+  .app-card:active{transform:scale(.98)}
+  .app-card .icon{font-size:32px;flex-shrink:0;line-height:1}
+  .app-card .body{flex:1;min-width:0}
+  .app-card .name{font-weight:800;font-size:17px;color:var(--ink)}
+  .app-card .desc{font-size:12px;color:var(--mute);margin-top:3px;line-height:1.4}
+  .app-card .arrow{color:var(--accent);font-size:22px;flex-shrink:0;font-weight:700}
+  .app-card.coming{opacity:.5;pointer-events:none;background:#fafbfc}
+  .app-card.coming .name::after{content:" (準備中)";font-size:11px;color:var(--mute);font-weight:500}
+  .app-card.coming .arrow{color:#cbd5e1}
+  footer{padding:24px 14px;text-align:center;font-size:11px;color:var(--mute);line-height:1.6}
+  footer b{color:var(--ink);font-weight:700}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>(株)ビルドクラスタ 業務アプリ</h1>
+    <div class="sub">工事管理・在庫・積算</div>
+  </header>
+
+  <div class="section-title">利用可能なアプリ</div>
+  <div class="grid">
+    <a class="app-card" href="./task-manager/">
+      <span class="icon">🔧</span>
+      <div class="body">
+        <div class="name">工事タスクマネージャー</div>
+        <div class="desc">物件ごとの工事進捗と発注書を現場で管理</div>
+      </div>
+      <span class="arrow">›</span>
+    </a>
+    <a class="app-card" href="./zaiko/">
+      <span class="icon">📦</span>
+      <div class="body">
+        <div class="name">在庫管理</div>
+        <div class="desc">消費・補充・棚卸と発注中の可視化</div>
+      </div>
+      <span class="arrow">›</span>
+    </a>
+    <div class="app-card coming">
+      <span class="icon">🧮</span>
+      <div class="body">
+        <div class="name">積算アプリ</div>
+        <div class="desc">単価表呼出・見積・発注書PDF発行</div>
+      </div>
+      <span class="arrow">›</span>
+    </div>
+  </div>
+
+  <footer>
+    <b>(株)ビルドクラスタ</b> · v1.0
+  </footer>
+</div>
+</body>
+</html>
