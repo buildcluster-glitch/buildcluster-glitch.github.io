@@ -152,6 +152,10 @@
   .st-diffbadge{font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0}
   .st-diffbadge.minus{background:#fee2e2;color:#991b1b}
   .st-diffbadge.plus{background:#dbeafe;color:#1e3a8a}
+  .st-reason{margin:0 14px 8px;padding:0 6px}
+  .st-reason select{width:100%;padding:8px 10px;border:1px solid #fbbf24;border-radius:8px;
+    background:#fffbeb;font-size:13px;outline:none;color:var(--ink)}
+  .st-reason select:focus{border-color:var(--accent)}
   .st-footer{position:fixed;bottom:var(--safe-bottom);left:0;right:0;padding:10px 14px;
     background:#fff;border-top:1px solid var(--line);display:flex;gap:8px;
     max-width:560px;margin:0 auto}
@@ -168,11 +172,13 @@
   .log.out{border-left:3px solid var(--danger)}
   .log.in{border-left:3px solid var(--ok)}
   .log.chk{border-left:3px solid var(--warn)}
+  .log.audit{border-left:3px solid #94a3b8;background:#f8fafc}
   .log .lt{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-bottom:4px;gap:8px}
   .log .lt .kind{font-weight:700}
   .log .lt .kind.out{color:var(--danger)}
   .log .lt .kind.in{color:var(--ok)}
   .log .lt .kind.chk{color:var(--warn)}
+  .log .lt .kind.audit{color:#64748b}
   .log .ln{font-weight:600;font-size:14px;line-height:1.3}
   .log .lm{font-size:12px;color:var(--mute);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
   .log .lm b{color:var(--ink);font-weight:600}
@@ -443,6 +449,7 @@
           <option value="out">消費のみ</option>
           <option value="in">補充のみ</option>
           <option value="chk">棚卸のみ</option>
+          <option value="audit">品目変更のみ</option>
         </select>
         <select id="log-member"><option value="">全メンバー</option></select>
       </div>
@@ -719,6 +726,14 @@
     <h3>設定</h3>
 
     <div class="set-sec">
+      <div class="set-title">このデバイスを使う人</div>
+      <div style="padding:10px 14px">
+        <div style="font-size:12px;color:var(--mute);margin-bottom:6px">選択するとモーダルの担当者欄が自動で埋まります</div>
+        <div class="picker members" id="current-user-picker" style="grid-template-columns:repeat(3,1fr)"></div>
+      </div>
+    </div>
+
+    <div class="set-sec">
       <div class="set-title">メンバー</div>
       <div id="members-edit"></div>
       <div class="set-item" style="border-top:1px solid var(--line)">
@@ -880,6 +895,7 @@ const SEED_ITEMS = [
 const SEED_MEMBERS = ['山田裕貴','木村優作','大村将史','南部大我','鈴木悠平','最上登生'];
 const CATEGORIES = ['照明器具','電気材料','水栓材料','便座','その他'];
 const CAT_CLASS = {'照明器具':'light','電気材料':'elec','水栓材料':'water','便座':'toilet','その他':'other'};
+const STOCKTAKE_REASONS = ['使用記録漏れ','入荷記録漏れ','破損','紛失','他現場へ移動','カウントミス','その他'];
 
 const STORAGE_KEY = 'zaiko_v1';
 const SYNC_CONFIG_KEY = 'zaiko_sync_v1';
@@ -897,9 +913,11 @@ const state = {
     search: '',
     selectedItemId: null,
     stocktakeInputs: {}, // {itemId: realStock}
+    stocktakeReasons: {},// {itemId: reasonStr}
     reportMonth: null,   // 'YYYY-MM' or null for current
   },
   pending: [],  // [{action, data, ts}] - 未同期の変更キュー
+  currentUser: '',  // このデバイスを使う人（モーダルのmember picker自動選択用）
 };
 
 // ---------- sync config ----------
@@ -925,7 +943,8 @@ function saveSyncConfig(){
 function save(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     items:state.items, logs:state.logs, orders:state.orders,
-    members:state.members, pending:state.pending, version:2
+    members:state.members, pending:state.pending,
+    currentUser:state.currentUser, version:3
   }));
 }
 function load(){
@@ -938,6 +957,7 @@ function load(){
     state.orders = d.orders || [];
     state.pending = d.pending || [];
     state.members = d.members && d.members.length ? d.members : SEED_MEMBERS.slice();
+    state.currentUser = d.currentUser || '';
     return true;
   }catch(e){ console.error(e); return false; }
 }
@@ -1234,6 +1254,7 @@ function renderStocktake(){
   const items = state.items.filter(i=>i.active).sort((a,b)=>
     (a.category+a.name).localeCompare(b.category+b.name,'ja'));
   const inputs = state.ui.stocktakeInputs;
+  const reasons = state.ui.stocktakeReasons;
 
   let match=0, diff=0;
   const rows = items.map(i=>{
@@ -1247,15 +1268,24 @@ function renderStocktake(){
       (d===0 ? '' :
       (d>0 ? `<span class="st-diffbadge plus">+${d}</span>` :
              `<span class="st-diffbadge minus">${d}</span>`));
+    // reason selector shown only when there's a non-zero diff
+    const reasonVal = reasons[i.id] || '';
+    const reasonOpts = ['<option value="">理由を選択…</option>']
+      .concat(STOCKTAKE_REASONS.map(r=>`<option value="${esc(r)}" ${r===reasonVal?'selected':''}>${esc(r)}</option>`));
+    const reasonRow = (d!==null && d!==0)
+      ? `<div class="st-reason"><select data-stkr="${i.id}">${reasonOpts.join('')}</select></div>` : '';
     return `
-      <div class="st-row ${cls}" data-id="${i.id}">
-        <div class="info">
-          <div class="nm">${esc(i.name)}</div>
-          <div class="sub">${esc(i.sku)} · ${esc(i.category)}</div>
+      <div class="st-wrap">
+        <div class="st-row ${cls}" data-id="${i.id}">
+          <div class="info">
+            <div class="nm">${esc(i.name)}</div>
+            <div class="sub">${esc(i.sku)} · ${esc(i.category)}</div>
+          </div>
+          <div class="syss">記録<br><b>${i.stock}</b></div>
+          <input type="number" inputmode="numeric" min="0" placeholder="実数" value="${hasVal?v:''}" data-stk="${i.id}">
+          ${badge}
         </div>
-        <div class="syss">記録<br><b>${i.stock}</b></div>
-        <input type="number" inputmode="numeric" min="0" placeholder="実数" value="${hasVal?v:''}" data-stk="${i.id}">
-        ${badge}
+        ${reasonRow}
       </div>`;
   }).join('');
 
@@ -1282,12 +1312,13 @@ function renderLogs(){
 
   $('#logs').innerHTML = logs.map(l=>{
     const item = state.items.find(i=>i.id===l.itemId);
-    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':'棚卸');
+    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':(l.type==='chk'?'棚卸':'品目変更'));
     const kindCls = l.type;
     const itemName = item ? `${esc(item.name)} <span style="color:var(--mute);font-weight:400">${esc(item.sku)}</span>` : '<i>(削除済)</i>';
-    const qtyStr = l.type==='chk'
-      ? (l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '')
-      : `数量 <b>${l.qty}</b>`;
+    let qtyStr = '';
+    if(l.type==='chk') qtyStr = l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '';
+    else if(l.type==='audit') qtyStr = '';
+    else qtyStr = `数量 <b>${l.qty}</b>`;
     const siteStr = (l.type==='out' && l.site) ? `現場 <b>${esc(l.site)}${l.room?' '+esc(l.room):''}</b>` : '';
     const noteStr = l.note ? `${esc(l.note)}` : '';
     return `
@@ -1520,9 +1551,11 @@ function openRecord(mode, itemId){
   // category → item picker
   itemPicker.init('rec', itemId);
 
-  // member picker
-  $('#rec-member').innerHTML = state.members.map(m=>
-    `<button type="button" data-m="${esc(m)}">${esc(m)}</button>`).join('');
+  // member picker (auto-select currentUser)
+  $('#rec-member').innerHTML = state.members.map(m=>{
+    const on = state.currentUser===m ? 'on' : '';
+    return `<button type="button" class="${on}" data-m="${esc(m)}">${esc(m)}</button>`;
+  }).join('');
 
   // defaults
   const n = nowLocal();
@@ -2007,8 +2040,9 @@ function openOrder(itemId, orderId){
   const targetItemId = existing?.itemId || itemId || null;
   itemPicker.init('ord', targetItemId);
 
+  const ordDefault = existing?.member || state.currentUser;
   $('#ord-member').innerHTML = state.members.map(m=>{
-    const on = existing?.member===m ? 'on' : '';
+    const on = ordDefault===m ? 'on' : '';
     return `<button type="button" class="${on}" data-m="${esc(m)}">${esc(m)}</button>`;
   }).join('');
 
@@ -2113,8 +2147,10 @@ function openReceive(orderId){
   $('#rcv-hint').textContent = `残り${remaining}個まで入力可能。部分入荷はそのまま残数を減らして処理します。`;
   $('#rcv-date').value = todayISO();
   $('#rcv-note').value = '';
-  $('#rcv-member').innerHTML = state.members.map(m=>
-    `<button type="button" data-m="${esc(m)}">${esc(m)}</button>`).join('');
+  $('#rcv-member').innerHTML = state.members.map(m=>{
+    const on = state.currentUser===m ? 'on' : '';
+    return `<button type="button" class="${on}" data-m="${esc(m)}">${esc(m)}</button>`;
+  }).join('');
   openSheet('sheet-receive');
 }
 function submitReceive(){
@@ -2212,6 +2248,7 @@ function submitItem(){
   };
 
   let saved;
+  const isNew = !editingItemId;
   if(editingItemId){
     const i = state.items.find(x=>x.id===editingItemId);
     Object.assign(i, data);
@@ -2221,6 +2258,16 @@ function submitItem(){
     state.items.push(saved);
   }
   queueOp('upsertItem', saved);
+  // audit log
+  const auditLog = {
+    id: uid(), type:'audit', itemId: saved.id,
+    member: state.currentUser || '',
+    datetime: new Date().toISOString(),
+    note: isNew ? `品目作成: ${saved.sku} ${saved.name}` : `品目編集: ${saved.sku} ${saved.name}`
+  };
+  state.logs.push(auditLog);
+  queueOp('appendLog', auditLog);
+
   save();
   closeSheet('sheet-item');
   renderAll();
@@ -2233,6 +2280,16 @@ function deleteItem(){
     ? 'この品目には履歴があります。削除するとログから品目名が参照できなくなります。続行しますか？'
     : 'この品目を削除しますか？';
   if(!confirm(msg)) return;
+  const target = state.items.find(i=>i.id===editingItemId);
+  // audit log
+  const auditLog = {
+    id: uid(), type:'audit', itemId: editingItemId,
+    member: state.currentUser || '',
+    datetime: new Date().toISOString(),
+    note: `品目削除: ${target?.sku||''} ${target?.name||''}`
+  };
+  state.logs.push(auditLog);
+  queueOp('appendLog', auditLog);
   queueOp('deleteItem', { id: editingItemId });
   state.items = state.items.filter(i=>i.id!==editingItemId);
   save();
@@ -2251,6 +2308,11 @@ function renderSettingsInfo(){
       <div class="nm">${esc(m)}</div>
       <button data-mdel="${idx}" style="color:var(--danger);background:#fee2e2">削除</button>
     </div>`).join('');
+  // current user picker
+  $('#current-user-picker').innerHTML = state.members.map(m=>{
+    const on = state.currentUser===m ? 'on' : '';
+    return `<button type="button" class="${on}" data-cu="${esc(m)}">${esc(m)}</button>`;
+  }).join('');
   // sync
   if($('#sync-url')) $('#sync-url').value = sync.url||'';
   $('#info-last-sync').textContent = sync.lastSyncAt ? fmtDT(sync.lastSyncAt) : '未同期';
@@ -2313,11 +2375,27 @@ function doReset(){
 // ---------- stocktake commit ----------
 function commitStocktake(){
   const inputs = state.ui.stocktakeInputs;
+  const reasons = state.ui.stocktakeReasons || {};
   const entries = Object.entries(inputs).filter(([id,v])=> v!=='' && !isNaN(Number(v)));
   if(!entries.length) return;
 
-  const member = prompt('実施者を選んでください\n('+state.members.join(' / ')+')', state.members[0]||'');
-  if(!member) return;
+  // 実施者: currentUser優先、なければプロンプト
+  let member = state.currentUser;
+  if(!member){
+    member = prompt('実施者を選んでください\n('+state.members.join(' / ')+')', state.members[0]||'');
+    if(!member) return;
+  }
+
+  // 差分あり&理由未選択の件を警告
+  const diffItems = entries.filter(([id,v])=>{
+    const it = state.items.find(i=>i.id===id);
+    return it && Number(v) !== it.stock;
+  });
+  const missingReason = diffItems.filter(([id])=> !reasons[id]);
+  if(missingReason.length){
+    const proceed = confirm(`差分あり ${diffItems.length}件 のうち、${missingReason.length}件が理由未選択です。\n未選択のまま記録しますか？（後で追えなくなります）\n\nキャンセルで戻って選択できます。`);
+    if(!proceed) return;
+  }
 
   const now = new Date().toISOString();
   let diffCount = 0;
@@ -2331,16 +2409,18 @@ function commitStocktake(){
       diffCount++;
       queueOp('upsertItem', item);
     }
+    const reasonTxt = diff===0 ? '一致' : (reasons[itemId] || '理由未選択');
     const log = {
       id: uid(), type:'chk', itemId, member,
       datetime: now,
       diff,
-      note: diff===0 ? '一致' : ''
+      note: reasonTxt
     };
     state.logs.push(log);
     queueOp('appendLog', log);
   });
   state.ui.stocktakeInputs = {};
+  state.ui.stocktakeReasons = {};
   save();
   alert(`棚卸記録完了。差分 ${diffCount}件 を修正しました。`);
   renderAll();
@@ -2541,9 +2621,16 @@ function bindEvents(){
       if(nextInp){ nextInp.focus(); nextInp.setSelectionRange(nextInp.value.length,nextInp.value.length); }
     },0);
   };
+  $('#st-rows').onchange = e=>{
+    const sel = e.target.closest('[data-stkr]');
+    if(!sel) return;
+    state.ui.stocktakeReasons[sel.dataset.stkr] = sel.value;
+    // no re-render needed (selection persists in DOM)
+  };
   $('#st-reset').onclick = ()=>{
     if(!confirm('入力中の棚卸データを全てクリアしますか？')) return;
     state.ui.stocktakeInputs = {};
+    state.ui.stocktakeReasons = {};
     renderStocktake();
   };
   $('#st-commit').onclick = commitStocktake;
@@ -2563,6 +2650,15 @@ function bindEvents(){
   $('#csv-file').onchange = e=>{ if(e.target.files[0]) startCSVImport(e.target.files[0]); e.target.value=''; };
   $('#csv-submit').onclick = commitCSVImport;
   $('#btn-reset').onclick = doReset;
+
+  // current user picker
+  $('#current-user-picker').onclick = e=>{
+    const b = e.target.closest('[data-cu]');
+    if(!b) return;
+    state.currentUser = b.dataset.cu;
+    save();
+    renderSettingsInfo();
+  };
 
   // sync UI
   $('#sync-save').onclick = ()=>{
