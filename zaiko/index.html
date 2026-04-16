@@ -344,6 +344,29 @@
   .csv-preview .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .csv-err{background:#fee2e2;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
 
+  /* ---------- item picker (category→item) ---------- */
+  .item-picker{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
+  .item-picker .picker-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+  .item-picker .picker-chips::-webkit-scrollbar{display:none}
+  .item-picker .picker-chips .chip{flex:0 0 auto;padding:6px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);
+    font-size:12px;white-space:nowrap;color:var(--mute);font-weight:600}
+  .item-picker .picker-chips .chip.on{background:#0f172a;color:#fff;border-color:#0f172a}
+  .item-picker .picker-chips .chip .ct{margin-left:3px;font-size:10px;opacity:.8}
+  .item-picker .picker-list{max-height:200px;overflow-y:auto}
+  .item-picker .picker-list .it{padding:8px 10px;border-radius:8px;cursor:pointer;
+    display:flex;gap:8px;align-items:baseline;font-size:13px;margin-bottom:2px}
+  .item-picker .picker-list .it:active{transform:scale(.99)}
+  .item-picker .picker-list .it.on{background:#dbeafe;font-weight:700}
+  .item-picker .picker-list .it.on .sku{color:var(--accent)}
+  .item-picker .picker-list .it .sku{font-family:ui-monospace,monospace;font-size:11px;color:var(--mute);flex-shrink:0;
+    padding:1px 6px;background:#f1f5f9;border-radius:4px}
+  .item-picker .picker-list .it .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item-picker .picker-list .empty{text-align:center;padding:14px;color:var(--mute);font-size:12px}
+  .item-picker .picker-selected{margin-top:6px;padding:6px 10px;background:#eff6ff;border-radius:8px;
+    font-size:12px;border:1px solid #bfdbfe;display:none}
+  .item-picker .picker-selected.on{display:block}
+  .item-picker .picker-selected b{color:var(--accent)}
+
   /* ---------- utils ---------- */
   .hidden{display:none !important}
   .diff-negative{color:var(--danger)}
@@ -495,7 +518,11 @@
     <h3 id="ord-title">発注を記録</h3>
     <div class="field">
       <label>品目</label>
-      <select id="ord-item"></select>
+      <div class="item-picker">
+        <div class="picker-chips" id="ord-cat-chips"></div>
+        <div class="picker-list" id="ord-item-list"></div>
+        <div class="picker-selected" id="ord-selected"></div>
+      </div>
     </div>
     <div class="field">
       <label>数量</label>
@@ -570,7 +597,11 @@
     <h3 id="rec-title">消費記録</h3>
     <div class="field">
       <label>品目</label>
-      <select id="rec-item"></select>
+      <div class="item-picker">
+        <div class="picker-chips" id="rec-cat-chips"></div>
+        <div class="picker-list" id="rec-item-list"></div>
+        <div class="picker-selected" id="rec-selected"></div>
+      </div>
     </div>
     <div class="field">
       <label>数量</label>
@@ -1409,6 +1440,76 @@ function renderSuppliersAndSites(){
   $('#sites-list').innerHTML = sites.map(s=>`<option value="${esc(s)}">`).join('');
 }
 
+// ---------- item picker (category → item) ----------
+// usage: itemPicker.init(prefix, initialItemId) / itemPicker.getSelected(prefix)
+const itemPicker = {
+  state: {}, // prefix -> {itemId, cat}
+  init(prefix, initialItemId){
+    const cat = initialItemId ? (state.items.find(i=>i.id===initialItemId)?.category || 'すべて') : 'すべて';
+    this.state[prefix] = { itemId: initialItemId || null, cat };
+    this.renderChips(prefix);
+    this.renderList(prefix);
+    this.renderSelected(prefix);
+  },
+  getSelected(prefix){ return this.state[prefix]?.itemId || null; },
+  renderChips(prefix){
+    const s = this.state[prefix];
+    const counts = {すべて: state.items.filter(i=>i.active).length};
+    CATEGORIES.forEach(c=> counts[c] = state.items.filter(i=>i.active && i.category===c).length);
+    const chips = [['すべて','すべて']].concat(CATEGORIES.map(c=>[c,c]));
+    $(`#${prefix}-cat-chips`).innerHTML = chips.map(([v,l])=>{
+      const on = s.cat===v?'on':'';
+      const ct = counts[v]||0;
+      return `<button type="button" class="chip ${on}" data-c="${esc(v)}">${esc(l)}<span class="ct">${ct}</span></button>`;
+    }).join('');
+  },
+  renderList(prefix){
+    const s = this.state[prefix];
+    let items = state.items.filter(i=>i.active);
+    if(s.cat!=='すべて') items = items.filter(i=>i.category===s.cat);
+    items.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ja'));
+    if(!items.length){
+      $(`#${prefix}-item-list`).innerHTML = '<div class="empty">このカテゴリの品目はありません</div>';
+      return;
+    }
+    $(`#${prefix}-item-list`).innerHTML = items.map(i=>{
+      const on = i.id===s.itemId?'on':'';
+      return `<div class="it ${on}" data-id="${i.id}">
+        <span class="sku">${esc(i.sku)}</span>
+        <span class="name">${esc(i.name)}</span>
+      </div>`;
+    }).join('');
+  },
+  renderSelected(prefix){
+    const s = this.state[prefix];
+    const box = $(`#${prefix}-selected`);
+    if(!s.itemId){ box.classList.remove('on'); return; }
+    const it = state.items.find(x=>x.id===s.itemId);
+    if(!it){ box.classList.remove('on'); return; }
+    box.classList.add('on');
+    box.innerHTML = `選択中: <b>${esc(it.name)}</b> <span style="color:var(--mute)">(${esc(it.sku)})</span>`;
+  },
+  selectCat(prefix, cat){ this.state[prefix].cat = cat; this.renderChips(prefix); this.renderList(prefix); },
+  selectItem(prefix, itemId){
+    this.state[prefix].itemId = itemId;
+    // Auto-scroll selected item's category into view, then re-render
+    this.renderList(prefix);
+    this.renderSelected(prefix);
+  },
+  bindEvents(prefix){
+    $(`#${prefix}-cat-chips`).onclick = e=>{
+      const b = e.target.closest('[data-c]');
+      if(!b) return;
+      this.selectCat(prefix, b.dataset.c);
+    };
+    $(`#${prefix}-item-list`).onclick = e=>{
+      const b = e.target.closest('[data-id]');
+      if(!b) return;
+      this.selectItem(prefix, b.dataset.id);
+    };
+  },
+};
+
 // ---------- record sheet (consumption / supply) ----------
 let recMode = 'out';
 function openRecord(mode, itemId){
@@ -1416,12 +1517,8 @@ function openRecord(mode, itemId){
   $('#rec-title').textContent = mode==='out'?'消費記録':'補充記録';
   $('#rec-out-fields').style.display = mode==='out'?'':'none';
 
-  // fill item select
-  const items = state.items.filter(i=>i.active)
-    .sort((a,b)=>(a.category+a.name).localeCompare(b.category+b.name,'ja'));
-  $('#rec-item').innerHTML = items.map(i=>
-    `<option value="${i.id}">${esc(i.category)} | ${esc(i.sku)} | ${esc(i.name)}</option>`).join('');
-  if(itemId) $('#rec-item').value = itemId;
+  // category → item picker
+  itemPicker.init('rec', itemId);
 
   // member picker
   $('#rec-member').innerHTML = state.members.map(m=>
@@ -1439,7 +1536,7 @@ function openRecord(mode, itemId){
   openSheet('sheet-record');
 }
 function submitRecord(){
-  const itemId = $('#rec-item').value;
+  const itemId = itemPicker.getSelected('rec');
   const qty = Math.max(1, Math.floor(Number($('#rec-qty').value)||1));
   const member = $('#rec-member').querySelector('button.on')?.dataset.m;
   if(!itemId) return alert('品目を選んでください');
@@ -1907,13 +2004,8 @@ function openOrder(itemId, orderId){
   const existing = orderId ? state.orders.find(o=>o.id===orderId) : null;
   $('#ord-title').textContent = existing ? '発注を編集' : '発注を記録';
 
-  const items = state.items.filter(i=>i.active)
-    .sort((a,b)=>(a.category+a.name).localeCompare(b.category+b.name,'ja'));
-  $('#ord-item').innerHTML = items.map(i=>
-    `<option value="${i.id}">${esc(i.category)} | ${esc(i.sku)} | ${esc(i.name)}</option>`).join('');
-
-  const targetItemId = existing?.itemId || itemId || items[0]?.id;
-  if(targetItemId) $('#ord-item').value = targetItemId;
+  const targetItemId = existing?.itemId || itemId || null;
+  itemPicker.init('ord', targetItemId);
 
   $('#ord-member').innerHTML = state.members.map(m=>{
     const on = existing?.member===m ? 'on' : '';
@@ -1926,7 +2018,7 @@ function openOrder(itemId, orderId){
   $('#ord-note').value = existing?.note || '';
 
   const recomputeDefaults = ()=>{
-    const sel = $('#ord-item').value;
+    const sel = itemPicker.getSelected('ord');
     const it = state.items.find(x=>x.id===sel);
     if(!existing && it){
       $('#ord-supplier').value = it.supplier || '';
@@ -1938,14 +2030,19 @@ function openOrder(itemId, orderId){
     $('#ord-supplier').value = existing.supplier || '';
     $('#ord-due').value = existing.expectedDate || '';
   }
-  $('#ord-item').onchange = ()=>{ if(!existing) recomputeDefaults(); };
+  // hook: re-compute when item is picked via the custom picker
+  const origSelectItem = itemPicker.selectItem.bind(itemPicker);
+  itemPicker.selectItem = (prefix, id)=>{
+    origSelectItem(prefix, id);
+    if(prefix==='ord' && !existing) recomputeDefaults();
+  };
   $('#ord-date').onchange = ()=>{ if(!existing) recomputeDefaults(); };
 
   $('#ord-delete').classList.toggle('hidden', !existing);
   openSheet('sheet-order');
 }
 function submitOrder(){
-  const itemId = $('#ord-item').value;
+  const itemId = itemPicker.getSelected('ord');
   const qty = Math.max(1, Math.floor(Number($('#ord-qty').value)||1));
   const member = $('#ord-member').querySelector('button.on')?.dataset.m;
   if(!itemId) return alert('品目を選んでください');
@@ -2516,6 +2613,8 @@ function bindEvents(){
   if(!load()) seed();
   loadSyncConfig();
   bindEvents();
+  itemPicker.bindEvents('rec');
+  itemPicker.bindEvents('ord');
   updateSyncBadge();
   showHome();
 })();
