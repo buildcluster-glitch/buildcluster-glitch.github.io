@@ -120,6 +120,10 @@
   .cat-tag.water{background:var(--cat-water)}
   .cat-tag.toilet{background:var(--cat-toilet)}
   .cat-tag.other{background:var(--cat-other)}
+  .loc-tag{display:inline-flex;align-items:center;gap:2px;padding:2px 6px;border-radius:4px;font-size:10px;
+    font-weight:700;letter-spacing:.2px;border:1px solid}
+  .loc-tag.warehouse{background:#cffafe;color:#0e7490;border-color:#a5f3fc}
+  .loc-tag.outdoor{background:#fef3c7;color:#a16207;border-color:#fde68a}
   .card .stockcol{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
     gap:2px;min-width:70px;padding-left:8px;border-left:1px solid var(--line)}
   .card .stockn{font-size:28px;font-weight:800;line-height:1;color:var(--ink)}
@@ -156,6 +160,11 @@
   .st-reason select{width:100%;padding:8px 10px;border:1px solid #fbbf24;border-radius:8px;
     background:#fffbeb;font-size:13px;outline:none;color:var(--ink)}
   .st-reason select:focus{border-color:var(--accent)}
+  .st-loc-header{margin:12px 14px 6px;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:800;
+    display:flex;align-items:center;gap:8px;border:1px solid}
+  .st-loc-header.warehouse{background:#cffafe;color:#0e7490;border-color:#a5f3fc}
+  .st-loc-header.outdoor{background:#fef3c7;color:#a16207;border-color:#fde68a}
+  .st-loc-header .ct{margin-left:auto;font-size:11px;font-weight:600;opacity:.7}
   .st-footer{position:fixed;bottom:var(--safe-bottom);left:0;right:0;padding:10px 14px;
     background:#fff;border-top:1px solid var(--line);display:flex;gap:8px;
     max-width:560px;margin:0 auto}
@@ -274,6 +283,8 @@
   .picker.cat button.on[data-v="水栓材料"]{border-color:var(--cat-water);color:var(--cat-water);background:#e0f2fe}
   .picker.cat button.on[data-v="便座"]{border-color:var(--cat-toilet);color:var(--cat-toilet);background:#f3e8ff}
   .picker.cat button.on[data-v="その他"]{border-color:var(--cat-other);color:var(--cat-other);background:#f1f5f9}
+  .picker.loc button.on[data-v="倉庫"]{border-color:#0891b2;color:#0891b2;background:#cffafe}
+  .picker.loc button.on[data-v="外物置"]{border-color:#d97706;color:#d97706;background:#fef3c7}
   .picker.members{grid-template-columns:repeat(3,1fr)}
   .qty-row{display:grid;grid-template-columns:40px 1fr 40px;gap:8px;align-items:center}
   .qty-row button{background:#f1f5f9;height:44px;border-radius:10px;font-size:20px;font-weight:700;color:var(--ink)}
@@ -407,6 +418,7 @@
           <button class="add-item-btn" id="btn-add-item" title="品目を追加"><span class="plus">＋</span>品目</button>
         </div>
         <div class="chips" id="cat-chips"></div>
+        <div class="chips" id="loc-chips"></div>
       </div>
       <div id="order-summary"></div>
       <div class="alerts" id="alerts"></div>
@@ -417,7 +429,8 @@
     <div id="tab-stocktake" class="hidden">
       <div class="st-head">
         <h2>週次棚卸</h2>
-        <p class="desc">各品目の実数を入力 → 差分を確認 → 記録で在庫修正</p>
+        <p class="desc">場所ごとに実数を入力 → 差分の理由を選ぶ → 記録で在庫修正</p>
+        <div class="chips" id="st-loc-chips" style="margin-bottom:10px"></div>
         <div class="st-stats">
           <div class="st-stat"><div class="n" id="st-total">0</div><div class="l">品目数</div></div>
           <div class="st-stat match"><div class="n" id="st-match">0</div><div class="l">一致</div></div>
@@ -675,6 +688,10 @@
       <label>カテゴリ</label>
       <div class="picker cat" id="it-cat"></div>
     </div>
+    <div class="field">
+      <label>所在地</label>
+      <div class="picker loc" id="it-loc" style="grid-template-columns:1fr 1fr"></div>
+    </div>
     <div class="field-row3">
       <div class="field">
         <label>現在庫</label>
@@ -896,6 +913,9 @@ const SEED_MEMBERS = ['山田裕貴','木村優作','大村将史','南部大我
 const CATEGORIES = ['照明器具','電気材料','水栓材料','便座','その他'];
 const CAT_CLASS = {'照明器具':'light','電気材料':'elec','水栓材料':'water','便座':'toilet','その他':'other'};
 const STOCKTAKE_REASONS = ['使用記録漏れ','入荷記録漏れ','破損','紛失','他現場へ移動','カウントミス','その他'];
+const LOCATIONS = ['倉庫','外物置'];
+const LOC_CLASS = {'倉庫':'warehouse','外物置':'outdoor'};
+const LOC_ICON = {'倉庫':'🏠','外物置':'🚪'};
 
 const STORAGE_KEY = 'zaiko_v1';
 const SYNC_CONFIG_KEY = 'zaiko_sync_v1';
@@ -910,6 +930,8 @@ const state = {
     view: 'home',        // 'home' | 'detail' | 'report'
     tab: 'list',         // 'list' | 'orders' | 'stocktake' | 'logs'
     catFilter: 'all',
+    locFilter: 'all',    // 'all' | '倉庫' | '外物置'
+    stocktakeLocFilter: 'all',
     search: '',
     selectedItemId: null,
     stocktakeInputs: {}, // {itemId: realStock}
@@ -967,6 +989,7 @@ function queueOp(action, data){
   state.pending.push({ action, data: JSON.parse(JSON.stringify(data)), ts: new Date().toISOString() });
   updateSyncBadge();
 }
+const OUTDOOR_SKUS = new Set(['OX9743LDR','PL8D-YA2','CH941SPF','FY-25PM5','FY-20PM5','VD-10ZC','VD-10ZFC','FY-24CPS7','VD-13ZC','FY-08PD9','FY-08PD9D','VD-15ZY14']);
 function seed(){
   state.items = SEED_ITEMS.map((r,i)=>({
     id: 'i_'+Date.now()+'_'+i,
@@ -974,7 +997,8 @@ function seed(){
     stock: 0, minStock: Number(r[4])||0,
     supplier: r[5], price: r[6]===''?null:Number(r[6]),
     priceDate: r[7]||'', leadDays: null,
-    note: r[8]||'', active: r[3]
+    note: r[8]||'', active: r[3],
+    location: OUTDOOR_SKUS.has(r[0]) ? '外物置' : '倉庫',
   }));
   state.logs = [];
   state.orders = [];
@@ -1074,6 +1098,16 @@ function renderCatChips(){
     const ct = counts[v]||0;
     return `<button class="chip ${on}" data-cat="${esc(v)}">${esc(label)}<span class="ct">${ct}</span></button>`;
   }).join('');
+
+  // location chips
+  const lcounts = {all: state.items.filter(i=>i.active).length};
+  LOCATIONS.forEach(l=> lcounts[l] = state.items.filter(i=>i.active && i.location===l).length);
+  const lchips = [['all','置き場すべて']].concat(LOCATIONS.map(l=>[l, LOC_ICON[l]+' '+l]));
+  $('#loc-chips').innerHTML = lchips.map(([v,label])=>{
+    const on = state.ui.locFilter===v?'on':'';
+    const ct = lcounts[v]||0;
+    return `<button class="chip ${on}" data-loc="${esc(v)}">${esc(label)}<span class="ct">${ct}</span></button>`;
+  }).join('');
 }
 
 function renderOrderSummary(){
@@ -1119,8 +1153,10 @@ function renderAlerts(){
 function renderItemList(){
   const q = state.ui.search.trim().toLowerCase();
   const cat = state.ui.catFilter;
+  const loc = state.ui.locFilter;
   let items = state.items.filter(i=> i.active);
   if(cat!=='all') items = items.filter(i=>i.category===cat);
+  if(loc!=='all') items = items.filter(i=>i.location===loc);
   if(q) items = items.filter(i=>
     (i.sku||'').toLowerCase().includes(q) ||
     (i.name||'').toLowerCase().includes(q) ||
@@ -1154,6 +1190,7 @@ function renderItemList(){
           <div class="top" style="padding-right:30px">
             <span class="cat-tag ${catCls}">${esc(i.category)}</span>
             <span class="sku">${esc(i.sku)}</span>
+            ${i.location?`<span class="loc-tag ${LOC_CLASS[i.location]||'warehouse'}">${LOC_ICON[i.location]||'🏠'}${esc(i.location)}</span>`:''}
           </div>
           <div class="name" style="padding-right:30px">${esc(i.name)}</div>
           ${i.maker?`<div class="maker">${esc(i.maker)}</div>`:''}
@@ -1251,12 +1288,29 @@ function renderOrders(){
 
 // ---------- render: stocktake ----------
 function renderStocktake(){
-  const items = state.items.filter(i=>i.active).sort((a,b)=>
-    (a.category+a.name).localeCompare(b.category+b.name,'ja'));
+  const locFilter = state.ui.stocktakeLocFilter;
+  // location chips
+  const locCounts = {all: state.items.filter(i=>i.active).length};
+  LOCATIONS.forEach(l=> locCounts[l] = state.items.filter(i=>i.active && i.location===l).length);
+  const locChips = [['all','置き場すべて']].concat(LOCATIONS.map(l=>[l, LOC_ICON[l]+' '+l]));
+  $('#st-loc-chips').innerHTML = locChips.map(([v,label])=>{
+    const on = locFilter===v?'on':'';
+    return `<button class="chip ${on}" data-stkloc="${esc(v)}">${esc(label)}<span class="ct">${locCounts[v]||0}</span></button>`;
+  }).join('');
+
+  // filter + sort by location > category > name
+  let items = state.items.filter(i=>i.active);
+  if(locFilter!=='all') items = items.filter(i=>i.location===locFilter);
+  items.sort((a,b)=>{
+    const la = a.location||'倉庫', lb = b.location||'倉庫';
+    if(la!==lb) return LOCATIONS.indexOf(la) - LOCATIONS.indexOf(lb);
+    return (a.category+a.name).localeCompare(b.category+b.name,'ja');
+  });
   const inputs = state.ui.stocktakeInputs;
   const reasons = state.ui.stocktakeReasons;
 
   let match=0, diff=0;
+  let lastLoc = null;
   const rows = items.map(i=>{
     const v = inputs[i.id];
     const hasVal = v!==undefined && v!=='' && !isNaN(Number(v));
@@ -1274,7 +1328,14 @@ function renderStocktake(){
       .concat(STOCKTAKE_REASONS.map(r=>`<option value="${esc(r)}" ${r===reasonVal?'selected':''}>${esc(r)}</option>`));
     const reasonRow = (d!==null && d!==0)
       ? `<div class="st-reason"><select data-stkr="${i.id}">${reasonOpts.join('')}</select></div>` : '';
-    return `
+    // location group header
+    let header = '';
+    if(locFilter==='all' && (i.location||'倉庫') !== lastLoc){
+      lastLoc = i.location||'倉庫';
+      const ct = items.filter(x=>(x.location||'倉庫')===lastLoc).length;
+      header = `<div class="st-loc-header ${LOC_CLASS[lastLoc]||'warehouse'}">${LOC_ICON[lastLoc]||'🏠'} ${esc(lastLoc)} <span class="ct">${ct}件</span></div>`;
+    }
+    return header + `
       <div class="st-wrap">
         <div class="st-row ${cls}" data-id="${i.id}">
           <div class="info">
@@ -1350,10 +1411,12 @@ function renderDetail(){
   $('#d-title').textContent = i.name;
 
   const catCls = CAT_CLASS[i.category]||'other';
+  const locCls = LOC_CLASS[i.location]||'warehouse';
   $('#d-hero').innerHTML = `
     <h2>${esc(i.name)}</h2>
-    <div class="sub"><span class="cat-tag ${catCls}">${esc(i.category)}</span> &nbsp; ${esc(i.sku)}${i.maker?' · '+esc(i.maker):''}</div>
+    <div class="sub"><span class="cat-tag ${catCls}">${esc(i.category)}</span> ${i.location?`<span class="loc-tag ${locCls}">${LOC_ICON[i.location]||'🏠'}${esc(i.location)}</span>`:''} &nbsp; ${esc(i.sku)}${i.maker?' · '+esc(i.maker):''}</div>
     <div class="kv">
+      <span>所在地</span><span>${LOC_ICON[i.location]||''} ${esc(i.location||'-')}</span>
       <span>注文先</span><span>${esc(i.supplier||'-')}</span>
       <span>単価</span><span>${i.price?'¥'+Number(i.price).toLocaleString():'-'}${i.priceDate?' <span style="color:var(--mute)">('+fmtD(i.priceDate)+'時点)</span>':''}</span>
       <span>リードタイム</span><span>${i.leadDays?i.leadDays+'日':'-'}</span>
@@ -1768,6 +1831,7 @@ const CSV_ALIAS = {
   note: ['備考','note','メモ','コメント'],
   active: ['使用中','active','有効'],
   stock: ['現在庫','在庫','stock','在庫数'],
+  location: ['所在地','置き場','置き場所','location'],
 };
 function buildHeaderMap(headers){
   const map = {};
@@ -1813,6 +1877,7 @@ function startCSVImport(file){
         if(!sku) return null;
         const rec = { sku, name: get('name') };
         if(hm.category!==undefined) rec.category = get('category') || 'その他';
+        if(hm.location!==undefined){ const v=get('location'); if(v) rec.location = LOCATIONS.includes(v) ? v : '倉庫'; }
         if(hm.maker!==undefined) rec.maker = get('maker');
         if(hm.minStock!==undefined){ const n=Number(get('minStock')); if(!isNaN(n)) rec.minStock = n; }
         if(hm.supplier!==undefined) rec.supplier = get('supplier');
@@ -1885,6 +1950,7 @@ function commitCSVImport(){
       name: rec.name || '',
       maker: rec.maker || '',
       category: rec.category || 'その他',
+      location: rec.location || '倉庫',
       stock: rec.stock ?? 0,
       minStock: rec.minStock ?? 0,
       leadDays: rec.leadDays ?? null,
@@ -1966,6 +2032,7 @@ function normalizeItem_(x){
     priceDate: (x.priceDate||'').slice(0,10),
     leadDays: x.leadDays==null?null:Number(x.leadDays),
     note: x.note||'', active: x.active!==false && x.active!==0 && x.active!=='FALSE',
+    location: LOCATIONS.includes(x.location) ? x.location : '倉庫',
   };
 }
 function normalizeLog_(x){
@@ -2223,6 +2290,11 @@ function openItemEdit(id){
   $('#it-cat').innerHTML = CATEGORIES.map(c=>
     `<button type="button" data-v="${esc(c)}" class="${c===cat?'on':''}">${esc(c)}</button>`).join('');
 
+  // location picker
+  const loc = i?.location || '倉庫';
+  $('#it-loc').innerHTML = LOCATIONS.map(l=>
+    `<button type="button" data-v="${esc(l)}" class="${l===loc?'on':''}">${LOC_ICON[l]} ${esc(l)}</button>`).join('');
+
   $('#item-delete').classList.toggle('hidden', !i);
   openSheet('sheet-item');
 }
@@ -2233,10 +2305,12 @@ function submitItem(){
   if(!sku) return alert('品番を入力してください');
   if(!name) return alert('品目名を入力してください');
 
+  const loc = $('#it-loc').querySelector('button.on')?.dataset.v || '倉庫';
   const data = {
     sku, name,
     maker: $('#it-maker').value.trim(),
     category: cat,
+    location: loc,
     stock: Math.max(0, Math.floor(Number($('#it-stock').value)||0)),
     minStock: Math.max(0, Math.floor(Number($('#it-min').value)||0)),
     leadDays: $('#it-lead').value ? Math.max(0, Math.floor(Number($('#it-lead').value))) : null,
@@ -2459,6 +2533,13 @@ function bindEvents(){
     state.ui.catFilter = b.dataset.cat;
     renderCatChips(); renderItemList();
   };
+  // loc chips
+  $('#loc-chips').onclick = e=>{
+    const b = e.target.closest('.chip');
+    if(!b) return;
+    state.ui.locFilter = b.dataset.loc;
+    renderCatChips(); renderItemList();
+  };
 
   // order summary tap → orders tab
   $('#order-summary').onclick = e=>{
@@ -2530,6 +2611,12 @@ function bindEvents(){
     const b = e.target.closest('button');
     if(!b) return;
     $$('#it-cat button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  };
+  $('#it-loc').onclick = e=>{
+    const b = e.target.closest('button');
+    if(!b) return;
+    $$('#it-loc button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
   };
   $('#item-submit').onclick = submitItem;
@@ -2609,6 +2696,13 @@ function bindEvents(){
     renderLogs();
   };
 
+  // stocktake location chips
+  $('#st-loc-chips').onclick = e=>{
+    const b = e.target.closest('.chip');
+    if(!b) return;
+    state.ui.stocktakeLocFilter = b.dataset.stkloc;
+    renderStocktake();
+  };
   // stocktake
   $('#st-rows').oninput = e=>{
     const inp = e.target.closest('[data-stk]');
