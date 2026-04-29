@@ -279,6 +279,18 @@
   /* マウスホバーで少し見やすく */
   #estimate-tbody tr.reduced-row:hover,
   #hatchu-tbody tr.reduced-row:hover { opacity: 0.85; }
+  /* 業者発注書 印刷除外行: 画面では薄く打ち消し線、印刷からは除外される */
+  #hatchu-tbody tr.print-hidden-row {
+    background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 6px, #e5e7eb 6px, #e5e7eb 12px) !important;
+    opacity: 0.55;
+  }
+  #hatchu-tbody tr.print-hidden-row td:nth-child(n+4):nth-child(-n+9) {
+    text-decoration: line-through;
+  }
+  #hatchu-tbody tr.print-hidden-row .btn-h-del {
+    background: #6b7280 !important;
+    color: #fff !important;
+  }
   /* 印刷モード: 実施版(減工事行を非表示) */
   body.hide-reduced-rows #estimate-tbody tr.reduced-row { display:none !important; }
   /* 印刷モード: 提出時版(減工事行を通常表示、打ち消しはナシ) */
@@ -429,10 +441,9 @@
     padding: 0 2mm;
     text-align: left;
     white-space: nowrap;
-    width: 28mm;
+    width: 44mm;
   }
-  .koutei-gantt .kt-date-cell.sunday,
-  .koutei-gantt .kt-work-cell.sunday {
+  .koutei-gantt .kt-date-cell.sunday {
     background:#9ca3af;
     -webkit-print-color-adjust:exact;
   }
@@ -440,8 +451,14 @@
     background:#60a5fa;
     -webkit-print-color-adjust:exact;
   }
+  /* 土日祝のセルは工程と被ってもグレー塗りで上書き */
+  .koutei-gantt .kt-work-cell.sunday {
+    background:#9ca3af !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
   .koutei-gantt .kt-diagonal {
-    width:28mm; height:10mm;
+    width:44mm; height:10mm;
     background: linear-gradient(to top right, transparent 49%, #000 49%, #000 51%, transparent 51%);
     position:relative;
   }
@@ -673,7 +690,13 @@
     font-size: 7.5pt;
     margin-top: 1mm;
     line-height: 1.25;
+    display:flex; align-items:center; gap: 3mm;
   }
+  .hatchu-print .hp-issuer img.hp-logo {
+    max-height: 14mm; max-width: 30mm;
+    object-fit: contain; flex-shrink:0;
+  }
+  .hatchu-print .hp-issuer .hp-issuer-text { line-height:1.3; }
   .hatchu-print .hp-info {
     display:grid;
     grid-template-columns: 1.6fr 1fr 1.6fr 1fr;
@@ -695,27 +718,44 @@
     width:100%; border-collapse:collapse;
     font-size: 8pt;
   }
+  /* ヘッダーが2ページ目以降に繰り返し出るのを抑制(thead=table-row-group にすると非繰り返し) */
+  .hatchu-print .hp-t thead { display: table-row-group; }
   .hatchu-print .hp-t th, .hatchu-print .hp-t td {
     border:1px solid #000;
-    padding: 0.4mm 1.2mm;
+    padding: 1.2mm 1.2mm;
     vertical-align: middle;
-    line-height: 1.2;
+    text-align: center;
+    line-height: 1.3;
+    height: 6mm;
   }
   .hatchu-print .hp-t th {
-    background:#e5e7eb;
-    -webkit-print-color-adjust:exact;
-    print-color-adjust:exact;
+    background:#fed7aa !important;
+    color:#7c2d12 !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+    color-adjust:exact !important;
     font-weight:600;
     text-align:center;
   }
+  /* 業者別印刷時、選択業者の行を薄い黄色でハイライト */
+  .hatchu-print .hp-t tr.hp-row-target td {
+    background:#fef9c3 !important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
   .hatchu-print .hp-t td.c { text-align:center; white-space:nowrap; }
-  .hatchu-print .hp-t td.num { text-align:right; white-space:nowrap; }
+  .hatchu-print .hp-t td.num { text-align:center; white-space:nowrap; }
   /* 工期列(2列目)は必ず1行に納める */
   .hatchu-print .hp-t td:nth-child(2),
   .hatchu-print .hp-t th:nth-child(2) { white-space:nowrap; }
   /* 施工面列(5列目)も1行に納める(「天井全面」等が折り返さないよう) */
   .hatchu-print .hp-t td:nth-child(5),
   .hatchu-print .hp-t th:nth-child(5) { white-space:nowrap; }
+  /* 工事名称(4列目) を広く、特記事項/品番(6列目) を狭く */
+  .hatchu-print .hp-t th:nth-child(4),
+  .hatchu-print .hp-t td:nth-child(4) { width: 26%; }
+  .hatchu-print .hp-t th:nth-child(6),
+  .hatchu-print .hp-t td:nth-child(6) { width: 16%; }
   .hatchu-print .hp-t tr.h-reduced {
     filter: grayscale(1);
   }
@@ -729,8 +769,10 @@
   }
   .hatchu-print .hp-t tr.hp-sum td {
     font-weight:bold;
-    background:#e0e7ff;
+    background:#fed7aa;
+    color:#7c2d12;
     -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
     font-size: 8.5pt;
   }
   .hatchu-print .hp-t tr.hp-subtotal td {
@@ -824,6 +866,16 @@
     body.print-hatchu-mode #hatchu-print-area {
       display:block !important;
       padding: 4mm;
+    }
+    /* 印刷時、背景色を必ず出力する(オレンジヘッダー等) */
+    body.print-hatchu-mode * {
+      -webkit-print-color-adjust:exact !important;
+      print-color-adjust:exact !important;
+      color-adjust:exact !important;
+    }
+    body.print-hatchu-mode .hatchu-print .hp-t th {
+      background:#fed7aa !important;
+      color:#7c2d12 !important;
     }
     @page { size: A4 portrait; margin: 4mm; }
   }
@@ -1018,12 +1070,13 @@
           <label>所在地</label><input type="text" id="meta-shozaichi" placeholder="例: 仙台市泉区山の寺2丁目26-18">
 
           <label>工事名称</label>
-          <input type="text" id="meta-kojiName" list="dl-koji-names" placeholder="原状回復工事 / 修繕工事 / リフォーム工事 (自由記載可)" style="grid-column: span 5;">
-          <datalist id="dl-koji-names">
-            <option value="原状回復工事">
-            <option value="修繕工事">
-            <option value="リフォーム工事">
-          </datalist>
+          <select id="meta-kojiName" style="grid-column: span 5;" title="工事名称(クリックで選択。「その他」で自由入力可)">
+            <option value="">(未選択)</option>
+            <option value="原状回復工事">原状回復工事</option>
+            <option value="修繕工事">修繕工事</option>
+            <option value="リフォーム工事">リフォーム工事</option>
+            <option value="__other__">✏ その他(自由入力)…</option>
+          </select>
 
           <label title="Drive/Dropbox等の案件フォルダ名。台帳で検索できます">📁 フォルダ名</label>
           <div style="grid-column: span 2; display:flex; gap:4px;">
@@ -1289,6 +1342,16 @@
           <button id="btn-hatchu-print-batch" class="primary" title="各業者ぶん + 全業者ぶんのPDFを順番に印刷ダイアログで出します">📦 業者別を一括印刷</button>
         </div>
       </div>
+      <!-- 発行元(発注書名義) -->
+      <fieldset style="border:1px solid #fde68a; background:#fffbeb; padding:8px 12px; margin:8px 0; border-radius:6px;">
+        <legend style="font-weight:600; color:#92400e; padding:0 6px;">🏢 発行元(発注書名義) <span style="font-weight:normal; font-size:11px; color:var(--muted);">※見積タブと連動。発注書の右上ヘッダーに掲載</span></legend>
+        <div style="display:flex; gap:14px; align-items:center; font-size:12px; flex-wrap:wrap;">
+          <label>発行元: <select id="hatchu-issuer-select" title="どちらの会社名義で発注書を発行するか"></select></label>
+          <div id="hatchu-issuer-info" style="font-size:11px; color:#374151; line-height:1.5; padding:4px 10px; background:#fff; border:1px solid #fde68a; border-radius:4px; flex:1; min-width:200px;">
+            <span style="color:var(--muted);">読込中…</span>
+          </div>
+        </div>
+      </fieldset>
       <!-- 物件情報ヘッダー -->
       <fieldset style="border:1px solid var(--line); padding:10px; margin:8px 0; border-radius:6px;">
         <legend style="font-weight:600;">📍 物件情報ヘッダー(印刷に出る)</legend>
@@ -1370,9 +1433,9 @@
               <th style="width:120px;">工事店名</th>
               <th style="width:170px;">工期</th>
               <th style="width:80px;">室名</th>
-              <th style="min-width:200px;">工事名称</th>
+              <th style="min-width:260px;">工事名称</th>
               <th style="width:110px;">施工面</th>
-              <th>特記事項/品番</th>
+              <th style="width:160px;">特記事項/品番</th>
               <th class="num" style="width:55px;">数量</th>
               <th style="width:55px;">単位</th>
               <th class="num" style="width:80px;" title="発注単価(見積タブと連動)">発注単価</th>
@@ -1445,6 +1508,26 @@
         </div>
       </fieldset>
       <fieldset style="border:1px solid var(--line); padding:10px; margin:8px 0; border-radius:6px;">
+        <legend style="font-weight:600;">📋 工程行(編集可・印刷に反映)</legend>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">
+          自動生成された行(青ラベル)はカテゴリ統合ルールに従って発注書から作成。手動追加(緑ラベル)は再生成しても残ります。<br>
+          🔄 最新データで生成 → 自動行を再構築・カスタム行は維持。
+        </div>
+        <table id="koutei-rows-table" style="width:100%; font-size:12px; border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:4px 6px; width:50px;">区分</th>
+              <th style="padding:4px 6px;">工事種目</th>
+              <th style="padding:4px 6px; width:90px;">開始 (M/D)</th>
+              <th style="padding:4px 6px; width:90px;">終了 (M/D)</th>
+              <th style="padding:4px 6px; width:60px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="koutei-rows-tbody"></tbody>
+        </table>
+        <button id="btn-koutei-add-row" style="margin-top:8px; padding:6px 12px; background:#16a34a; color:#fff; border:1px solid #15803d; border-radius:4px; cursor:pointer;">＋ 行追加(手動)</button>
+      </fieldset>
+      <fieldset style="border:1px solid var(--line); padding:10px; margin:8px 0; border-radius:6px;">
         <legend style="font-weight:600;">🗓 工期チャート プレビュー</legend>
         <div id="koutei-preview" style="overflow-x:auto;"></div>
       </fieldset>
@@ -1487,6 +1570,7 @@
         </div>
         <div style="display:flex; gap:6px;">
           <button id="btn-oshirase-print" class="primary">🖨 A4で印刷</button>
+          <button id="btn-oshirase-save-pdf" title="ボタン1クリックでPDFファイルとしてダウンロード(印刷ダイアログを介さない)">📥 PDFで保存</button>
           <button id="btn-oshirase-regen" title="最新の発注書データから再生成">🔄 最新データで生成</button>
         </div>
       </div>
@@ -1523,9 +1607,26 @@
         </div>
       </fieldset>
       <fieldset style="border:1px solid var(--line); padding:10px; margin:8px 0; border-radius:6px;">
-        <legend style="font-weight:600;">🗓 カテゴリ別工期(自動抽出)</legend>
-        <div id="oshirase-periods" style="font-size:12px;"></div>
-        <div style="color:var(--muted); font-size:11px; margin-top:6px;">※ 発注書タブの工期データから自動生成。編集は発注書タブで行ってください。</div>
+        <legend style="font-weight:600;">🗓 カテゴリ別工事(編集可・印刷に反映)</legend>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:6px;">
+          自動行(青)は発注書ベース。手動行(緑)は再生成しても残ります。<br>
+          自動行を×で削除すると 「再生成しても出ない」(再表示は「🔄 最新の発注書データから再生成」)
+        </div>
+        <table id="oshirase-rows-table" style="width:100%; font-size:12px; border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f3f4f6;">
+              <th style="padding:4px 6px; width:50px;">区分</th>
+              <th style="padding:4px 6px; width:160px;">工事種目</th>
+              <th style="padding:4px 6px; width:90px;">開始</th>
+              <th style="padding:4px 6px; width:90px;">終了</th>
+              <th style="padding:4px 6px;">備考(注意書き等・印刷反映)</th>
+              <th style="padding:4px 6px; width:60px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="oshirase-rows-tbody"></tbody>
+        </table>
+        <button id="btn-oshirase-add-row" style="margin-top:8px; padding:6px 12px; background:#16a34a; color:#fff; border:1px solid #15803d; border-radius:4px; cursor:pointer;">＋ 行追加(手動)</button>
+        <div id="oshirase-periods" style="display:none;"></div>
       </fieldset>
     </div>
     <!-- 印刷用本体 -->
@@ -2115,6 +2216,7 @@
 <script src="suido_templates.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
 <script>
   if (window['pdfjsLib']) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -2280,10 +2382,13 @@ function emptyLine() {
     // 業者発注書 固有フィールド(空なら見積の値 or 既定で補完される)
     hatchuPeriodStart: '', // 工期開始(例: 10/9)
     hatchuPeriodEnd: '',   // 工期終了(例: 15)
+    hatchuTime: '',        // 時間指定(例: 9時～ / 9:00～11:00) ※工事名称=修繕工事の時のみ表示
     hatchuSurface: '',     // 施工面(例: 壁全面)
     hatchuRemark: '',      // 備考(¥金額 等、空なら自動で見積金額を表示)
     hatchuItem: null,      // 業者発注書専用 工事名称(null=見積と連動 / 文字列=独立)
     hatchuSpecs: null,     // 業者発注書専用 特記事項/品番(null=見積と連動 / 文字列=独立)
+    hatchuPrintHidden: false, // 業者発注書 印刷除外フラグ(見積タブ・発注書UIには表示、印刷だけ除外)
+    hatchuSection: null,   // 'jisha' / 'gaichuu' / null(=自動: supplier から判定)
   };
 }
 
@@ -2339,6 +2444,10 @@ function emptyKoutei() {
     shikou: '(株)ビルドクラスタ',
     sekininsha: '',
     sekininTel: '',
+    // カスタム行: ユーザーが追加・編集した工程表の行
+    // 形式: [{ id, category, start, end, source: 'auto'|'custom' }]
+    // source='auto' は再生成で上書き対象、'custom' はユーザー追加で再生成しても残る
+    rows: [],
   };
 }
 // 工事お知らせ データモデル
@@ -2356,6 +2465,9 @@ function emptyOshirase() {
     tantouTel: '',
     workHours: '9:00〜17:30',
     workCategories: '',
+    // カテゴリ別工事行: ユーザーが削除/追加/編集可能
+    // 形式: [{ id, category, start, end, source: 'auto'|'custom' }]
+    rows: [],
   };
 }
 function emptyTaikyo() {
@@ -3213,20 +3325,54 @@ docModeSelect.addEventListener('change', e => {
   renderEstimate(); // モード切替ではデータは書き換えない
 });
 
-// 発行元セレクタ
+// 発行元セレクタ(見積タブ + 業者発注書タブ 両方に同じセレクタを置いて同期)
 const issuerSelect = document.getElementById('issuerSelect');
+const hatchuIssuerSelect = document.getElementById('hatchu-issuer-select');
+const hatchuIssuerInfo = document.getElementById('hatchu-issuer-info');
 function renderIssuerOptions() {
   const issuers = state.settings.issuers || {};
-  issuerSelect.innerHTML = Object.entries(issuers).map(([key, v]) =>
+  const optionsHtml = Object.entries(issuers).map(([key, v]) =>
     `<option value="${escapeHtml(key)}">${escapeHtml(v.name || key)}</option>`
   ).join('');
-  issuerSelect.value = state.settings.issuerKey || Object.keys(issuers)[0] || 'buildcluster';
+  const currentKey = state.settings.issuerKey || Object.keys(issuers)[0] || 'buildcluster';
+  issuerSelect.innerHTML = optionsHtml;
+  issuerSelect.value = currentKey;
+  if (hatchuIssuerSelect) {
+    hatchuIssuerSelect.innerHTML = optionsHtml;
+    hatchuIssuerSelect.value = currentKey;
+  }
+  renderHatchuIssuerInfo();
+}
+function renderHatchuIssuerInfo() {
+  if (!hatchuIssuerInfo) return;
+  const iss = currentIssuer();
+  const logoHtml = iss.logo
+    ? `<img src="${escapeHtml(iss.logo)}" alt="logo" style="max-height:32px; max-width:80px; object-fit:contain; vertical-align:middle; margin-right:8px;">`
+    : `<span style="display:inline-block; width:32px; height:32px; line-height:32px; text-align:center; background:#fde68a; color:#92400e; border-radius:4px; vertical-align:middle; margin-right:8px; font-size:10px;">no logo</span>`;
+  hatchuIssuerInfo.innerHTML = `
+    ${logoHtml}
+    <b style="color:#92400e;">${escapeHtml(iss.jishaName||'(未設定)')}</b>
+    <span style="margin-left:8px;">${escapeHtml(iss.jishaAddr||'')}</span>
+    <span style="margin-left:8px;">TEL: ${escapeHtml(iss.jishaTel||'-')}</span>
+    <span style="margin-left:8px;">FAX: ${escapeHtml(iss.jishaFax||'-')}</span>
+  `;
 }
 issuerSelect.addEventListener('change', e => {
   state.settings.issuerKey = e.target.value;
   saveSettings();
+  if (hatchuIssuerSelect) hatchuIssuerSelect.value = e.target.value;
+  renderHatchuIssuerInfo();
   renderPrintMeta();
 });
+if (hatchuIssuerSelect) {
+  hatchuIssuerSelect.addEventListener('change', e => {
+    state.settings.issuerKey = e.target.value;
+    saveSettings();
+    issuerSelect.value = e.target.value;
+    renderHatchuIssuerInfo();
+    renderPrintMeta();
+  });
+}
 
 priceColSelect.addEventListener('change', e => {
   const col = e.target.value;
@@ -4057,12 +4203,31 @@ function addLineFromMaster(itemNumber) {
 }
 
 // モードに応じた金額を返す
+// 産廃処分費(産業廃棄物運搬処分費)行 = 家主負担行の小計 × 5% を動的に算出
+function isSanpaiAutoLine(l) {
+  if (!l) return false;
+  const item = (l.item || '').trim();
+  const specs = (l.specs || '').trim();
+  return item === '産廃処分費' && /産業廃棄物運搬処分費/.test(specs);
+}
+function computeSanpaiAmount() {
+  const lines = state.estimate?.lines || [];
+  const yanushiBase = lines
+    .filter(l => l && l.item && !l.reduced && !isSanpaiAutoLine(l) && (typeof effectiveBurdenType === 'function' ? effectiveBurdenType(l) : (l.burdenType || '家主')) === '家主')
+    .reduce((s, l) => s + lineAmount(l, 'estimate'), 0);
+  return Math.round(yanushiBase * 0.05);
+}
+
 function lineAmount(l, mode) {
   mode = mode || state.settings.docMode || 'estimate';
   if (mode === 'order') {
     // 'order' = 外注費(発注書PDFで業者に見せる金額)。材料費は含めない。
     if (l.orderAmountOverride != null && l.orderAmountOverride !== '') return Number(l.orderAmountOverride) || 0;
     return (Number(l.qty)||0) * (Number(l.orderPrice)||0);
+  }
+  // 産廃処分費の自動算出: 手動上書きがなければ 家主小計 × 5%
+  if (isSanpaiAutoLine(l) && (l.amountOverride == null || l.amountOverride === '')) {
+    return computeSanpaiAmount();
   }
   if (l.amountOverride != null && l.amountOverride !== '') return Number(l.amountOverride) || 0;
   return (Number(l.qty)||0) * (Number(l.unitPrice)||0);
@@ -6267,11 +6432,51 @@ const META_FIELD_MAP = {
   'meta-remarks': 'remarks',
   'meta-kojiName': 'kojiName',
 };
+// 工事名称セレクト: 既定外のカスタム値が state にあれば動的にオプションを追加する
+function syncKojiNameSelect() {
+  const sel = document.getElementById('meta-kojiName');
+  if (!sel) return;
+  const cur = state.estimate?.meta?.kojiName || '';
+  // 既定外の値があれば、リストの先頭(空オプションの直後)に動的オプションを追加
+  const fixed = ['', '原状回復工事', '修繕工事', 'リフォーム工事', '__other__'];
+  // 既存のカスタムオプション(class="koji-custom")は一旦削除
+  Array.from(sel.querySelectorAll('option.koji-custom')).forEach(o => o.remove());
+  if (cur && !fixed.includes(cur)) {
+    const opt = document.createElement('option');
+    opt.value = cur;
+    opt.textContent = cur + ' (自由入力)';
+    opt.className = 'koji-custom';
+    // (未選択) の直後 = index 1 に挿入
+    sel.insertBefore(opt, sel.options[1] || null);
+  }
+  sel.value = cur;
+}
 Object.entries(META_FIELD_MAP).forEach(([id, key]) => {
   const el = document.getElementById(id);
   if (!el) return;
-  el.value = state.estimate.meta[key] || '';
+  if (id === 'meta-kojiName') {
+    syncKojiNameSelect();
+  } else {
+    el.value = state.estimate.meta[key] || '';
+  }
   el.addEventListener('input', e => {
+    // 工事名称セレクトで「その他」が選ばれたら prompt で自由入力
+    if (id === 'meta-kojiName' && e.target.value === '__other__') {
+      const cur = state.estimate.meta.kojiName || '';
+      // 既定外の値が現状あればそれを初期値、無ければ空
+      const fixed = ['原状回復工事', '修繕工事', 'リフォーム工事'];
+      const init = (cur && !fixed.includes(cur)) ? cur : '';
+      const typed = (prompt('工事名称を自由入力(空=未選択)', init) || '').trim();
+      e.target.value = typed; // セレクトの値を反映
+      state.estimate.meta.kojiName = typed;
+      syncKojiNameSelect();
+      saveEstimate(); renderPrintMeta(); renderCurrentHeader();
+      // 修繕工事に切り替わった/解除された場合、業者発注書の時間欄表示を再描画
+      if (!document.getElementById('tab-hatchu').classList.contains('hide')) {
+        if (typeof renderHatchuRows === 'function') renderHatchuRows();
+      }
+      return;
+    }
     state.estimate.meta[key] = e.target.value;
     // 現場情報へ逆方向同期
     if (!state.estimate.meta.taikyo) state.estimate.meta.taikyo = emptyTaikyo();
@@ -6301,6 +6506,10 @@ Object.entries(META_FIELD_MAP).forEach(([id, key]) => {
         const tEl = document.querySelector(`[data-taikyo="${tKey}"]`);
         if (tEl) tEl.value = e.target.value;
       }
+    }
+    // 工事名称変更 → 修繕工事の時間入力欄を出すかどうかが変わるので 業者発注書を再描画
+    if (key === 'kojiName' && !document.getElementById('tab-hatchu').classList.contains('hide')) {
+      if (typeof renderHatchuRows === 'function') renderHatchuRows();
     }
   });
 });
@@ -7531,7 +7740,13 @@ function renderPatternSwitcher() {
 function syncMetaInputs() {
   Object.entries(META_FIELD_MAP).forEach(([id, key]) => {
     const el = document.getElementById(id);
-    if (el) el.value = state.estimate.meta[key] || '';
+    if (!el) return;
+    if (id === 'meta-kojiName') {
+      // 工事名称セレクトはカスタム値の動的オプション追加が必要
+      if (typeof syncKojiNameSelect === 'function') syncKojiNameSelect();
+    } else {
+      el.value = state.estimate.meta[key] || '';
+    }
   });
   // 既存の見積で 現場名はあるが 宛名/所在地 が空の場合、物件マスタから初回自動引用
   const meta = state.estimate?.meta;
@@ -7541,7 +7756,12 @@ function syncMetaInputs() {
       // 反映後の値を入力欄にも書き戻す
       Object.entries(META_FIELD_MAP).forEach(([id, key]) => {
         const el = document.getElementById(id);
-        if (el) el.value = state.estimate.meta[key] || '';
+        if (!el) return;
+        if (id === 'meta-kojiName') {
+          if (typeof syncKojiNameSelect === 'function') syncKojiNameSelect();
+        } else {
+          el.value = state.estimate.meta[key] || '';
+        }
       });
     }
   }
@@ -8505,19 +8725,189 @@ function autoFillKoutei() {
   if (!k.shikou) k.shikou = '(株)ビルドクラスタ';
   if (!k.sekininsha) k.sekininsha = t.tachiaiPerson || issuer.tantou || '';
   if (!k.sekininTel) k.sekininTel = t.tachiaiPersonTel || issuer.tantouTel || '';
+  // 工程行(rows): 既存の カスタム行(source='custom')は残し、自動行(source='auto')を再生成
+  if (!Array.isArray(k.rows)) k.rows = [];
+  const customs = k.rows.filter(r => r && r.source === 'custom');
+  const autoPeriods = mergeKouteiCategories(getCategoryPeriods());
+  const autos = Object.entries(autoPeriods).map(([cat, p], i) => ({
+    id: `a-${cat}-${i}`, category: cat, start: p.start || '', end: p.end || '', source: 'auto'
+  }));
+  // 畳工事 を別行として追加(item名に「畳」を含む行から最早開始・最遅終了を抽出)
+  // 工期が未設定でも、畳の行が発注書に存在すれば 畳工事 行は出す(ユーザーが工程表側で工期入力可)
+  const tatamiKey = (md) => {
+    const p = parseMonthDay(md);
+    if (!p.m || !p.d) return null;
+    return Number(p.m) * 100 + Number(p.d);
+  };
+  // 畳工事判定: item に「畳」を含むが、「6畳」「8畳」のような数字+畳(部屋サイズ表現)は除外
+  const isTatamiItem = (item) => {
+    if (!item) return false;
+    const cleaned = String(item).replace(/\d+畳/g, ''); // "6畳用" → "用" 等
+    return /畳/.test(cleaned);
+  };
+  const tatamiLines = (state.estimate?.lines || []).filter(l =>
+    l.item && !l.reduced && isTatamiItem(l.item) && !isJishaLine(l)
+  );
+  if (tatamiLines.length) {
+    let ts = '', te = '';
+    tatamiLines.forEach(l => {
+      const cand = (md) => {
+        const p = parseMonthDay(md);
+        return (p.m && p.d) ? `${p.m}/${p.d}` : '';
+      };
+      const cs = cand(l.hatchuPeriodStart);
+      const ce = cand(l.hatchuPeriodEnd);
+      if (cs && (!ts || tatamiKey(cs) < tatamiKey(ts))) ts = cs;
+      if (ce && (!te || tatamiKey(ce) > tatamiKey(te))) te = ce;
+    });
+    autos.push({
+      id: 'a-tatami',
+      category: '畳工事',
+      start: ts || te || '',
+      end: te || ts || '',
+      source: 'auto'
+    });
+  }
+  // 最終確認 行(発注書の finalCheckDate を参照、ある時のみ追加)
+  const ho = state.estimate?.meta?.hatchuOrder || {};
+  let finalMD = '';
+  if (ho.finalCheckDate) {
+    const md = parseMonthDay(ho.finalCheckDate);
+    if (md.m && md.d) {
+      finalMD = `${md.m}/${md.d}`;
+    } else {
+      const m2 = String(ho.finalCheckDate).match(/(\d{1,2})\/(\d{1,2})/);
+      if (m2) finalMD = `${m2[1]}/${m2[2]}`;
+    }
+  }
+  if (finalMD) {
+    autos.push({ id: 'a-finalcheck', category: '最終確認', start: finalMD, end: finalMD, source: 'auto' });
+  }
+  // 予備日 +3日(基準: 最終確認があればそれ、無ければ自動行の最遅 end)
+  const dateKey = (md) => {
+    const p = parseMonthDay(md);
+    if (!p.m || !p.d) return null;
+    return Number(p.m) * 100 + Number(p.d);
+  };
+  let yobiBase = finalMD;
+  if (!yobiBase) {
+    let bestKey = -1, bestEnd = '';
+    autos.forEach(a => {
+      const candidate = a.end || a.start;
+      const ck = dateKey(candidate);
+      if (ck != null && ck > bestKey) { bestKey = ck; bestEnd = candidate; }
+    });
+    yobiBase = bestEnd;
+  }
+  if (yobiBase) {
+    const md = parseMonthDay(yobiBase);
+    if (md.m && md.d) {
+      const today = new Date();
+      let year = today.getFullYear();
+      if (Number(md.m) < today.getMonth() + 1) year += 1;
+      const startDt = new Date(year, Number(md.m) - 1, Number(md.d));
+      startDt.setDate(startDt.getDate() + 1); // 基準の翌日から
+      const endDt = new Date(startDt);
+      endDt.setDate(endDt.getDate() + 2); // start + 2 = 計3日
+      autos.push({
+        id: 'a-yobi',
+        category: '予備日',
+        start: `${startDt.getMonth() + 1}/${startDt.getDate()}`,
+        end: `${endDt.getMonth() + 1}/${endDt.getDate()}`,
+        source: 'auto'
+      });
+    }
+  }
+  k.rows = [...autos, ...customs];
   saveEstimate();
 }
 
+// 工程行の追加(カスタム行)
+function addKouteiRow() {
+  const k = getKoutei();
+  if (!Array.isArray(k.rows)) k.rows = [];
+  k.rows.push({ id: `c-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, category: '', start: '', end: '', source: 'custom' });
+  saveEstimate();
+  renderKoutei();
+}
+
+// 工程行の削除
+function removeKouteiRow(id) {
+  const k = getKoutei();
+  if (!Array.isArray(k.rows)) return;
+  k.rows = k.rows.filter(r => r.id !== id);
+  saveEstimate();
+  renderKoutei();
+}
+
 // ガントチャート生成: カテゴリ別工期を HTML テーブルにする
+// 工程表用: 細かい提案系カテゴリを「内装工事」に統合 / 清掃工事 → ハウスクリーニング にリネーム
+const KOUTEI_CATEGORY_MERGE = {
+  '電気工事提案': '内装工事',
+  '消耗品交換提案': '内装工事',
+  '交換提案・補修工事': '内装工事',
+  '火災警報器交換': '内装工事',
+  '水回り補修工事': '内装工事',
+  '水回り設備交換提案': '内装工事',
+  '便座交換提案': '内装工事',
+  'スイッチ・コンセント交換提案': '内装工事',
+  '調整': '内装工事',
+  '化粧台交換提案': '内装工事',
+  'エアコン交換提案': '内装工事',
+  '清掃工事': 'ハウスクリーニング'
+};
+function mergeKouteiCategories(rawPeriods) {
+  const merged = {};
+  const dateKey = (md) => {
+    const p = parseMonthDay(md);
+    if (!p.m || !p.d) return null;
+    return Number(p.m) * 100 + Number(p.d);
+  };
+  const earlier = (a, b) => {
+    const ka = dateKey(a), kb = dateKey(b);
+    if (ka == null) return b || '';
+    if (kb == null) return a || '';
+    return ka < kb ? a : b;
+  };
+  const later = (a, b) => {
+    const ka = dateKey(a), kb = dateKey(b);
+    if (ka == null) return b || '';
+    if (kb == null) return a || '';
+    return ka > kb ? a : b;
+  };
+  Object.entries(rawPeriods).forEach(([cat, p]) => {
+    const target = KOUTEI_CATEGORY_MERGE[cat] || cat;
+    if (!merged[target]) merged[target] = { start: p.start, end: p.end };
+    else {
+      merged[target] = {
+        start: earlier(merged[target].start, p.start),
+        end: later(merged[target].end, p.end)
+      };
+    }
+  });
+  return merged;
+}
+
 function buildKouteiGantt() {
-  const periods = getCategoryPeriods();
+  // 工程行: koutei.rows (auto + custom 両方)を使う。なければ自動生成からフォールバック
+  const k = getKoutei();
+  let rows = Array.isArray(k && k.rows) ? k.rows : [];
+  if (!rows.length) {
+    const periods = mergeKouteiCategories(getCategoryPeriods());
+    rows = Object.entries(periods).map(([cat, p], i) => ({
+      id: `a-${cat}-${i}`, category: cat, start: p.start || '', end: p.end || '', source: 'auto'
+    }));
+  }
   // カテゴリを開始日順にソート
   const key = (md) => {
     const p = parseMonthDay(md);
     if (!p.m || !p.d) return 9999;
     return Number(p.m)*100 + Number(p.d);
   };
-  const cats = Object.entries(periods).sort((a,b) => key(a[1].start) - key(b[1].start));
+  const cats = rows
+    .filter(r => r && (r.category || r.start || r.end))
+    .map(r => [r.category, { start: r.start || '', end: r.end || '' }, r])
+    .sort((a, b) => key(a[1].start) - key(b[1].start));
   if (!cats.length) return { html: '<div style="color:#999; padding:10px;">(発注書工期データなし)</div>', dates: [] };
 
   // 日付範囲: 最早-2日 〜 最遅+2日
@@ -8581,8 +8971,9 @@ function buildKouteiGantt() {
     const cells = dates.map(d => {
       const inRange = sDate && eDate && d >= sDate && d <= eDate;
       let cls = 'kt-work-cell';
+      // 土日祝は工程被っても黒塗り(class 同時付与で CSS 側 sunday が優先)
       if (inRange) cls += ' work';
-      else if (isRest(d)) cls += ' sunday';
+      if (isRest(d)) cls += ' sunday';
       return `<td class="${cls}">&nbsp;</td>`;
     }).join('');
     return `<tr><th class="kt-rowlabel">${escapeHtml(cat)}</th>${cells}</tr>`;
@@ -8616,10 +9007,65 @@ function renderKoutei() {
   document.querySelectorAll('#tab-koutei [data-ktei]').forEach(inp => {
     if (document.activeElement !== inp) inp.value = k[inp.dataset.ktei] || '';
   });
+  // 工程行リスト
+  renderKouteiRowsList();
   // プレビュー
   const { html } = buildKouteiGantt();
   const pv = document.getElementById('koutei-preview');
   if (pv) pv.innerHTML = html;
+}
+
+function renderKouteiRowsList() {
+  const tbody = document.getElementById('koutei-rows-tbody');
+  if (!tbody) return;
+  const k = getKoutei();
+  const rows = Array.isArray(k.rows) ? k.rows : [];
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:#999;">行がありません。「＋ 行追加」または「🔄 最新データで生成」</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const isAuto = r.source === 'auto';
+    const badgeBg = isAuto ? '#dbeafe' : '#dcfce7';
+    const badgeColor = isAuto ? '#1e40af' : '#166534';
+    const badgeText = isAuto ? '自動' : '手動';
+    return `<tr data-row-id="${escapeHtml(r.id)}" style="border-bottom:1px solid #eee;">
+      <td style="padding:4px 6px; text-align:center;"><span style="display:inline-block; padding:1px 6px; font-size:10px; border-radius:3px; background:${badgeBg}; color:${badgeColor}; font-weight:600;">${badgeText}</span></td>
+      <td style="padding:4px 6px;"><input type="text" data-kr="category" value="${escapeHtml(r.category||'')}" style="width:100%;" placeholder="工事種目"></td>
+      <td style="padding:4px 6px;"><input type="text" data-kr="start" value="${escapeHtml(r.start||'')}" style="width:100%;" placeholder="5/8"></td>
+      <td style="padding:4px 6px;"><input type="text" data-kr="end" value="${escapeHtml(r.end||'')}" style="width:100%;" placeholder="5/12"></td>
+      <td style="padding:4px 6px; text-align:center;"><button class="btn-koutei-row-del danger" title="この行を削除" style="font-size:11px; padding:2px 6px;">×</button></td>
+    </tr>`;
+  }).join('');
+  // 入力イベント
+  tbody.querySelectorAll('input[data-kr]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.rowId;
+      const field = inp.dataset.kr;
+      const row = k.rows.find(r => r.id === id);
+      if (!row) return;
+      row[field] = e.target.value;
+      saveEstimate();
+      // プレビューだけ即更新(行一覧は再描画しない=フォーカス維持)
+      const { html } = buildKouteiGantt();
+      const pv = document.getElementById('koutei-preview');
+      if (pv) pv.innerHTML = html;
+    });
+  });
+  // 削除ボタン
+  tbody.querySelectorAll('.btn-koutei-row-del').forEach(btn => btn.addEventListener('click', e => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.rowId;
+    const row = k.rows.find(r => r.id === id);
+    if (!row) return;
+    if (row.source === 'auto') {
+      if (!confirm('自動生成された行を削除します。\n「🔄 最新データで生成」で復活します。')) return;
+    } else {
+      if ((row.category || row.start || row.end) && !confirm('この手動行を削除しますか?')) return;
+    }
+    removeKouteiRow(id);
+  }));
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8634,13 +9080,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRegen = document.getElementById('btn-koutei-regen');
   if (btnRegen) btnRegen.addEventListener('click', () => {
     const k = getKoutei();
-    Object.keys(k).forEach(key => { if (key !== 'shikou') k[key] = ''; });
+    // 編集項目はクリア(shikou固定文言だけ残す)、rowsは保持(自動行だけ再生成)
+    Object.keys(k).forEach(key => {
+      if (key === 'shikou') return;
+      if (key === 'rows') return;
+      k[key] = '';
+    });
     autoFillKoutei();
     renderKoutei();
-    showToast('最新データで再生成しました');
+    showToast('最新データで再生成しました(手動行は維持)');
   });
   const btnPrint = document.getElementById('btn-koutei-print');
   if (btnPrint) btnPrint.addEventListener('click', printKoutei);
+  const btnAddRow = document.getElementById('btn-koutei-add-row');
+  if (btnAddRow) btnAddRow.addEventListener('click', () => {
+    if (typeof addKouteiRow === 'function') addKouteiRow();
+  });
 });
 
 function printKoutei() {
@@ -8789,11 +9244,53 @@ function autoFillOshirase() {
   if (!o.tantouName) o.tantouName = t.tachiaiPerson || issuer.tantou || '';
   if (!o.tantouTel) o.tantouTel = t.tachiaiPersonTel || issuer.tantouTel || '';
   if (!o.workHours) o.workHours = '9:00〜17:30';
-  // 工事内容(大分類)
-  const periods = getCategoryPeriods();
-  const cats = Object.keys(periods);
+  // 工事内容(大分類) — 工程表と同じ統合ルールを適用
+  const periods = mergeKouteiCategories(getCategoryPeriods());
+  // カテゴリ別工事 行 を再構築(custom行は保持、auto行は再生成、削除済みauto行はexcludedKeysで除外)
+  if (!Array.isArray(o.rows)) o.rows = [];
+  if (!Array.isArray(o.excludedAutoKeys)) o.excludedAutoKeys = [];
+  // 既存ユーザー編集 note を category キー で保存
+  const existingNotes = {};
+  o.rows.forEach(r => { if (r && r.category && r.note != null) existingNotes[r.category] = r.note; });
+  const customs = o.rows.filter(r => r && r.source === 'custom');
+  const autos = Object.entries(periods)
+    .filter(([cat]) => !o.excludedAutoKeys.includes(cat))
+    .map(([cat, p], i) => {
+      const defaultNote = NOISY_CATEGORIES.has(cat) ? '※一時大きな音が伴う作業となります' : '';
+      const note = (existingNotes[cat] != null) ? existingNotes[cat] : defaultNote;
+      return { id: `a-${cat}`, category: cat, start: p.start || '', end: p.end || '', note, source: 'auto' };
+    });
+  o.rows = [...autos, ...customs];
+  // workCategories 表示文字列も rows ベースで再生成(空ならのみ)
+  const cats = o.rows.map(r => r.category).filter(Boolean);
   if (!o.workCategories) o.workCategories = cats.join('・');
   saveEstimate();
+}
+
+// お知らせ: 行追加(手動)
+function addOshiraseRow() {
+  const o = getOshirase();
+  if (!Array.isArray(o.rows)) o.rows = [];
+  o.rows.push({ id: `c-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, category: '', start: '', end: '', source: 'custom' });
+  saveEstimate();
+  renderOshirase();
+}
+
+// お知らせ: 行削除(自動行は excludedAutoKeys に追加して再生成時も復活させない)
+function removeOshiraseRow(id) {
+  const o = getOshirase();
+  if (!Array.isArray(o.rows)) return;
+  const target = o.rows.find(r => r.id === id);
+  if (!target) return;
+  if (target.source === 'auto') {
+    if (!Array.isArray(o.excludedAutoKeys)) o.excludedAutoKeys = [];
+    if (target.category && !o.excludedAutoKeys.includes(target.category)) {
+      o.excludedAutoKeys.push(target.category);
+    }
+  }
+  o.rows = o.rows.filter(r => r.id !== id);
+  saveEstimate();
+  renderOshirase();
 }
 
 /* =========================
@@ -8871,10 +9368,11 @@ function renderIsp() {
   const lines = (est.lines || []).filter(l => l.item && !l.reduced);
 
   // 末尾に「産廃処分費(家主負担分の5%)」を家主負担として追加(ISPタブ専用)
-  // 家主負担行のみの見積小計を基準に5%(全体ではない、入居者負担分は含めない)
+  // 家主小計列(yanushiSubtotal=実際にISPに表示される金額) を基準に5%
+  // → 元請けの倍率(山一/みどり等)・手入力 yanushiAmt も反映された数値で計算
   const yanushiBase = lines
     .filter(l => effectiveBurdenType(l) === '家主')
-    .reduce((s, l) => s + lineAmount(l, 'estimate'), 0);
+    .reduce((s, l) => s + yanushiSubtotal(l), 0);
   const sanpaiAmt = Math.round(yanushiBase * 0.05);
   if (yanushiBase > 0) {
     lines.push({
@@ -9238,22 +9736,63 @@ function renderOshirase() {
     const k = inp.dataset.osh;
     if (document.activeElement !== inp) inp.value = o[k] || '';
   });
-  // カテゴリ別工期表示
-  const periods = getCategoryPeriods();
-  const periodsEl = document.getElementById('oshirase-periods');
-  if (periodsEl) {
-    const rows = Object.entries(periods);
-    if (!rows.length) {
-      periodsEl.innerHTML = '<div style="color:#999;">(発注書工期データなし)</div>';
-    } else {
-      periodsEl.innerHTML = rows.map(([cat, p]) => {
-        const noisy = NOISY_CATEGORIES.has(cat);
-        const range = `${p.start||'?'}〜${p.end||'?'}`;
-        const tag = noisy ? ' <span style="color:#dc2626; font-size:11px;">🔊 音が出る作業</span>' : '';
-        return `<div style="padding:3px 8px; display:flex; gap:12px; border-bottom:1px solid #eee;"><b style="min-width:160px;">${escapeHtml(cat)}</b><span>${escapeHtml(range)}</span>${tag}</div>`;
-      }).join('');
-    }
+  renderOshiraseRowsList();
+}
+
+function renderOshiraseRowsList() {
+  const tbody = document.getElementById('oshirase-rows-tbody');
+  if (!tbody) return;
+  const o = getOshirase();
+  const rawRows = Array.isArray(o.rows) ? o.rows : [];
+  if (!rawRows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:12px; text-align:center; color:#999;">行がありません。「＋ 行追加」または「🔄 最新の発注書データから再生成」</td></tr>';
+    return;
   }
+  // 着工日(開始日)順にソート(空・自由入力の行は末尾)
+  const sortKey = (md) => {
+    const p = parseMonthDay(md);
+    if (!p.m || !p.d) return 99999;
+    return Number(p.m) * 100 + Number(p.d);
+  };
+  const rows = rawRows.slice().sort((a, b) => sortKey(a.start) - sortKey(b.start));
+  tbody.innerHTML = rows.map(r => {
+    const isAuto = r.source === 'auto';
+    const badgeBg = isAuto ? '#dbeafe' : '#dcfce7';
+    const badgeColor = isAuto ? '#1e40af' : '#166534';
+    const badgeText = isAuto ? '自動' : '手動';
+    const noisy = NOISY_CATEGORIES.has(r.category) ? ' 🔊' : '';
+    return `<tr data-row-id="${escapeHtml(r.id)}" style="border-bottom:1px solid #eee;">
+      <td style="padding:4px 6px; text-align:center;"><span style="display:inline-block; padding:1px 6px; font-size:10px; border-radius:3px; background:${badgeBg}; color:${badgeColor}; font-weight:600;">${badgeText}</span></td>
+      <td style="padding:4px 6px;"><input type="text" data-or="category" value="${escapeHtml(r.category||'')}" style="width:100%;" placeholder="工事種目">${noisy}</td>
+      <td style="padding:4px 6px;"><input type="text" data-or="start" value="${escapeHtml(r.start||'')}" style="width:100%;" placeholder="5/8"></td>
+      <td style="padding:4px 6px;"><input type="text" data-or="end" value="${escapeHtml(r.end||'')}" style="width:100%;" placeholder="5/12"></td>
+      <td style="padding:4px 6px;"><input type="text" data-or="note" value="${escapeHtml(r.note||'')}" style="width:100%; font-size:11px;" placeholder="例: ※一時大きな音が伴う作業となります"></td>
+      <td style="padding:4px 6px; text-align:center;"><button class="btn-oshirase-row-del danger" title="この行を削除" style="font-size:11px; padding:2px 6px;">×</button></td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('input[data-or]').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.rowId;
+      const field = inp.dataset.or;
+      const row = o.rows.find(r => r.id === id);
+      if (!row) return;
+      row[field] = e.target.value;
+      saveEstimate();
+    });
+  });
+  tbody.querySelectorAll('.btn-oshirase-row-del').forEach(btn => btn.addEventListener('click', e => {
+    const tr = e.target.closest('tr');
+    const id = tr.dataset.rowId;
+    const row = o.rows.find(r => r.id === id);
+    if (!row) return;
+    if (row.source === 'auto') {
+      if (!confirm(`自動行「${row.category||'(無名)'}」を削除しますか?\n削除後はお知らせ印刷から外れます。\n「🔄 最新の発注書データから再生成」を押せば復活します。`)) return;
+    } else {
+      if ((row.category || row.start || row.end) && !confirm('この手動行を削除しますか?')) return;
+    }
+    removeOshiraseRow(id);
+  }));
 }
 
 // 編集フィールド変更→ state に反映
@@ -9270,28 +9809,93 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const btnRegen = document.getElementById('btn-oshirase-regen');
   if (btnRegen) btnRegen.addEventListener('click', () => {
-    // 一旦クリアして再生成
+    // 編集項目クリア(shikouCompany/workHoursは固定文言を保持) + excludedAutoKeys/rowsもクリアで全自動行を復活
     const o = getOshirase();
-    Object.keys(o).forEach(k => { if (k !== 'shikouCompany' && k !== 'workHours') o[k] = ''; });
+    Object.keys(o).forEach(k => {
+      if (k === 'shikouCompany' || k === 'workHours') return;
+      if (k === 'rows') { o.rows = []; return; }
+      if (k === 'excludedAutoKeys') { o.excludedAutoKeys = []; return; }
+      o[k] = '';
+    });
     autoFillOshirase();
     renderOshirase();
-    showToast('最新の発注書データから再生成しました');
+    showToast('最新の発注書データから再生成しました(削除した自動行も復活)');
   });
   const btnPrint = document.getElementById('btn-oshirase-print');
   if (btnPrint) btnPrint.addEventListener('click', printOshirase);
+  const btnAddRow = document.getElementById('btn-oshirase-add-row');
+  if (btnAddRow) btnAddRow.addEventListener('click', () => {
+    if (typeof addOshiraseRow === 'function') addOshiraseRow();
+  });
+  const btnSavePdf = document.getElementById('btn-oshirase-save-pdf');
+  if (btnSavePdf) btnSavePdf.addEventListener('click', async () => {
+    if (typeof html2pdf === 'undefined') {
+      showToast('html2pdf 未読込(オフラインの可能性)', true);
+      return;
+    }
+    btnSavePdf.disabled = true;
+    btnSavePdf.textContent = '⏳ 生成中...';
+    try {
+      // DOM構築(印刷と共通)
+      buildOshiraseDom();
+      const o = getOshirase();
+      const area = document.getElementById('oshirase-print-area');
+      // 画面外に絶対配置で表示(html2canvasがレンダリング可能な状態)
+      const originalStyle = area.getAttribute('style') || '';
+      area.setAttribute('style', 'display:block !important; position:absolute; left:-9999px; top:0; width:210mm; background:#fff; padding:0; margin:0; z-index:9999;');
+      // レイアウト待ち
+      await new Promise(r => setTimeout(r, 200));
+      const fname = sanitizeFilename(`${o.bukkenName||'物件'}${o.roomNo?'_'+o.roomNo:''}_工事のお知らせ_${o.issueDate||''}.pdf`);
+      const opt = {
+        margin: 0,
+        filename: fname,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          windowWidth: 794, // 210mm @ 96dpi
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+      await html2pdf().set(opt).from(area).save();
+      // 元に戻す
+      area.setAttribute('style', originalStyle);
+      showToast(`PDF「${fname}」を保存しました`);
+    } catch (err) {
+      console.error('PDF保存失敗', err);
+      showToast('PDF保存に失敗しました(F12 Console参照)', true);
+      // エラー時もスタイル復元
+      const area = document.getElementById('oshirase-print-area');
+      if (area) area.removeAttribute('style');
+    } finally {
+      btnSavePdf.disabled = false;
+      btnSavePdf.textContent = '📥 PDFで保存';
+    }
+  });
 });
 
-function printOshirase() {
+// 工事のお知らせ印刷用DOMを構築(印刷もPDF保存も共通でこれを使う)
+function buildOshiraseDom() {
   autoFillOshirase();
   const o = getOshirase();
-  const periods = getCategoryPeriods();
+  const rawOshiraseRows = Array.isArray(o.rows) ? o.rows : [];
+  const sortKey = (md) => {
+    const p = parseMonthDay(md);
+    if (!p.m || !p.d) return 99999;
+    return Number(p.m) * 100 + Number(p.d);
+  };
+  const oshiraseRows = rawOshiraseRows.slice().sort((a, b) => sortKey(a.start) - sortKey(b.start));
   const area = document.getElementById('oshirase-print-area');
   if (!area) return;
-  // カテゴリ別工期行を生成
-  const periodRows = Object.entries(periods).map(([cat, p]) => {
+  const periodRows = oshiraseRows.filter(r => r.category || r.start || r.end).map((r) => {
+    const cat = r.category || '';
+    const p = { start: r.start || '', end: r.end || '' };
     const range = `${p.start||''}〜${p.end||''}`;
-    const noisy = NOISY_CATEGORIES.has(cat);
-    return `<div class="osh-sub">・${escapeHtml(cat)} ${escapeHtml(range)}</div>${noisy ? `<div class="osh-note">  ※一時大きな音が伴う作業となります</div>` : ''}`;
+    const note = (r.note || '').trim();
+    return `<div class="osh-sub">・${escapeHtml(cat)} ${escapeHtml(range)}</div>${note ? `<div class="osh-note">  ${escapeHtml(note)}</div>` : ''}`;
   }).join('');
   const bukkenFull = `${escapeHtml(o.bukkenName)}${o.roomNo?' '+escapeHtml(o.roomNo)+'号室':''}`;
   const overallRange = `${escapeHtml(o.workStart)}〜${escapeHtml(o.workEnd)}`;
@@ -9343,6 +9947,11 @@ function printOshirase() {
         <li>諸事情により日程を変更させて頂く場合があります。</li>
       </ul>
     </div>`;
+}
+
+function printOshirase() {
+  buildOshiraseDom();
+  const o = getOshirase();
   const prevTitle = document.title;
   document.title = sanitizeFilename(`[${o.bukkenName||'(無題)'}${o.roomNo?' '+o.roomNo:''}] 工事のお知らせ`);
   document.body.classList.add('print-oshirase-mode');
@@ -10959,6 +11568,9 @@ function renderHatchu() {
   renderHatchuWorkshopSelect();
   // 業者別サマリー
   renderHatchuBreakdown();
+  // 発行元セレクタ + 情報表示の同期(タブ切替時に最新を反映)
+  if (hatchuIssuerSelect) hatchuIssuerSelect.value = state.settings.issuerKey || '';
+  if (typeof renderHatchuIssuerInfo === 'function') renderHatchuIssuerInfo();
 }
 
 // "M/D" 形式の文字列を分解(ISO YYYY-MM-DD も受け入れ)
@@ -11019,7 +11631,8 @@ function buildDateOptionsNext2Months(currentValue) {
     let color = '';
     if (dow === 0 || holiday) color = '#dc2626';      // 日曜・祝日: 赤
     else if (dow === 6) color = '#2563eb';            // 土曜: 青
-    const label = `${m}/${dd}(${DOW[dow]})${holiday ? ' '+holiday : ''}`;
+    // 祝日は色だけで判別(名称は省略してドロップダウン幅を抑える)
+    const label = `${m}/${dd}(${DOW[dow]})`;
     arr.push({ value: val, text: label, color });
   }
   // 現在値が M/D 形式以外(旧ISOデータ等)→ 正規化して範囲内なら選択、なければ範囲外表示
@@ -11030,22 +11643,48 @@ function buildDateOptionsNext2Months(currentValue) {
   return arr;
 }
 
-// 日付プルダウンのHTML生成(単一select、曜日色付き)
+// 日付プルダウンのHTML生成(単一select、曜日色付き + プリセット + 自由入力オプション)
 function monthDaySelectHtml(fieldKey, value) {
   const opts = buildDateOptionsNext2Months(value);
-  const selectedVal = toMonthDay(value);
+  const rawVal = String(value || '');
+  const md = parseMonthDay(rawVal);
+  // 終了日(hatchuPeriodEnd) にだけ追加するプリセット選択肢
+  const presetValues = (fieldKey === 'hatchuPeriodEnd') ? ['迄'] : [];
+  const isPreset = presetValues.includes(rawVal);
+  const isFreeText = rawVal && !(md.m && md.d) && !isPreset;
+  const selectedVal = isFreeText
+    ? rawVal
+    : (isPreset
+        ? rawVal
+        : ((md.m && md.d) ? `${md.m}/${md.d}` : ''));
+  // 自由入力された値はプルダウンに動的オプションを追加(=value一致で selected 表示できるように)
+  const freeOption = isFreeText
+    ? `<option value="${escapeHtml(rawVal)}" selected style="color:#92400e; font-weight:bold;">${escapeHtml(rawVal)}</option>`
+    : '';
+  // プリセット option (迄/まで/ASAP/未定 等)。先頭にまとめて配置
+  const presetHtml = presetValues.map(p => {
+    const sel = (rawVal === p) ? ' selected' : '';
+    return `<option value="${escapeHtml(p)}"${sel} style="color:#7c2d12; font-weight:600;">${escapeHtml(p)}</option>`;
+  }).join('');
   const options = '<option value="">-</option>' +
+    freeOption +
     opts.map(o => {
       const styleAttr = o.color ? ` style="color:${o.color};"` : '';
-      const sel = o.value === selectedVal ? ' selected' : '';
+      const sel = (!isFreeText && !isPreset && o.value === selectedVal) ? ' selected' : '';
       return `<option value="${escapeHtml(o.value)}"${sel}${styleAttr}>${escapeHtml(o.text)}</option>`;
-    }).join('');
-  return `<select data-h="${fieldKey}" style="width:78px; font-size:11px;">${options}</select>`;
+    }).join('') +
+    `<option value="__free__" style="color:#7c2d12;">✏ 自由入力…</option>` +
+    presetHtml;
+  return `<select data-h="${fieldKey}" style="width:78px; font-size:11px;" title="日付選択。「✏ 自由入力」で任意のテキスト入力可">${options}</select>`;
 }
 
-// 自社工事判定: supplier が空 or "ビルドクラスタ"
+// 自社工事判定:
+//   1. line.hatchuSection が 'jisha' or 'gaichuu' なら、それを優先(ユーザーがセクション固定)
+//   2. それ以外: supplier が空 or "ビルドクラスタ" なら自社、それ以外は工事店
 function isJishaLine(line) {
-  const s = (line.supplier || '').trim();
+  if (line && line.hatchuSection === 'jisha') return true;
+  if (line && line.hatchuSection === 'gaichuu') return false;
+  const s = (line && line.supplier ? line.supplier : '').trim();
   return !s || s === 'ビルドクラスタ';
 }
 
@@ -11094,7 +11733,8 @@ function renderHatchuRows() {
   const jishaVisible = sortReducedLast(allVisible.filter(x => isJishaLine(x.l)));
   document.getElementById('hatchu-row-count').textContent = `外注 ${gaichuuVisible.length}件 / 自社 ${jishaVisible.length}件(見積と連動)`;
   // 業者候補
-  const workshopOpts = [...new Set(lines.map(l => l.supplier).filter(Boolean).concat(COL_GROUPS.hatchu.cols))];
+  // 工事店プルダウン候補: 既存lineのsupplier + 外注先マスタ + ビルドクラスタ(自社)を必ず含める
+  const workshopOpts = [...new Set(['ビルドクラスタ', ...lines.map(l => l.supplier).filter(Boolean), ...COL_GROUPS.hatchu.cols])];
   const wsListId = 'dl-hatchu-workshops';
   let wsDatalist = document.getElementById(wsListId);
   if (!wsDatalist) {
@@ -11104,13 +11744,15 @@ function renderHatchuRows() {
   }
   wsDatalist.innerHTML = workshopOpts.map(w => `<option value="${escapeHtml(w)}">`).join('');
 
+  // 工事名称が「修繕工事」のとき、工期セルの右側に時間指定用テキスト入力を出す
+  const isShuzenKoji = (state.estimate?.meta?.kojiName === '修繕工事');
   const renderSection = (items, sectionLabel, sectionColor, bgColor) => {
     if (items.length === 0) {
       return `<tr class="hatchu-section-row"><td colspan="14" style="background:${bgColor}; color:${sectionColor}; font-weight:bold; padding:6px 10px; border-top:2px solid ${sectionColor};">${escapeHtml(sectionLabel)} <span style="font-size:11px; font-weight:normal; color:#6b7280;">(該当なし)</span></td></tr>`;
     }
     const header = `<tr class="hatchu-section-row"><td colspan="14" style="background:${bgColor}; color:${sectionColor}; font-weight:bold; padding:6px 10px; border-top:2px solid ${sectionColor};">${escapeHtml(sectionLabel)} <span style="font-size:11px; font-weight:normal; color:#6b7280;">(${items.length}件)</span></td></tr>`;
     const rowsHtml = items.map(({ l, origIdx }, i) => {
-    const reducedClass = l.reduced ? ' class="reduced-row"' : '';
+    // (reducedClass は trClassAttr に統合)
     const estAmt   = lineAmount(l, 'estimate');
     const orderAmt = lineAmount(l, 'order');
     // 粗利 = 見積金額 − 原価合計(材料費 + 外注費)
@@ -11154,13 +11796,22 @@ function renderHatchuRows() {
     const specsOverridden = l.hatchuSpecs != null;
     const specsBg = specsOverridden ? 'background:#fef3c7;' : '';
     const specsRestoreBtn = specsOverridden ? `<button type="button" class="btn-h-restore-specs no-print" title="見積と同じに戻す" style="position:absolute; right:2px; top:50%; transform:translateY(-50%); width:16px; height:16px; line-height:14px; text-align:center; border:1px solid #f59e0b; background:#fff; color:#92400e; font-size:10px; border-radius:50%; cursor:pointer; padding:0; z-index:6;">↺</button>` : '';
-    return `<tr data-i="${origIdx}" draggable="true"${reducedClass}${extraStyle}>
+    // tr のclass属性: reduced-row / print-hidden-row を組み合わせ
+    const trClassAttr = (l.reduced || l.hatchuPrintHidden)
+      ? ` class="${[l.reduced?'reduced-row':'', l.hatchuPrintHidden?'print-hidden-row':''].filter(Boolean).join(' ')}"`
+      : '';
+    return `<tr data-i="${origIdx}" draggable="true"${trClassAttr}${extraStyle}>
       <td class="num">${i+1}${extraBadge}</td>
       <td>${supplierSelect}</td>
       <td style="white-space:nowrap;">
         ${isJishaLine(l)
           ? `<span style="font-size:11px; color:#6b7280; font-style:italic;" title="自社(ビルドクラスタ)の工期は最終確認日と同じ">最終確認日と同じ</span>`
-          : `${monthDaySelectHtml('hatchuPeriodStart', l.hatchuPeriodStart)}<span style="font-size:11px; color:#6b7280;">〜</span>${monthDaySelectHtml('hatchuPeriodEnd', l.hatchuPeriodEnd)}`}
+          : (isShuzenKoji
+              // 修繕工事: 1日完結なので「日付1つ + 時間」にシンプル化
+              ? `${monthDaySelectHtml('hatchuPeriodStart', l.hatchuPeriodStart)}<input type="text" data-h="hatchuTime" value="${escapeHtml(l.hatchuTime||'')}" placeholder="9時～" title="時間指定 (例: 9時～ / 9:00～11:00 / 13時集合)" style="width:78px; font-size:11px; margin-left:4px; background:#fffbeb; border:1px solid #fde68a;">`
+              // 通常: 開始 〜 終了 の従来UI
+              : `${monthDaySelectHtml('hatchuPeriodStart', l.hatchuPeriodStart)}<span style="font-size:11px; color:#6b7280;">〜</span>${monthDaySelectHtml('hatchuPeriodEnd', l.hatchuPeriodEnd)}`
+            )}
       </td>
       <td><input type="text" data-h="room" value="${escapeHtml(l.room||'')}" style="width:100%;"></td>
       <td class="h-item-cell" style="position:relative;">${insAbove}${insBelow}<input type="text" data-h="item" value="${escapeHtml(itemDisplay)}" style="width:100%; ${itemBg} ${itemOverridden ? 'padding-right:20px !important;' : ''}" title="${itemOverridden ? '業者発注書専用に編集中(見積と独立)。↺ボタンで見積と同じに戻る' : ''}">${itemRestoreBtn}</td>
@@ -11173,9 +11824,13 @@ function renderHatchuRows() {
       <td class="num"><input type="text" data-h="orderAmount" value="${fmtNum(orderAmt)}" style="width:100%; text-align:right;" inputmode="decimal" title="発注小計(=数量×発注単価)。手入力で上書き、空にすると自動再計算"></td>
       <td class="num no-print" style="background:#f0f9ff; color:#1e3a8a;" title="参考(印刷外): 見積単価">${fmtNum(l.unitPrice||0)}</td>
       <td class="num no-print" style="background:${grossBg}; color:${grossColor}; font-weight:600;" title="粗利 = ${fmtNum(estAmt)} − 原価${fmtNum(totalCost)}(材料${fmtNum((Number(l.qty)||0)*(Number(l.materialPrice)||0))}+外注${fmtNum(orderAmt)}) = ${fmtNum(grossProfit)}\n粗利率 = ${grossRate!=null?grossRate.toFixed(1)+'%':'(計算不可)'}\n判定: 25%以上=緑 / 10〜24%=黄 / 10%未満=赤">${grossDisp}</td>
-      <td style="white-space:nowrap;">
+      <td class="h-action-cell" style="white-space:nowrap;">
+        ${(itemOverridden || specsOverridden) ? `<button class="btn-h-restore-row no-print" title="この行の発注書専用編集をすべて解除(工事名称・特記事項を見積と同じに戻す)" style="font-size:12px; padding:1px 4px; background:#fef3c7; border:1px solid #f59e0b; color:#92400e;">🔄</button>` : ''}
+        <button class="btn-h-top" title="${isJishaLine(l)?'自社セクション':'工事店セクション'}の一番上へ移動" style="font-size:12px; padding:1px 4px;">⏫</button>
+        <button class="btn-h-bottom" title="${isJishaLine(l)?'自社セクション':'工事店セクション'}の一番下へ移動" style="font-size:12px; padding:1px 4px;">⏬</button>
+        <button class="btn-h-section" title="セクション切替(現在: ${isJishaLine(l)?'自社':'工事店'})\\nクリックで${isJishaLine(l)?'工事店':'自社'}セクションへ${l.hatchuSection?' / 自動判定に戻すには再度クリック後 supplier を見直し':''}" style="font-size:12px; padding:1px 4px;${l.hatchuSection?' background:#dbeafe; border-color:#3b82f6;':''}">${isJishaLine(l)?'🏠':'🔧'}</button>
         <button class="btn-h-reduce" title="${l.reduced?'解除':'減工事マーク'}" style="background:${l.reduced?'#fcd34d':'transparent'};">${l.reduced?'➕':'➖'}</button>
-        <button class="danger btn-h-del" title="削除(見積からも削除)">×</button>
+        <button class="${l.hatchuPrintHidden?'':'danger '}btn-h-del" title="${l.hatchuPrintHidden?'印刷除外を解除(印刷に出るようにする)':'印刷から除外(行は残す)\\nShift+クリックで完全削除'}">${l.hatchuPrintHidden?'↺':'×'}</button>
       </td>
     </tr>`;
     }).join('');
@@ -11233,6 +11888,69 @@ function renderHatchuRows() {
       } else {
         line[k] = v;
       }
+      // ★リアルタイム: 各種「見積と同じに戻す」ボタン+ハイライトの表示/非表示 を切替(item/specs 変更時)
+      if (k === 'item' || k === 'specs') {
+        // per-cell ↺ (入力欄の右側の小さい復旧ボタン)
+        const cellTd = e.target.closest('td');
+        const cellBtnClass = (k === 'item') ? 'btn-h-restore-item' : 'btn-h-restore-specs';
+        const cellOverridden = (k === 'item') ? (line.hatchuItem != null) : (line.hatchuSpecs != null);
+        if (cellTd) {
+          let cellExistingBtn = cellTd.querySelector('.' + cellBtnClass);
+          if (cellOverridden && !cellExistingBtn) {
+            const cb = document.createElement('button');
+            cb.type = 'button';
+            cb.className = cellBtnClass + ' no-print';
+            cb.title = '見積と同じに戻す';
+            cb.style.cssText = 'position:absolute; right:2px; top:50%; transform:translateY(-50%); width:16px; height:16px; line-height:14px; text-align:center; border:1px solid #f59e0b; background:#fff; color:#92400e; font-size:10px; border-radius:50%; cursor:pointer; padding:0; z-index:6;';
+            cb.textContent = '↺';
+            cb.addEventListener('click', ev => {
+              ev.stopPropagation();
+              if (k === 'item') line.hatchuItem = null;
+              else line.hatchuSpecs = null;
+              saveEstimate();
+              renderHatchuRows();
+            });
+            cellTd.appendChild(cb);
+            // 入力欄も視覚的に編集中(黄色背景)
+            e.target.style.background = '#fef3c7';
+            e.target.style.paddingRight = '20px';
+            e.target.title = '業者発注書専用に編集中(見積と独立)。↺ボタンで見積と同じに戻る';
+          } else if (!cellOverridden && cellExistingBtn) {
+            cellExistingBtn.remove();
+            e.target.style.background = '';
+            e.target.style.paddingRight = '';
+            e.target.title = '';
+          }
+        }
+        // 行ごと一括 🔄 ボタン(アクションセル先頭)
+        const actionTd = tr.querySelector('td.h-action-cell');
+        if (actionTd) {
+          let existingBtn = actionTd.querySelector('.btn-h-restore-row');
+          const shouldShow = (line.hatchuItem != null) || (line.hatchuSpecs != null);
+          if (shouldShow && !existingBtn) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-h-restore-row no-print';
+            btn.title = 'この行の発注書専用編集をすべて解除(工事名称・特記事項を見積と同じに戻す)';
+            btn.style.cssText = 'font-size:12px; padding:1px 4px; background:#fef3c7; border:1px solid #f59e0b; color:#92400e;';
+            btn.textContent = '🔄';
+            btn.addEventListener('click', ev => {
+              ev.stopPropagation();
+              line.hatchuItem = null;
+              line.hatchuSpecs = null;
+              saveEstimate();
+              renderHatchuRows();
+              if (typeof showToast === 'function') {
+                const label = line.item || line.category || '(行)';
+                showToast(`「${label}」を見積と同じ内容に戻しました`);
+              }
+            });
+            actionTd.insertBefore(btn, actionTd.firstChild);
+          } else if (!shouldShow && existingBtn) {
+            existingBtn.remove();
+          }
+        }
+      }
       saveEstimate();
       // 業者・数量・金額に影響する変更はリアルタイムサマリー更新
       if (k === 'supplier' || k === 'qty' || k === 'hatchuRemark' || k === 'orderPrice' || k === 'orderAmount' || k === 'materialPrice') {
@@ -11272,8 +11990,7 @@ function renderHatchuRows() {
       }
     });
   });
-  // 日付プルダウン(工期)は select 要素だが data-h 属性なので既存の input[data-h] ループで拾えない
-  // select[data-h] にも change イベントを紐付け(M/D 形式に正規化)
+  // 日付プルダウン (hatchuPeriodStart/End) と 工事店プルダウン (supplier) は select 経由
   tbody.querySelectorAll('select[data-h]').forEach(sel => {
     sel.addEventListener('change', e => {
       const tr = e.target.closest('tr');
@@ -11281,21 +11998,32 @@ function renderHatchuRows() {
       const k = sel.dataset.h;
       const line = state.estimate.lines[idx];
       if (!line) return;
-      // 工期フィールドは M/D に正規化して保存
+      // 工期フィールド: 通常はM/D形式、「✏ 自由入力」選択でプロンプト → 生テキストを保存
       if (k === 'hatchuPeriodStart' || k === 'hatchuPeriodEnd') {
-        const newVal = toMonthDay(sel.value);
+        let raw = sel.value;
+        let newVal;
+        if (raw === '__free__') {
+          // 自由入力プロンプト
+          const cur = line[k] || '';
+          const md = parseMonthDay(cur);
+          const init = (md.m && md.d) ? '' : cur; // M/D 形式なら自由入力欄は空から
+          const typed = (prompt('日付を自由入力(例: 5/7迄 / ASAP / 未定 / 朝一)\n空にすると未指定に戻ります', init) || '').trim();
+          newVal = typed; // 空 = クリア、それ以外 = 生テキストとして保存
+        } else {
+          // 通常選択: M/D に正規化(動的custom optionで自由入力値が選ばれた場合は値そのまま)
+          const md = parseMonthDay(raw);
+          newVal = (md.m && md.d) ? `${md.m}/${md.d}` : raw;
+        }
         line[k] = newVal;
         // 同じ業者の "連続ブロック" だけに反映 (他業者を挟んだら別ブロック扱い)
-        // 例: [思綺×3, 戸引×1, 思綺×2] で 1番目を編集 → 上の思綺×3 のみ。下の思綺×2 は対象外。
+        // 自由入力(5/7迄 等) も連続ブロックに反映する(業者ごとに同じ値を流したい要望)
         const isJisha = isJishaLine(line);
-        // 表示順(発注書タブの並び)で隣接判定
-        const lines = state.estimate.lines;
+        const linesAll = state.estimate.lines;
         const hatchuOrder = (typeof syncHatchuLineOrder === 'function')
           ? syncHatchuLineOrder()
-          : lines.map((_, i) => i);
+          : linesAll.map((_, i) => i);
         const orderRank = new Map(hatchuOrder.map((origIdx, displayIdx) => [origIdx, displayIdx]));
-        // 業者発注書タブのセクション内(自社 or 外注)で表示順にソート
-        const sectionRows = lines
+        const sectionRows = linesAll
           .map((l, oIdx) => ({ l, origIdx: oIdx }))
           .filter(x => x.l.item && (isJishaLine(x.l) === isJisha))
           .sort((a, b) => (orderRank.get(a.origIdx) ?? 999999) - (orderRank.get(b.origIdx) ?? 999999));
@@ -11311,15 +12039,13 @@ function renderHatchuRows() {
           if (tgt[k] !== newVal) { tgt[k] = newVal; count++; }
         }
         const groupLabel = isJisha ? 'ビルドクラスタ(自社)' : (line.supplier || '');
-        if (groupLabel) {
-          saveEstimate();
-          renderHatchuRows();
-          if (count > 0) {
-            const label = k === 'hatchuPeriodStart' ? '開始日' : '終了日';
-            showToast(`「${groupLabel}」の連続${count}行に${label}を反映`);
-          }
-          return;
+        saveEstimate();
+        renderHatchuRows();
+        if (count > 0 && groupLabel) {
+          const label = k === 'hatchuPeriodStart' ? '開始日' : '終了日';
+          if (typeof showToast === 'function') showToast(`「${groupLabel}」の連続${count}行に${label}を反映`);
         }
+        return;
       } else if (k === 'supplier') {
         // 工事店プルダウン: 「__other__」選択 → 自由入力
         let v = sel.value;
@@ -11358,17 +12084,31 @@ function renderHatchuRows() {
   tbody.querySelectorAll('.btn-h-del').forEach(btn => btn.addEventListener('click', e => {
     const idx = Number(e.target.closest('tr').dataset.i);
     const line = state.estimate.lines[idx];
-    // 内容のある行は確認ダイアログを出す(空行は即削除)
-    const hasContent = line && (line.item || line.category || line.specs || line.room || line.qty || line.supplier);
-    if (hasContent) {
-      const label = line.item || line.category || '(無題)';
-      const extra = line.hatchuOnly ? '\n[追加工事]' : '\n※見積からも削除されます';
-      if (!confirm(`この行を削除しますか?\n\n${label}${line.room?` / ${line.room}`:''}${line.specs?`\n${line.specs}`:''}${extra}`)) return;
+    if (!line) return;
+    const hasContent = (line.item || line.category || line.specs || line.room || line.qty || line.supplier);
+    // Shift+クリック → 完全削除(見積からも削除)。それ以外 → 印刷除外トグル
+    // 空行(内容なし) も Shift と同様に即削除
+    if (e.shiftKey || !hasContent) {
+      if (hasContent) {
+        const label = line.item || line.category || '(無題)';
+        const extra = line.hatchuOnly ? '\n[追加工事]' : '\n※見積からも削除されます';
+        if (!confirm(`この行を完全削除しますか?(行ごと消えます)\n\n${label}${line.room?` / ${line.room}`:''}${line.specs?`\n${line.specs}`:''}${extra}`)) return;
+      }
+      state.estimate.lines.splice(idx, 1);
+      saveEstimate();
+      renderHatchu();
+      if (typeof renderEstimate === 'function') renderEstimate();
+      return;
     }
-    state.estimate.lines.splice(idx, 1);
+    // 通常クリック: 印刷除外フラグをトグル(行は残す)
+    line.hatchuPrintHidden = !line.hatchuPrintHidden;
     saveEstimate();
-    renderHatchu();
-    if (typeof renderEstimate === 'function') renderEstimate();
+    renderHatchuRows();
+    renderHatchuBreakdown();
+    if (typeof showToast === 'function') {
+      const label = line.item || line.category || '(行)';
+      showToast(line.hatchuPrintHidden ? `「${label}」を発注書印刷から除外` : `「${label}」を発注書印刷に再表示`);
+    }
   }));
   tbody.querySelectorAll('.btn-h-reduce').forEach(btn => btn.addEventListener('click', e => {
     const idx = Number(e.target.closest('tr').dataset.i);
@@ -11379,6 +12119,129 @@ function renderHatchuRows() {
     saveEstimate();
     renderHatchuRows();
     if (typeof renderEstimate === 'function') renderEstimate();
+  }));
+  // ⏫ 一番上へ移動: 同セクション(自社/工事店)内の先頭にこの行を持ってくる
+  tbody.querySelectorAll('.btn-h-top').forEach(btn => btn.addEventListener('click', e => {
+    const idx = Number(e.target.closest('tr').dataset.i);
+    const line = state.estimate.lines[idx];
+    if (!line) return;
+    const order = syncHatchuLineOrder();
+    const lines = state.estimate.lines;
+    const isJisha = isJishaLine(line);
+    // 現在位置を削除
+    const fromIdx = order.indexOf(idx);
+    if (fromIdx === -1) return;
+    order.splice(fromIdx, 1);
+    // 同セクションの最初の位置を探す
+    let insertAt = order.findIndex(i => {
+      const l = lines[i];
+      return l && (isJishaLine(l) === isJisha);
+    });
+    if (insertAt === -1) insertAt = 0; // 同セクションが他に無ければ全体先頭
+    order.splice(insertAt, 0, idx);
+    saveEstimate();
+    renderHatchuRows();
+    if (typeof showToast === 'function') {
+      const label = line.item || line.category || '(行)';
+      const sec = isJisha ? '自社' : '工事店';
+      showToast(`「${label}」を${sec}セクションの一番上へ移動`);
+    }
+  }));
+  // 🔄 行ごと見積に戻す: hatchuItem / hatchuSpecs オーバーライドを一括解除
+  function attachRestoreRowHandler(btn) {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const tr = e.target.closest('tr');
+      const idx = Number(tr.dataset.i);
+      const line = state.estimate.lines[idx];
+      if (!line) return;
+      line.hatchuItem = null;
+      line.hatchuSpecs = null;
+      saveEstimate();
+      renderHatchuRows();
+      if (typeof showToast === 'function') {
+        const label = line.item || line.category || '(行)';
+        showToast(`「${label}」を見積と同じ内容に戻しました`);
+      }
+    });
+  }
+  tbody.querySelectorAll('.btn-h-restore-row').forEach(attachRestoreRowHandler);
+  // 🔄ボタンを行のアクションセル先頭に動的に挿入/削除する(リアルタイム反映用)
+  // window スコープに置いて input ハンドラからアクセス可能に
+  if (typeof window.updateRestoreRowBtnVisibility !== 'function') {
+    window.updateRestoreRowBtnVisibility = function(tr, line) {
+      if (!tr || !line) return;
+      const actionTd = tr.querySelector('td:last-child');
+      if (!actionTd) return;
+      const existingBtn = actionTd.querySelector('.btn-h-restore-row');
+      const shouldShow = (line.hatchuItem != null) || (line.hatchuSpecs != null);
+      if (shouldShow && !existingBtn) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-h-restore-row no-print';
+        btn.title = 'この行の発注書専用編集をすべて解除(工事名称・特記事項を見積と同じに戻す)';
+        btn.style.cssText = 'font-size:12px; padding:1px 4px; background:#fef3c7; border:1px solid #f59e0b; color:#92400e;';
+        btn.textContent = '🔄';
+        attachRestoreRowHandler(btn);
+        actionTd.insertBefore(btn, actionTd.firstChild);
+      } else if (!shouldShow && existingBtn) {
+        existingBtn.remove();
+      }
+    };
+  }
+  // 🏠/🔧 セクション切替: hatchuSection を反対セクションに固定(supplierと無関係に配置)
+  // Shift+クリック で 自動判定(=null)に戻す
+  tbody.querySelectorAll('.btn-h-section').forEach(btn => btn.addEventListener('click', e => {
+    const idx = Number(e.target.closest('tr').dataset.i);
+    const line = state.estimate.lines[idx];
+    if (!line) return;
+    if (e.shiftKey) {
+      line.hatchuSection = null;
+      saveEstimate();
+      renderHatchuRows();
+      renderHatchuBreakdown();
+      if (typeof showToast === 'function') showToast('セクション固定を解除(supplier から自動判定)');
+      return;
+    }
+    // 現在のセクションの「反対」へ固定
+    const isCurrentlyJisha = isJishaLine(line);
+    line.hatchuSection = isCurrentlyJisha ? 'gaichuu' : 'jisha';
+    saveEstimate();
+    renderHatchuRows();
+    renderHatchuBreakdown();
+    if (typeof showToast === 'function') {
+      const label = line.item || line.category || '(行)';
+      const sec = line.hatchuSection === 'jisha' ? '自社' : '工事店';
+      showToast(`「${label}」を${sec}セクションに固定 (Shift+クリックで自動に戻る)`);
+    }
+  }));
+  // ⏬ 一番下へ移動: 同セクション(自社/工事店)内の末尾にこの行を持ってくる
+  tbody.querySelectorAll('.btn-h-bottom').forEach(btn => btn.addEventListener('click', e => {
+    const idx = Number(e.target.closest('tr').dataset.i);
+    const line = state.estimate.lines[idx];
+    if (!line) return;
+    const order = syncHatchuLineOrder();
+    const lines = state.estimate.lines;
+    const isJisha = isJishaLine(line);
+    // 現在位置を削除
+    const fromIdx = order.indexOf(idx);
+    if (fromIdx === -1) return;
+    order.splice(fromIdx, 1);
+    // 同セクションの最後の位置を探す(後ろから検索)
+    let insertAt = -1;
+    for (let i = order.length - 1; i >= 0; i--) {
+      const l = lines[order[i]];
+      if (l && (isJishaLine(l) === isJisha)) { insertAt = i + 1; break; }
+    }
+    if (insertAt === -1) insertAt = order.length; // 同セクションが他に無ければ全体末尾
+    order.splice(insertAt, 0, idx);
+    saveEstimate();
+    renderHatchuRows();
+    if (typeof showToast === 'function') {
+      const label = line.item || line.category || '(行)';
+      const sec = isJisha ? '自社' : '工事店';
+      showToast(`「${label}」を${sec}セクションの一番下へ移動`);
+    }
   }));
   // 復旧ボタン: 業者発注書専用の編集を解除して見積側の値に戻す
   tbody.querySelectorAll('.btn-h-restore-item').forEach(btn => btn.addEventListener('click', e => {
@@ -11482,7 +12345,8 @@ function renderHatchuBreakdown() {
   const el = document.getElementById('hatchu-breakdown-summary');
   if (!el) return;
   const lines = state.estimate?.lines || [];
-  const activeLines = lines.filter(l => l.item && !l.reduced);
+  // 印刷除外行も合計から除外(画面表示と印刷の整合性)
+  const activeLines = lines.filter(l => l.item && !l.reduced && !l.hatchuPrintHidden);
   if (!activeLines.length) {
     el.innerHTML = '<div style="color:#6b7280;">(まだ明細がありません)</div>';
     return;
@@ -11581,6 +12445,11 @@ function autoFillHatchuHeader() {
   if (!ho.suidoDenki) {
     const earliest = gaichuuEarliestStart();
     if (earliest) ho.suidoDenki = `${earliest}〜`;
+  }
+  // 最終確認日: 外注の最遅終了日 +1日 を自動補完(空の時のみ)
+  if (!ho.finalCheckDate) {
+    const nextDay = gaichuuLatestEndPlusOne();
+    if (nextDay) ho.finalCheckDate = nextDay;
   }
   // 担当者: 立会・見積担当者(ビルドクラスタ側)優先、無ければ営業担当者(元請け側)
   if (!ho.tantou) ho.tantou = taikyo.tachiaiPerson || taikyo.eigyoTantou || '';
@@ -11821,6 +12690,38 @@ function jishaEarliestStart() {
   return best ? `${best.m}/${best.d}` : '';
 }
 
+// 外注(gaichuu)行の最遅終了日 +1日 を "M/D(曜)" で返す(最終確認日の自動値)
+// hatchuPeriodEnd が M/D 形式でない or 空 のときは hatchuPeriodStart にフォールバック
+function gaichuuLatestEndPlusOne() {
+  const lines = state.estimate?.lines || [];
+  const DOW = ['日','月','火','水','木','金','土'];
+  let best = null;
+  lines.forEach(l => {
+    if (!l.item || l.reduced) return;
+    if (isJishaLine(l)) return;
+    const endP = parseMonthDay(l.hatchuPeriodEnd);
+    const startP = parseMonthDay(l.hatchuPeriodStart);
+    const useP = (endP.m && endP.d) ? endP : startP;
+    if (!useP.m || !useP.d) return;
+    const m = Number(useP.m);
+    const d = Number(useP.d);
+    const key = m * 100 + d;
+    if (!best || key > best.key) best = { m, d, key };
+  });
+  if (!best) return '';
+  // +1日 (Dateオブジェクトで月跨ぎも正確に計算)
+  const today = new Date();
+  let year = today.getFullYear();
+  // 候補の月が今月より前(=年明け扱い)なら +1年
+  if (best.m < today.getMonth() + 1) year += 1;
+  const next = new Date(year, best.m - 1, best.d);
+  next.setDate(next.getDate() + 1);
+  const m2 = next.getMonth() + 1;
+  const d2 = next.getDate();
+  const dow = DOW[next.getDay()];
+  return `${m2}/${d2}(${dow})`;
+}
+
 // 外注(gaichuu)行の最早着工日 を "M/D" で返す
 function gaichuuEarliestStart() {
   const lines = state.estimate?.lines || [];
@@ -11836,16 +12737,33 @@ function gaichuuEarliestStart() {
   return best ? `${best.m}/${best.d}` : '';
 }
 
+// M/D 形式から曜日を取得 (例: m=5, d=7 → '水')
+function mdToDow(m, d) {
+  if (!m || !d) return '';
+  const today = new Date();
+  let year = today.getFullYear();
+  const mdKey = Number(m) * 100 + Number(d);
+  const curKey = (today.getMonth() + 1) * 100 + today.getDate();
+  if (mdKey < curKey - 30) year += 1;
+  const date = new Date(year, Number(m) - 1, Number(d));
+  const DOW = ['日','月','火','水','木','金','土'];
+  return DOW[date.getDay()];
+}
+
 function formatHatchuPeriod(start, end) {
   const sp = parseMonthDay(start);
   const ep = parseMonthDay(end);
-  const sStr = (sp.m && sp.d) ? `${sp.m}/${sp.d}` : '';
-  const eStr = (ep.m && ep.d) ? `${ep.m}/${ep.d}` : '';
+  // 自由入力(M/D形式でない値) はそのまま使う / M/D 形式は曜日付き表示
+  const sStr = (sp.m && sp.d) ? `${sp.m}/${sp.d}(${mdToDow(sp.m, sp.d)})` : (start || '');
+  const eStr = (ep.m && ep.d) ? `${ep.m}/${ep.d}(${mdToDow(ep.m, ep.d)})` : (end || '');
   if (!sStr && !eStr) return '';
   if (sStr && !eStr) return sStr;
   if (!sStr && eStr) return `〜${eStr}`;
-  // 同じ月なら終了は日のみ
-  if (sp.m === ep.m) return `${sStr} 〜${ep.d}`;
+  // 終了が「迄」「まで」のみ(日付なし) → 〜 を入れずに連結 (例: 5/7(水)迄)
+  const endIsMade = (!ep.m || !ep.d) && (end === '迄' || end === 'まで');
+  if (endIsMade) return `${sStr}${end}`;
+  // 両方M/D形式 + 同じ月なら終了は日(曜) のみ (例: 5/7(水) 〜18(日))
+  if (sp.m && ep.m && sp.m === ep.m) return `${sStr} 〜${ep.d}(${mdToDow(ep.m, ep.d)})`;
   return `${sStr} 〜${eStr}`;
 }
 
@@ -11855,10 +12773,19 @@ function printHatchu(filterWorkshop) {
   if (!ho) return;
   const area = document.getElementById('hatchu-print-area');
   if (!area) return;
-  const lines = state.estimate.lines.filter(l => l.item || l.supplier);
-  // 外注 vs 自社 に分離(自社 = supplier 空 or ビルドクラスタ)
-  const gaichuuLines = lines.filter(l => !isJishaLine(l));
-  const jishaLines = lines.filter(l => isJishaLine(l));
+  // 業者発注書タブで設定された行並び (hatchuLineOrder) を尊重
+  const hatchuOrderForPrint = (typeof syncHatchuLineOrder === 'function')
+    ? syncHatchuLineOrder()
+    : state.estimate.lines.map((_, i) => i);
+  // 印刷除外マークのある行は完全にスキップ(明細にも合計にも出ない)
+  const allLinesOrdered = hatchuOrderForPrint
+    .map(i => state.estimate.lines[i])
+    .filter(l => l && (l.item || l.supplier) && !l.hatchuPrintHidden);
+  const lines = allLinesOrdered;
+  // 外注 vs 自社 に分離(自社 = supplier 空 or ビルドクラスタ)+ 各セクション内で 通常→減工事 の順
+  const sortReducedLast = arr => arr.slice().sort((a, b) => (a.reduced?1:0) - (b.reduced?1:0));
+  const gaichuuLines = sortReducedLast(lines.filter(l => !isJishaLine(l)));
+  const jishaLines = sortReducedLast(lines.filter(l => isJishaLine(l)));
   const isSupplierSpecific = filterWorkshop !== '__all__';
   // 業者別印刷でも「工事内容」は全業者の行を表示。「金額」だけが該当業者のみ表示される。
   // selfLine: その金額を表示するかどうか(業者別印刷時は supplier一致行のみtrue)
@@ -11888,12 +12815,24 @@ function printHatchu(filterWorkshop) {
   const issuer = currentIssuer();
   // 自社行の工期は finalCheckDate(最終確認日) を使う(空なら自社最早工事開始日でフォールバック)
   const jishaPeriodLabel = ho.finalCheckDate || jishaEarliestStart() || '';
+  const isShuzenKojiPrint = (state.estimate?.meta?.kojiName === '修繕工事');
   const rowHtml = l => {
     const amt = lineAmount(l, 'order');  // 発注小計(= qty × orderPrice)
     const remark = amt > 0 ? `¥${amt.toLocaleString()}` : '';
-    const period = isJishaLine(l)
-      ? jishaPeriodLabel
-      : formatHatchuPeriod(l.hatchuPeriodStart, l.hatchuPeriodEnd);
+    let period;
+    if (isJishaLine(l)) {
+      period = jishaPeriodLabel;
+    } else if (isShuzenKojiPrint) {
+      // 修繕工事: 開始日(曜付き) + 時間 (終了日は無視)
+      const startMd = parseMonthDay(l.hatchuPeriodStart);
+      const dateStr = (startMd.m && startMd.d)
+        ? `${startMd.m}/${startMd.d}(${mdToDow(startMd.m, startMd.d)})`
+        : (l.hatchuPeriodStart || '');
+      period = [dateStr, l.hatchuTime || ''].filter(Boolean).join(' ');
+    } else {
+      // 通常: 開始 〜 終了
+      period = formatHatchuPeriod(l.hatchuPeriodStart, l.hatchuPeriodEnd);
+    }
     // 金額表示ポリシー:
     //   減工事 → 空白
     //   該当業者分のみ表示(業者別印刷時)
@@ -11901,7 +12840,10 @@ function printHatchu(filterWorkshop) {
     const amountCell = l.reduced
       ? ''
       : (shouldShowAmount(l) ? escapeHtml(remark) : '');
-    return `<tr${l.reduced ? ' class="h-reduced"' : ''}>
+    // 業者別印刷で選択業者の行を黄色ハイライト(減工事行は除外)
+    const isTargetRow = isSupplierSpecific && !l.reduced && l.supplier === filterWorkshop && !isJishaLine(l);
+    const trClasses = [l.reduced ? 'h-reduced' : '', isTargetRow ? 'hp-row-target' : ''].filter(Boolean).join(' ');
+    return `<tr${trClasses ? ` class="${trClasses}"` : ''}>
       <td>${l.reduced ? '減工事' : (isJishaLine(l) ? '' : escapeHtml(l.supplier||''))}</td>
       <td class="c">${escapeHtml(period)}</td>
       <td>${escapeHtml(l.room||'')}</td>
@@ -11921,10 +12863,13 @@ function printHatchu(filterWorkshop) {
         <div class="hp-right">
           <div style="text-align:right;">${escapeHtml(ho.issueDate||'')}</div>
           <div class="hp-issuer">
-            <div><b>${escapeHtml(issuer.jishaName||'')}</b></div>
-            <div>${escapeHtml(issuer.jishaAddr||'')}</div>
-            <div>TEL:${escapeHtml(issuer.jishaTel||'')}</div>
-            <div>FAX:${escapeHtml(issuer.jishaFax||'')}</div>
+            ${issuer.logo ? `<img class="hp-logo" src="${escapeHtml(issuer.logo)}" alt="logo">` : ''}
+            <div class="hp-issuer-text">
+              <div><b>${escapeHtml(issuer.jishaName||'')}</b></div>
+              <div>${escapeHtml(issuer.jishaAddr||'')}</div>
+              <div>TEL:${escapeHtml(issuer.jishaTel||'')}</div>
+              <div>FAX:${escapeHtml(issuer.jishaFax||'')}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -11964,22 +12909,17 @@ function printHatchu(filterWorkshop) {
         <tbody>
           ${isSupplierSpecific ? `
             <!-- 業者別印刷: 全業者・自社の工事内容は見えるが、金額は該当業者分のみ -->
-            ${gaichuuLines.length ? `<tr class="hp-section hp-section-gaichuu"><td colspan="9">🔧 工事明細(全業者の工事内容を記載、金額は御社分のみ)</td></tr>` : ''}
             ${gaichuuLines.map(rowHtml).join('')}
             <tr class="hp-sum"><td colspan="8" style="text-align:right;">${escapeHtml(filterWorkshop)} 御担当合計</td><td class="num">¥${selectedSupplierTotal.toLocaleString()}</td></tr>
             ${jishaLines.length ? `<tr class="hp-section hp-section-jisha"><td colspan="9">🏠 自社工事(ビルドクラスタ)</td></tr>` : ''}
             ${jishaLines.map(rowHtml).join('')}
           ` : `
-            <!-- 全業者印刷: 外注・自社をすべて表示 -->
-            ${gaichuuLines.length ? `<tr class="hp-section hp-section-gaichuu"><td colspan="9">🔧 工事明細</td></tr>` : ''}
+            <!-- 全業者印刷: 外注・自社をすべて表示(自社小計・総合計・最終確認日は出さない) -->
             ${gaichuuLines.map(rowHtml).join('')}
             ${gaichuuLines.length ? `<tr class="hp-subtotal"><td colspan="8" style="text-align:right;">工事店 小計</td><td class="num">¥${gaichuuTotal.toLocaleString()}</td></tr>` : ''}
             ${jishaLines.length ? `<tr class="hp-section hp-section-jisha"><td colspan="9">🏠 自社工事(ビルドクラスタ)</td></tr>` : ''}
             ${jishaLines.map(rowHtml).join('')}
-            ${jishaLines.length ? `<tr class="hp-subtotal"><td colspan="8" style="text-align:right;">自社小計</td><td class="num">¥${jishaTotal.toLocaleString()}</td></tr>` : ''}
-            <tr class="hp-sum"><td colspan="8" style="text-align:right;">総合計</td><td class="num">¥${grandTotal.toLocaleString()}</td></tr>
           `}
-          <tr class="hp-check"><td>最終確認日</td><td class="c" colspan="8">${escapeHtml(ho.finalCheckDate || jishaEarliestStart() || '')}</td></tr>
         </tbody>
       </table>
       <!-- 業者別発注金額まとめは印刷しない (画面下部の確認用パネルのみで表示) -->
