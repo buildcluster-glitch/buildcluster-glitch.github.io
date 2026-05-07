@@ -193,6 +193,8 @@
   .log .lm b{color:var(--ink);font-weight:600}
   .log .del{position:absolute;top:8px;right:8px;color:var(--mute);padding:4px 8px;font-size:14px;border-radius:6px}
   .log .del:hover{color:var(--danger);background:#fee2e2}
+  .log .undo{position:absolute;top:8px;right:38px;color:var(--accent);padding:4px 8px;font-size:13px;border-radius:6px;font-weight:700}
+  .log .undo:hover{background:#dbeafe}
   .log .ln-link{cursor:pointer;display:inline-block;padding:2px 0;border-radius:4px;
     transition:background .1s}
   .log .ln-link:active{background:#e0e7ff;transform:scale(.99)}
@@ -1442,6 +1444,8 @@ function renderLogs(){
     else qtyStr = `数量 <b>${l.qty}</b>`;
     const siteStr = (l.type==='out' && l.site) ? `現場 <b>${esc(l.site)}${l.room?' '+esc(l.room):''}</b>` : '';
     const noteStr = l.note ? `${esc(l.note)}` : '';
+    const undoBtn = (l.type==='out'||l.type==='in')
+      ? `<button class="undo" data-logundo="${l.id}" title="取消（在庫戻す）">↩</button>`:'';
     return `
       <div class="log ${kindCls}">
         <div class="lt"><span class="kind ${kindCls}">${kindLabel}</span><span>${esc(fmtDT(l.datetime))}</span></div>
@@ -1452,6 +1456,7 @@ function renderLogs(){
           ${siteStr?`<span>${siteStr}</span>`:''}
           ${noteStr?`<span>${noteStr}</span>`:''}
         </div>
+        ${undoBtn}
         <button class="del" data-logdel="${l.id}">✕</button>
       </div>`;
   }).join('');
@@ -1531,16 +1536,20 @@ function renderDetail(){
     return;
   }
   $('#d-logs').innerHTML = myLogs.map(l=>{
-    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':'棚卸');
-    const qtyStr = l.type==='chk'
-      ? (l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '')
-      : `<b>${l.type==='in'?'+':'−'}${l.qty}</b>`;
+    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':(l.type==='chk'?'棚卸':'品目変更'));
+    let qtyStr = '';
+    if(l.type==='chk') qtyStr = l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '';
+    else if(l.type==='audit') qtyStr = '';
+    else qtyStr = `<b>${l.type==='in'?'+':'−'}${l.qty}</b>`;
     const siteStr = (l.type==='out' && l.site) ? ` · ${esc(l.site)}${l.room?' '+esc(l.room):''}` : '';
+    const undoBtn = (l.type==='out'||l.type==='in')
+      ? `<button class="undo" data-logundo="${l.id}" title="取消（在庫戻す）">↩</button>`:'';
     return `
       <div class="log ${l.type}">
         <div class="lt"><span class="kind ${l.type}">${kindLabel}</span><span>${esc(fmtDT(l.datetime))}</span></div>
         <div class="ln">${qtyStr} &nbsp; <span style="font-weight:400;font-size:13px;color:var(--mute)">${esc(l.member||'')}${siteStr}</span></div>
         ${l.note?`<div class="lm">${esc(l.note)}</div>`:''}
+        ${undoBtn}
       </div>`;
   }).join('');
 }
@@ -2031,6 +2040,30 @@ function commitCSVImport(){
   closeSheet('sheet-csv');
   alert(`インポート完了: 追加${report.add.length}件 / 更新${report.update.length}件 / スキップ${report.skip.length}件`);
   renderAll();
+}
+
+// ---------- undo a consumption/supply log ----------
+function undoLog(logId){
+  const log = state.logs.find(l=>l.id===logId);
+  if(!log) return;
+  if(!['out','in'].includes(log.type)){ alert('このログは取消できません（消費/補充のみ）'); return; }
+  const item = state.items.find(i=>i.id===log.itemId);
+  const action = log.type==='out' ? '消費' : '補充';
+  const qty = log.qty || 0;
+  if(!item){
+    if(!confirm('品目が見つかりません。ログだけ削除しますか？')) return;
+  } else {
+    const reverseSign = log.type==='out' ? '+' : '−';
+    if(!confirm(`この${action}を取り消します:\n${item.name}\n在庫を ${reverseSign}${qty} 戻します。続行しますか？`)) return;
+    if(log.type==='out') item.stock = (item.stock||0) + qty;
+    else item.stock = Math.max(0, (item.stock||0) - qty);
+    queueOp('upsertItem', item);
+  }
+  state.logs = state.logs.filter(l=>l.id!==logId);
+  queueOp('deleteLog', { id: logId });
+  save();
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
 }
 
 // ---------- cloud sync ----------
@@ -2760,10 +2793,13 @@ function bindEvents(){
   $('#log-kind').onchange = renderLogs;
   $('#log-member').onchange = renderLogs;
   $('#logs').onclick = e=>{
+    // undo (reverse stock + delete)
+    const u = e.target.closest('[data-logundo]');
+    if(u){ e.stopPropagation(); undoLog(u.dataset.logundo); return; }
     // jump to item detail
     const link = e.target.closest('[data-jump]');
     if(link){ showDetail(link.dataset.jump); return; }
-    // delete log
+    // delete log (without stock change)
     const b = e.target.closest('[data-logdel]');
     if(!b) return;
     if(!confirm('このログを削除しますか？ 在庫数の自動修正はされません（必要なら棚卸で調整）')) return;
@@ -2771,6 +2807,10 @@ function bindEvents(){
     state.logs = state.logs.filter(l=>l.id!==b.dataset.logdel);
     save();
     renderLogs();
+  };
+  $('#d-logs').onclick = e=>{
+    const u = e.target.closest('[data-logundo]');
+    if(u) undoLog(u.dataset.logundo);
   };
 
   // stocktake location chips
