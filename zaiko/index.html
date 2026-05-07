@@ -1243,12 +1243,19 @@ function renderItemList(){
     (i.name||'').toLowerCase().includes(q) ||
     (i.maker||'').toLowerCase().includes(q)
   );
-  // sort: alert severity (effective vs min ratio asc), then name
+  // sort: 動きがあった順（直近のログ datetime 降順）→ なければ名前順
+  const lastActivity = new Map();
+  state.logs.forEach(l=>{
+    if(!l.itemId || !l.datetime) return;
+    const cur = lastActivity.get(l.itemId);
+    if(!cur || l.datetime > cur) lastActivity.set(l.itemId, l.datetime);
+  });
   items.sort((a,b)=>{
-    const ea = effectiveStock(a); const eb = effectiveStock(b);
-    const ra = a.minStock>0 ? ea/a.minStock : 99;
-    const rb = b.minStock>0 ? eb/b.minStock : 99;
-    if(ra!==rb) return ra-rb;
+    const aLast = lastActivity.get(a.id) || '';
+    const bLast = lastActivity.get(b.id) || '';
+    if(aLast && !bLast) return -1;
+    if(!aLast && bLast) return 1;
+    if(aLast !== bLast) return bLast.localeCompare(aLast);
     return (a.name||'').localeCompare(b.name||'','ja');
   });
 
