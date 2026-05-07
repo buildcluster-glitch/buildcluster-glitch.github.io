@@ -2324,7 +2324,16 @@ function submitOrder(){
 }
 function deleteOrder(){
   if(!editingOrderId) return;
-  if(!confirm('この発注を削除しますか？')) return;
+  if(!confirm('この発注を削除しますか？（発注作成ログも削除されます）')) return;
+  const o = state.orders.find(x=>x.id===editingOrderId);
+  // 対応する発注作成ログを削除
+  if(o){
+    const creation = findOrderCreationLog_(o.itemId, o.qty);
+    if(creation){
+      state.logs = state.logs.filter(l=>l.id!==creation.id);
+      queueOp('deleteLog', { id: creation.id });
+    }
+  }
   queueOp('deleteOrder', { id: editingOrderId });
   state.orders = state.orders.filter(o=>o.id!==editingOrderId);
   save();
@@ -2332,21 +2341,24 @@ function deleteOrder(){
   renderAll();
   if(state.ui.view==='detail') renderDetail();
 }
+// 発注作成ログ（type='ord' & 発注作成）を itemId+qty で1件特定
+function findOrderCreationLog_(itemId, qty){
+  return state.logs
+    .filter(l=>l.type==='ord' && l.itemId===itemId && l.qty===qty && (l.note||'').startsWith('発注作成'))
+    .sort((a,b)=>(b.datetime||'').localeCompare(a.datetime||''))[0];
+}
 function cancelOrder(orderId){
   const o = state.orders.find(x=>x.id===orderId);
   if(!o) return;
-  if(!confirm('この発注を取消にしますか？（履歴には残ります）')) return;
+  if(!confirm('この発注を取消にしますか？（発注作成ログも削除されます）')) return;
   o.status = 'canceled';
   queueOp('upsertOrder', o);
-  // 取消ログ
-  const ordLog = {
-    id: uid(), type:'ord', itemId: o.itemId, qty: o.qty,
-    member: state.currentUser || '',
-    datetime: new Date().toISOString(),
-    note: `発注取消${o.supplier?` (${o.supplier})`:''}`
-  };
-  state.logs.push(ordLog);
-  queueOp('appendLog', ordLog);
+  // 対応する発注作成ログを削除
+  const creation = findOrderCreationLog_(o.itemId, o.qty);
+  if(creation){
+    state.logs = state.logs.filter(l=>l.id!==creation.id);
+    queueOp('deleteLog', { id: creation.id });
+  }
   save();
   renderAll();
   if(state.ui.view==='detail') renderDetail();
