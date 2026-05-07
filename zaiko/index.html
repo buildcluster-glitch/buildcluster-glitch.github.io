@@ -193,6 +193,9 @@
   .log .lm b{color:var(--ink);font-weight:600}
   .log .del{position:absolute;top:8px;right:8px;color:var(--mute);padding:4px 8px;font-size:14px;border-radius:6px}
   .log .del:hover{color:var(--danger);background:#fee2e2}
+  .log .ln-link{cursor:pointer;display:inline-block;padding:2px 0;border-radius:4px;
+    transition:background .1s}
+  .log .ln-link:active{background:#e0e7ff;transform:scale(.99)}
 
   /* ---------- on-order badge on item card ---------- */
   .card .onorder{font-size:11px;color:var(--accent);font-weight:700;margin-top:4px;
@@ -1430,7 +1433,9 @@ function renderLogs(){
     const item = state.items.find(i=>i.id===l.itemId);
     const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':(l.type==='chk'?'棚卸':'品目変更'));
     const kindCls = l.type;
-    const itemName = item ? `${esc(item.name)} <span style="color:var(--mute);font-weight:400">${esc(item.sku)}</span>` : '<i>(削除済)</i>';
+    const itemName = item
+      ? `<span class="ln-link" data-jump="${item.id}">${esc(item.name)} <span style="color:var(--mute);font-weight:400">${esc(item.sku)}</span> <span style="color:var(--accent);font-size:11px">›</span></span>`
+      : '<i>(削除済)</i>';
     let qtyStr = '';
     if(l.type==='chk') qtyStr = l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '';
     else if(l.type==='audit') qtyStr = '';
@@ -2752,9 +2757,14 @@ function bindEvents(){
   $('#log-kind').onchange = renderLogs;
   $('#log-member').onchange = renderLogs;
   $('#logs').onclick = e=>{
+    // jump to item detail
+    const link = e.target.closest('[data-jump]');
+    if(link){ showDetail(link.dataset.jump); return; }
+    // delete log
     const b = e.target.closest('[data-logdel]');
     if(!b) return;
     if(!confirm('このログを削除しますか？ 在庫数の自動修正はされません（必要なら棚卸で調整）')) return;
+    queueOp('deleteLog', { id: b.dataset.logdel });
     state.logs = state.logs.filter(l=>l.id!==b.dataset.logdel);
     save();
     renderLogs();
