@@ -804,6 +804,15 @@
         <div id="sync-test-result" style="font-size:12px;margin-top:8px"></div>
       </div>
       <div class="set-item">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">
+          <input type="checkbox" id="sync-auto" checked style="width:auto">
+          <span>
+            <div class="lbl">自動同期</div>
+            <div class="val" style="text-align:left">操作するたびに1.5秒後に自動で送信＆取得</div>
+          </span>
+        </label>
+      </div>
+      <div class="set-item">
         <div>
           <div class="lbl">最終同期</div>
           <div class="val" id="info-last-sync">未同期</div>
@@ -946,6 +955,7 @@ const state = {
 const sync = {
   url: '',
   lastSyncAt: null,
+  autoSync: true,
   get enabled(){ return !!this.url; },
 };
 function loadSyncConfig(){
@@ -955,10 +965,54 @@ function loadSyncConfig(){
     const d = JSON.parse(raw);
     sync.url = d.url || '';
     sync.lastSyncAt = d.lastSyncAt || null;
+    sync.autoSync = d.autoSync !== false;  // default true
   }catch(e){}
 }
 function saveSyncConfig(){
-  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({url:sync.url, lastSyncAt:sync.lastSyncAt}));
+  localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify({
+    url:sync.url, lastSyncAt:sync.lastSyncAt, autoSync:sync.autoSync
+  }));
+}
+
+// ---------- auto-sync: debounced after each mutation ----------
+let syncDebounceTimer = null;
+let syncInFlight = false;
+let syncRescheduleNeeded = false;
+const AUTO_SYNC_DELAY_MS = 1500;
+
+function scheduleAutoSync(){
+  if(!sync.autoSync || !sync.url) return;
+  if(syncInFlight){ syncRescheduleNeeded = true; return; }
+  if(syncDebounceTimer) clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(runAutoSync, AUTO_SYNC_DELAY_MS);
+}
+async function runAutoSync(){
+  syncDebounceTimer = null;
+  if(!state.pending.length) return;
+  if(syncInFlight){ syncRescheduleNeeded = true; return; }
+  syncInFlight = true;
+  setSyncIcon('syncing');
+  try{
+    await syncFullSilent();
+    setSyncIcon('ok');
+    setTimeout(()=>{ if(!syncInFlight) setSyncIcon(''); }, 1500);
+  }catch(err){
+    console.warn('auto-sync failed:', err.message);
+    setSyncIcon('err');
+  }finally{
+    syncInFlight = false;
+    if(syncRescheduleNeeded){
+      syncRescheduleNeeded = false;
+      scheduleAutoSync();
+    }
+  }
+}
+async function syncFullSilent(){
+  const push = await syncPush();
+  const pull = await syncPull({ replace:false });
+  renderAll();
+  if(state.ui.view==='detail') renderDetail();
+  return { push, pull };
 }
 
 // ---------- persistence ----------
@@ -988,6 +1042,7 @@ function load(){
 function queueOp(action, data){
   state.pending.push({ action, data: JSON.parse(JSON.stringify(data)), ts: new Date().toISOString() });
   updateSyncBadge();
+  scheduleAutoSync();
 }
 const OUTDOOR_SKUS = new Set(['OX9743LDR','PL8D-YA2','CH941SPF','FY-25PM5','FY-20PM5','VD-10ZC','VD-10ZFC','FY-24CPS7','VD-13ZC','FY-08PD9','FY-08PD9D','VD-15ZY14']);
 function seed(){
@@ -1997,10 +2052,13 @@ async function syncPull({ replace=false }={}){
     state.members = (data.members || []).map(m=>m.name||m).filter(Boolean);
     if(!state.members.length) state.members = SEED_MEMBERS.slice();
   } else {
-    // merge by id: server wins for existing, local-unique kept (they'll be pushed later)
-    mergeById_(state.items, (data.items||[]).map(normalizeItem_));
-    mergeById_(state.logs, (data.logs||[]).map(normalizeLog_));
-    mergeById_(state.orders, (data.orders||[]).map(normalizeOrder_));
+    // pending変更がある行は上書きしない（次回pushで反映される）
+    const pendingItemIds = new Set(state.pending.filter(p=>p.action==='upsertItem'||p.action==='deleteItem').map(p=>p.data?.id).filter(Boolean));
+    const pendingOrderIds = new Set(state.pending.filter(p=>p.action==='upsertOrder'||p.action==='deleteOrder').map(p=>p.data?.id).filter(Boolean));
+    const pendingLogIds = new Set(state.pending.filter(p=>p.action==='appendLog'||p.action==='deleteLog').map(p=>p.data?.id).filter(Boolean));
+    mergeById_(state.items, (data.items||[]).map(normalizeItem_), pendingItemIds);
+    mergeById_(state.logs, (data.logs||[]).map(normalizeLog_), pendingLogIds);
+    mergeById_(state.orders, (data.orders||[]).map(normalizeOrder_), pendingOrderIds);
     if(data.members && data.members.length){
       state.members = data.members.map(m=>m.name||m).filter(Boolean);
     }
@@ -2010,13 +2068,16 @@ async function syncPull({ replace=false }={}){
   save();
   return data;
 }
-function mergeById_(localArr, serverArr){
+function mergeById_(localArr, serverArr, pendingIds){
+  pendingIds = pendingIds || new Set();
   const serverMap = new Map(serverArr.filter(x=>x && x.id).map(x=>[x.id, x]));
-  // replace or add server-side rows
+  // replace or add server-side rows (skip pending: those need to be pushed first)
   for(let i=0; i<localArr.length; i++){
     const lid = localArr[i].id;
     if(serverMap.has(lid)){
-      localArr[i] = serverMap.get(lid);
+      if(!pendingIds.has(lid)){
+        localArr[i] = serverMap.get(lid);
+      }
       serverMap.delete(lid);
     }
   }
@@ -2052,18 +2113,20 @@ function normalizeOrder_(x){
 async function syncPush(){
   if(!sync.url) throw new Error('URL未設定');
   if(!state.pending.length) return { pushed: 0 };
-  const ops = state.pending.map(p=>({ action:p.action, data:p.data }));
+  // スナップショット（送信中に追加されるopは次回に送る）
+  const opCount = state.pending.length;
+  const ops = state.pending.slice(0, opCount).map(p=>({ action:p.action, data:p.data }));
   const res = await fetch(sync.url, {
     method:'POST',
     body: JSON.stringify({ action:'bulkSync', data: ops }),
-    // Content-Typeを指定しないことでプリフライト回避
   });
   if(!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if(!data.ok) throw new Error(data.error || 'push failed');
-  state.pending = [];
+  // スナップショットした分だけ消す（送信中に追加された分は残す）
+  state.pending.splice(0, opCount);
   save();
-  return { pushed: ops.length, result: data.result };
+  return { pushed: opCount, result: data.result };
 }
 
 async function syncFull(){
@@ -2389,6 +2452,7 @@ function renderSettingsInfo(){
   }).join('');
   // sync
   if($('#sync-url')) $('#sync-url').value = sync.url||'';
+  if($('#sync-auto')) $('#sync-auto').checked = sync.autoSync;
   $('#info-last-sync').textContent = sync.lastSyncAt ? fmtDT(sync.lastSyncAt) : '未同期';
   $('#info-pending').textContent = `${state.pending.length}件`;
 }
@@ -2760,6 +2824,11 @@ function bindEvents(){
     saveSyncConfig();
     $('#sync-test-result').innerHTML = '<span style="color:var(--ok)">✓ URL保存しました</span>';
   };
+  $('#sync-auto').onchange = e=>{
+    sync.autoSync = e.target.checked;
+    saveSyncConfig();
+    if(sync.autoSync && state.pending.length) scheduleAutoSync();
+  };
   $('#sync-test').onclick = async ()=>{
     sync.url = $('#sync-url').value.trim();
     saveSyncConfig();
@@ -2807,6 +2876,10 @@ function bindEvents(){
   itemPicker.bindEvents('ord');
   updateSyncBadge();
   showHome();
+  // 起動時に未送信のpendingがあれば即同期
+  if(sync.url && sync.autoSync && state.pending.length){
+    setTimeout(scheduleAutoSync, 200);
+  }
 })();
 </script>
 </body>
