@@ -1020,6 +1020,27 @@ async function syncFullSilent(){
   return { push, pull };
 }
 
+// 起動時 / フォーカス復帰時の同期: pending送信 → サーバーの最新取得
+async function runOpenSync(){
+  if(!sync.url || !sync.autoSync) return;
+  if(syncInFlight) return;
+  syncInFlight = true;
+  setSyncIcon('syncing');
+  try{
+    if(state.pending.length) await syncPush();
+    await syncPull({ replace:false });
+    renderAll();
+    if(state.ui.view==='detail') renderDetail();
+    setSyncIcon('ok');
+    setTimeout(()=>{ if(!syncInFlight) setSyncIcon(''); }, 2000);
+  }catch(err){
+    console.warn('open-sync failed:', err.message);
+    setSyncIcon('err');
+  }finally{
+    syncInFlight = false;
+  }
+}
+
 // ---------- persistence ----------
 function save(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -2927,10 +2948,16 @@ function bindEvents(){
   itemPicker.bindEvents('ord');
   updateSyncBadge();
   showHome();
-  // 起動時に未送信のpendingがあれば即同期
-  if(sync.url && sync.autoSync && state.pending.length){
-    setTimeout(scheduleAutoSync, 200);
+  // 起動時自動同期: pending送信 + サーバー最新取得
+  if(sync.url && sync.autoSync){
+    setTimeout(runOpenSync, 200);
   }
+  // タブ復帰時にも同期
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'visible' && sync.url && sync.autoSync){
+      runOpenSync();
+    }
+  });
 })();
 </script>
 </body>
