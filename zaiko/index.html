@@ -182,12 +182,14 @@
   .log.in{border-left:3px solid var(--ok)}
   .log.chk{border-left:3px solid var(--warn)}
   .log.audit{border-left:3px solid #94a3b8;background:#f8fafc}
+  .log.ord{border-left:3px solid #a855f7}
   .log .lt{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-bottom:4px;gap:8px}
   .log .lt .kind{font-weight:700}
   .log .lt .kind.out{color:var(--danger)}
   .log .lt .kind.in{color:var(--ok)}
   .log .lt .kind.chk{color:var(--warn)}
   .log .lt .kind.audit{color:#64748b}
+  .log .lt .kind.ord{color:#a855f7}
   .log .ln{font-weight:600;font-size:14px;line-height:1.3}
   .log .lm{font-size:12px;color:var(--mute);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px 10px}
   .log .lm b{color:var(--ink);font-weight:600}
@@ -466,6 +468,7 @@
           <option value="all">全種別</option>
           <option value="out">消費のみ</option>
           <option value="in">補充のみ</option>
+          <option value="ord">発注のみ</option>
           <option value="chk">棚卸のみ</option>
           <option value="audit">品目変更のみ</option>
         </select>
@@ -1461,7 +1464,7 @@ function renderLogs(){
 
   $('#logs').innerHTML = logs.map(l=>{
     const item = state.items.find(i=>i.id===l.itemId);
-    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':(l.type==='chk'?'棚卸':'品目変更'));
+    const kindLabel = ({out:'消費',in:'補充',chk:'棚卸',ord:'発注',audit:'品目変更'})[l.type] || l.type;
     const kindCls = l.type;
     const itemName = item
       ? `<span class="ln-link" data-jump="${item.id}">${esc(item.name)} <span style="color:var(--mute);font-weight:400">${esc(item.sku)}</span> <span style="color:var(--accent);font-size:11px">›</span></span>`
@@ -1564,10 +1567,11 @@ function renderDetail(){
     return;
   }
   $('#d-logs').innerHTML = myLogs.map(l=>{
-    const kindLabel = l.type==='out'?'消費':(l.type==='in'?'補充':(l.type==='chk'?'棚卸':'品目変更'));
+    const kindLabel = ({out:'消費',in:'補充',chk:'棚卸',ord:'発注',audit:'品目変更'})[l.type] || l.type;
     let qtyStr = '';
     if(l.type==='chk') qtyStr = l.diff!=null ? `差分 <b class="${l.diff<0?'diff-negative':'diff-positive'}">${l.diff>0?'+':''}${l.diff}</b>` : '';
     else if(l.type==='audit') qtyStr = '';
+    else if(l.type==='ord') qtyStr = `<b>📦${l.qty}</b>`;
     else qtyStr = `<b>${l.type==='in'?'+':'−'}${l.qty}</b>`;
     const siteStr = (l.type==='out' && l.site) ? ` · ${esc(l.site)}${l.room?' '+esc(l.room):''}` : '';
     const undoBtn = (l.type==='out'||l.type==='in')
@@ -2291,6 +2295,7 @@ function submitOrder(){
   };
 
   let saved;
+  const isNewOrder = !editingOrderId;
   if(editingOrderId){
     const o = state.orders.find(x=>x.id===editingOrderId);
     // keep receivedQty unchanged
@@ -2301,6 +2306,17 @@ function submitOrder(){
     state.orders.push(saved);
   }
   queueOp('upsertOrder', saved);
+  // 発注作成のログ（新規のみ。編集はノイズになるので残さない）
+  if(isNewOrder){
+    const ordLog = {
+      id: uid(), type:'ord', itemId: saved.itemId, qty: saved.qty,
+      member: saved.member || state.currentUser || '',
+      datetime: new Date().toISOString(),
+      note: `発注作成${saved.supplier?` (${saved.supplier})`:''}${saved.expectedDate?` 予定${saved.expectedDate}`:''}`
+    };
+    state.logs.push(ordLog);
+    queueOp('appendLog', ordLog);
+  }
   save();
   closeSheet('sheet-order');
   renderAll();
@@ -2322,6 +2338,15 @@ function cancelOrder(orderId){
   if(!confirm('この発注を取消にしますか？（履歴には残ります）')) return;
   o.status = 'canceled';
   queueOp('upsertOrder', o);
+  // 取消ログ
+  const ordLog = {
+    id: uid(), type:'ord', itemId: o.itemId, qty: o.qty,
+    member: state.currentUser || '',
+    datetime: new Date().toISOString(),
+    note: `発注取消${o.supplier?` (${o.supplier})`:''}`
+  };
+  state.logs.push(ordLog);
+  queueOp('appendLog', ordLog);
   save();
   renderAll();
   if(state.ui.view==='detail') renderDetail();
