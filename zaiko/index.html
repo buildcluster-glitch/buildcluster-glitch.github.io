@@ -2583,17 +2583,15 @@ function commitStocktake(){
     if(!item) return;
     const real = Number(v);
     const diff = real - item.stock;
-    if(diff!==0){
-      item.stock = real;
-      diffCount++;
-      queueOp('upsertItem', item);
-    }
-    const reasonTxt = diff===0 ? '一致' : (reasons[itemId] || '理由未選択');
+    if(diff===0) return;  // 差分なしはログを作らない（ノイズ削減）
+    item.stock = real;
+    diffCount++;
+    queueOp('upsertItem', item);
     const log = {
       id: uid(), type:'chk', itemId, member,
       datetime: now,
       diff,
-      note: reasonTxt
+      note: reasons[itemId] || '理由未選択'
     };
     state.logs.push(log);
     queueOp('appendLog', log);
