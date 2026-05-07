@@ -2312,14 +2312,17 @@ function submitReceive(){
   // increment stock
   item.stock = (item.stock||0) + qty;
 
-  // auto-generate supply log
+  // auto-generate supply log (時刻は入荷ボタン押下時刻)
+  const now = new Date();
+  const pad = n=>String(n).padStart(2,'0');
+  const recvTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
   state.logs.push({
     id: uid(),
     type: 'in',
     itemId: item.id,
     qty,
     member,
-    datetime: `${recvDate}T00:00`,
+    datetime: `${recvDate}T${recvTime}`,
     note: `発注${o.id.slice(-6)}から入荷${fullyReceived?'':'(部分)'}${$('#rcv-note').value.trim()?' · '+$('#rcv-note').value.trim():''}`,
   });
 
