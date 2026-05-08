@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>売上集計 - ビルドクラスタ</title>
+<style>
+  :root { --bg:#f5f5f7; --panel:#fff; --line:#e1e1e6; --accent:#2563eb; --accent-dk:#1d4ed8; --text:#111; --muted:#666; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif; background:var(--bg); color:var(--text); }
+  nav.app-switcher { display:flex; gap:1px; background:#0f172a; padding:0; }
+  nav.app-switcher a { padding:8px 18px; background:#1e293b; color:#cbd5e1; text-decoration:none; font-size:13px; transition:0.15s; }
+  nav.app-switcher a:hover { background:#334155; color:#fff; }
+  nav.app-switcher a.active { background:#2563eb; color:#fff; font-weight:600; }
+  header { background:#111; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header .meta { font-size:12px; color:#bbb; }
+  main { padding:14px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--muted); }
+  input[type=text], input[type=date], input[type=number], select {
+    font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:4px; background:#fff;
+  }
+  button { font:inherit; padding:5px 10px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; }
+  button:hover { background:#f0f0f3; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:hover { background:var(--accent-dk); }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:middle; }
+  th { background:#fafafa; position:sticky; top:0; z-index:1; font-weight:600; font-size:11px; color:#444; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  /* サマリーカード */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:12px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  .card .label { font-size:11px; color:#64748b; }
+  .card .value { font-size:22px; font-weight:700; color:#0f172a; margin-top:4px; }
+  .card .sub { font-size:11px; color:#94a3b8; margin-top:2px; }
+  .card.juchu { border-left:4px solid #16a34a; }
+  .card.profit { border-left:4px solid #2563eb; }
+  .card.cost { border-left:4px solid #f59e0b; }
+  .card.count { border-left:4px solid #8b5cf6; }
+  /* テーブル */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns:1fr; } }
+  .section-title { font-size:13px; font-weight:600; color:#1e3a8a; margin:0 0 8px; padding-bottom:4px; border-bottom:2px solid #dbeafe; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; background:#eef2ff; color:#3730a3; }
+  .empty { padding:20px; text-align:center; color:#94a3b8; }
+  /* 棒グラフ(CSS only) */
+  .bar-row { display:flex; align-items:center; gap:8px; margin:2px 0; }
+  .bar-row .lbl { width:140px; font-size:11px; color:#475569; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-row .bar-wrap { flex:1; height:18px; background:#f1f5f9; border-radius:3px; position:relative; overflow:hidden; }
+  .bar-row .bar { height:100%; background:linear-gradient(to right, #3b82f6, #1e40af); border-radius:3px; }
+  .bar-row .val { width:90px; font-size:11px; color:#0f172a; text-align:right; font-variant-numeric:tabular-nums; flex-shrink:0; }
+</style>
+</head>
+<body>
+<nav class="app-switcher">
+  <a href="index.html">📝 見積作成</a>
+  <a href="invoice.html">💰 請求書</a>
+  <a href="sales.html" class="active">📊 売上集計</a>
+  <a href="progress.html">🔨 工事進捗</a>
+  <a href="index.html#settings">⚙ 設定</a>
+</nav>
+<header>
+  <h1>📊 売上集計</h1>
+  <span class="meta">確定版 + 完了日入力済 = 集計対象</span>
+  <span class="meta" id="data-info" style="margin-left:auto; padding:2px 10px; background:#1e3a8a; border-radius:4px;"></span>
+</header>
+<main>
+  <!-- フィルタ -->
+  <div class="panel">
+    <div class="row">
+      <label>期間:</label>
+      <select id="period-mode" style="font-size:12px;">
+        <option value="ytd">今年全体</option>
+        <option value="month">月単位</option>
+        <option value="quarter">四半期</option>
+        <option value="year">年単位</option>
+        <option value="custom">期間指定</option>
+        <option value="all">全期間</option>
+      </select>
+      <input type="number" id="period-year" min="2020" max="2099" value="2026" style="width:80px;">
+      <select id="period-month" style="font-size:12px; display:none;">
+        <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+        <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+        <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+        <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+      </select>
+      <select id="period-quarter" style="font-size:12px; display:none;">
+        <option value="1">Q1 (1-3月)</option>
+        <option value="2">Q2 (4-6月)</option>
+        <option value="3">Q3 (7-9月)</option>
+        <option value="4">Q4 (10-12月)</option>
+      </select>
+      <span id="period-custom-wrap" style="display:none; gap:4px; align-items:center;">
+        <input type="date" id="period-from"> 〜 <input type="date" id="period-to">
+      </span>
+      <span style="border-left:1px solid #e1e1e6; padding-left:8px; margin-left:4px;"></span>
+      <label>元請け:</label>
+      <select id="filter-motouke" style="font-size:12px; min-width:140px;">
+        <option value="">(全部)</option>
+      </select>
+      <label>工事種別:</label>
+      <select id="filter-koji" style="font-size:12px;">
+        <option value="">(全部)</option>
+        <option value="原状回復工事">原状回復工事</option>
+        <option value="修繕工事">修繕工事</option>
+        <option value="リフォーム">リフォーム</option>
+        <option value="その他">その他</option>
+      </select>
+      <label>担当:</label>
+      <select id="filter-creator" style="font-size:12px;">
+        <option value="">(全部)</option>
+      </select>
+      <label>請求:</label>
+      <select id="filter-invoice" style="font-size:12px;">
+        <option value="">(全部)</option>
+        <option value="未">📝 未提出</option>
+        <option value="済">📤 提出済</option>
+      </select>
+      <label>入金:</label>
+      <select id="filter-payment" style="font-size:12px;">
+        <option value="">(全部)</option>
+        <option value="未">⏳ 未入金</option>
+        <option value="済">✅ 入金済</option>
+      </select>
+      <span style="border-left:1px solid #e1e1e6; padding-left:8px; margin-left:4px;"></span>
+      <label title="📅カレンダー: その月の1日〜末日 / 📋締め日: 元請けごとの締め日(山一は21日〜翌20日)">集計基準:</label>
+      <select id="filter-closing-mode" style="font-size:12px;">
+        <option value="closing">📋 締め日基準(山一21日)</option>
+        <option value="calendar">📅 カレンダー基準</option>
+      </select>
+      <button id="btn-reload" class="primary" style="font-size:12px;">🔄 再集計</button>
+      <button id="btn-export-csv" style="font-size:12px;">📥 CSV出力</button>
+      <button id="btn-make-invoice" style="font-size:12px; background:#16a34a; color:#fff; border-color:#15803d; font-weight:600;" title="現在のフィルタ結果から請求書を作成(元請けで自動グループ化)">💰 請求書作成</button>
+    </div>
+  </div>
+
+  <!-- サマリーカード -->
+  <div class="cards" id="summary-cards"></div>
+
+  <!-- 内訳セクション -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="section-title">📅 月別売上</div>
+      <div id="by-month"></div>
+    </div>
+    <div class="panel">
+      <div class="section-title">🏢 元請け別売上</div>
+      <div id="by-motouke"></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="section-title">🔧 工事種別売上</div>
+      <div id="by-koji"></div>
+    </div>
+    <div class="panel">
+      <div class="section-title">👤 担当者別売上</div>
+      <div id="by-creator"></div>
+    </div>
+  </div>
+
+  <!-- 詳細リスト -->
+  <div class="panel" style="padding:0;">
+    <div style="padding:10px 12px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px;">
+      <div class="section-title" style="margin:0; border:none; padding:0;">📋 対象案件一覧</div>
+      <span class="pill" id="detail-count">0件</span>
+      <span style="margin-left:auto; font-size:11px; color:#94a3b8;">完了日昇順</span>
+    </div>
+    <div style="max-height:60vh; overflow:auto;">
+      <table id="detail-table">
+        <thead>
+          <tr>
+            <th>完了日</th>
+            <th>締め月</th>
+            <th>元請け</th>
+            <th>物件名</th>
+            <th>号室</th>
+            <th>工事種別</th>
+            <th>担当者</th>
+            <th class="num">売上(税抜)</th>
+            <th class="num">材料費</th>
+            <th class="num">外注費</th>
+            <th class="num">原価合計</th>
+            <th class="num">粗利</th>
+            <th class="num">粗利率</th>
+            <th>請求</th>
+            <th>入金</th>
+          </tr>
+        </thead>
+        <tbody id="detail-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+const STORAGE_KEY = 'mitsumori_estimates_v1';
+const SETTINGS_KEY = 'mitsumori_settings_v1';
+const fmtNum = n => Number(n||0).toLocaleString('ja-JP');
+const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function loadEstimates() {
+  try { const s = localStorage.getItem(STORAGE_KEY); return s ? (JSON.parse(s) || {}) : {}; } catch(e){ return {}; }
+}
+function lineAmount(l) {
+  if (l.amountOverride != null && l.amountOverride !== '') return Number(l.amountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.unitPrice)||0);
+}
+function lineOrderAmount(l) {
+  if (l.orderAmountOverride != null && l.orderAmountOverride !== '') return Number(l.orderAmountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.orderPrice)||0);
+}
+function lineMaterialAmount(l) {
+  return (Number(l.qty)||0) * (Number(l.materialPrice)||0);
+}
+function estimateTotal(est) { return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineAmount(l), 0); }
+function materialTotal(est) { return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineMaterialAmount(l), 0); }
+function orderTotal(est) {
+  return (est.lines||[]).reduce((s,l) => {
+    if (l.reduced) return s;
+    if (!l.supplier || l.supplier === 'ビルドクラスタ') return s;
+    return s + lineOrderAmount(l);
+  }, 0);
+}
+
+// 完了日(M/D 形式 / YYYY-MM-DD)を Date に変換
+function parseCompleteDate(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+  // ISO形式
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(str);
+  if (m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+  // M/D 形式 (年は今年/今年-1/今年+1 で最近を選択)
+  m = /^(\d{1,2})\/(\d{1,2})/.exec(str);
+  if (m) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const mm = Number(m[1]), dd = Number(m[2]);
+    const cands = [
+      new Date(today.getFullYear()-1, mm-1, dd),
+      new Date(today.getFullYear(),   mm-1, dd),
+      new Date(today.getFullYear()+1, mm-1, dd),
+    ];
+    let best = cands[1], bestDiff = Math.abs(best - today);
+    for (const c of cands) { const d = Math.abs(c - today); if (d < bestDiff) { bestDiff = d; best = c; } }
+    return best;
+  }
+  return null;
+}
+function shortenMotouke(s) {
+  s = String(s||'').trim();
+  return s.replace(/^株式会社\s*/, '').replace(/^有限会社\s*/, '').replace(/^合同会社\s*/, '');
+}
+
+// === 締め日ルール ===
+// 山一系: 毎月21日 〜 翌月20日 を「その月」と数える(21日以降は翌月扱い)
+// その他: カレンダーの月そのまま(月末締め)
+function getClosingMonthKey(date, motouke) {
+  if (!date) return '不明';
+  let year = date.getFullYear();
+  let month = date.getMonth() + 1; // 1-12
+  if (/山一/.test(motouke || '')) {
+    // 21日以降の完了日 → 翌月の締め
+    if (date.getDate() >= 21) {
+      month++;
+      if (month > 12) { month = 1; year++; }
+    }
+  }
+  return `${year}/${String(month).padStart(2,'0')}`;
+}
+// 締め月キーから期間範囲(start/end)を逆算: 「年.月の締め月」を含む完了日の範囲
+function getClosingPeriodRange(year, month, isYamaichi) {
+  if (isYamaichi) {
+    // 山一: (year.month-1).21 〜 year.month.20
+    const start = new Date(year, month - 2, 21); // month-1 → 0-index は month-2
+    if (month === 1) start.setFullYear(year - 1, 11, 21); // 1月締め = 前年12/21〜
+    const end = new Date(year, month - 1, 20, 23, 59, 59, 999);
+    return { start, end };
+  }
+  // その他: year.month.1 〜 year.month.末
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999); // 月末
+  return { start, end };
+}
+function getCreator(est) {
+  return (est.meta?.taikyo?.tachiaiPerson || est.meta?.creator || '').trim();
+}
+function getMotouke(est) {
+  return shortenMotouke(est.meta?.atena || est.meta?.taikyo?.motouke || '').trim() || '(未設定)';
+}
+function getKojiName(est) {
+  return (est.meta?.kojiName || '(未設定)').trim();
+}
+
+// === 集計対象抽出 ===
+// 条件: 確定版 (isConfirmed=true) かつ 完了日 (hatchuOrder.completeDate) 入力済
+function getEligibleEstimates() {
+  const all = loadEstimates();
+  return Object.values(all).filter(e => {
+    if (!e || e.deleted || e.meta?.isTemplate) return false;
+    if (!e.meta?.isConfirmed) return false;
+    const cd = (e.meta?.hatchuOrder?.completeDate || '').trim();
+    if (!cd) return false;
+    return true;
+  });
+}
+
+// === フィルタ適用 ===
+function applyFilters(rows) {
+  const mode = document.getElementById('period-mode').value;
+  const year = Number(document.getElementById('period-year').value) || (new Date()).getFullYear();
+  const month = Number(document.getElementById('period-month').value);
+  const quarter = Number(document.getElementById('period-quarter').value);
+  const fromStr = document.getElementById('period-from').value;
+  const toStr = document.getElementById('period-to').value;
+  const motouke = document.getElementById('filter-motouke').value;
+  const koji = document.getElementById('filter-koji').value;
+  const creator = document.getElementById('filter-creator').value;
+  const closingMode = document.getElementById('filter-closing-mode')?.value || 'closing';
+  // 月単位/四半期/年単位は 締め日基準(closing) なら row ごとに判定する別ロジック
+  // ytd/all/custom は既存ロジック(カレンダー日付ベース)
+  if (mode === 'all') {
+    return rows.filter(e => {
+      const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+      if (!cd) return false;
+      if (motouke && getMotouke(e) !== motouke) return false;
+      if (koji && getKojiName(e) !== koji) return false;
+      if (creator && getCreator(e) !== creator) return false;
+      return true;
+    });
+  }
+  if (mode === 'custom') {
+    let dateFrom = fromStr ? new Date(fromStr) : null;
+    let dateTo = toStr ? new Date(toStr) : null;
+    if (dateTo) dateTo.setHours(23,59,59,999);
+    return rows.filter(e => {
+      const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+      if (!cd) return false;
+      if (dateFrom && cd < dateFrom) return false;
+      if (dateTo && cd > dateTo) return false;
+      if (motouke && getMotouke(e) !== motouke) return false;
+      if (koji && getKojiName(e) !== koji) return false;
+      if (creator && getCreator(e) !== creator) return false;
+      return true;
+    });
+  }
+  // ytd/year/month/quarter で 締め日基準 → 各行の closingMonthKey で判定
+  // カレンダー基準 → 従来通り日付範囲フィルタ
+  let calStart = null, calEnd = null;
+  let inClosingPeriod = null; // (e) => bool
+  if (mode === 'ytd' || mode === 'year') {
+    if (closingMode === 'closing') {
+      // 締め日基準: 1月締め(=前年12/21〜) 〜 12月締め(=12/20)
+      // 山一の場合: 前年12/21 〜 当年12/20、その他: 当年1/1〜12/31
+      inClosingPeriod = (e) => {
+        const m = getMotouke(e);
+        const isYama = /山一/.test(m);
+        const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+        if (!cd) return false;
+        const k = getClosingMonthKey(cd, m);
+        const [ky, km] = k.split('/').map(Number);
+        return ky === year;
+      };
+    } else {
+      calStart = new Date(year, 0, 1); calEnd = new Date(year, 11, 31, 23,59,59,999);
+    }
+  } else if (mode === 'month') {
+    if (closingMode === 'closing') {
+      const targetKey = `${year}/${String(month).padStart(2,'0')}`;
+      inClosingPeriod = (e) => {
+        const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+        if (!cd) return false;
+        return getClosingMonthKey(cd, getMotouke(e)) === targetKey;
+      };
+    } else {
+      calStart = new Date(year, month-1, 1); calEnd = new Date(year, month, 0, 23,59,59,999);
+    }
+  } else if (mode === 'quarter') {
+    if (closingMode === 'closing') {
+      const startMonth = (quarter-1) * 3 + 1;
+      const months = [startMonth, startMonth+1, startMonth+2].map(m => `${year}/${String(m).padStart(2,'0')}`);
+      inClosingPeriod = (e) => {
+        const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+        if (!cd) return false;
+        return months.includes(getClosingMonthKey(cd, getMotouke(e)));
+      };
+    } else {
+      const startMonth = (quarter-1) * 3;
+      calStart = new Date(year, startMonth, 1); calEnd = new Date(year, startMonth+3, 0, 23,59,59,999);
+    }
+  }
+  return rows.filter(e => {
+    const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+    if (!cd) return false;
+    if (inClosingPeriod) {
+      if (!inClosingPeriod(e)) return false;
+    } else {
+      if (calStart && cd < calStart) return false;
+      if (calEnd && cd > calEnd) return false;
+    }
+    if (motouke && getMotouke(e) !== motouke) return false;
+    if (koji && getKojiName(e) !== koji) return false;
+    if (creator && getCreator(e) !== creator) return false;
+    // 請求/入金ステータス
+    const invFilter = document.getElementById('filter-invoice')?.value || '';
+    const payFilter = document.getElementById('filter-payment')?.value || '';
+    const invSt = e.meta?.invoiceStatus || '未';
+    const paySt = e.meta?.paymentStatus || '未';
+    if (invFilter && invSt !== invFilter) return false;
+    if (payFilter && paySt !== payFilter) return false;
+    return true;
+  });
+}
+
+// === サマリー算出 ===
+function calcSummary(rows) {
+  let total = 0, material = 0, order = 0;
+  rows.forEach(e => {
+    total += estimateTotal(e);
+    material += materialTotal(e);
+    order += orderTotal(e);
+  });
+  const cost = material + order;
+  const profit = total - cost;
+  const profitRate = total > 0 ? (profit / total * 100) : 0;
+  return { total, material, order, cost, profit, profitRate, count: rows.length };
+}
+
+function renderSummaryCards(s) {
+  const c = document.getElementById('summary-cards');
+  c.innerHTML = `
+    <div class="card juchu">
+      <div class="label">総売上(税抜)</div>
+      <div class="value">¥${fmtNum(s.total)}</div>
+      <div class="sub">${s.count}件</div>
+    </div>
+    <div class="card profit">
+      <div class="label">粗利</div>
+      <div class="value" style="color:${s.profit<0?'#dc2626':'#16a34a'};">¥${fmtNum(s.profit)}</div>
+      <div class="sub">粗利率 ${s.profitRate.toFixed(1)}%</div>
+    </div>
+    <div class="card cost">
+      <div class="label">原価合計</div>
+      <div class="value">¥${fmtNum(s.cost)}</div>
+      <div class="sub">材料 ¥${fmtNum(s.material)} + 外注 ¥${fmtNum(s.order)}</div>
+    </div>
+    <div class="card count">
+      <div class="label">案件数</div>
+      <div class="value">${s.count}件</div>
+      <div class="sub">平均 ¥${fmtNum(s.count > 0 ? Math.round(s.total / s.count) : 0)}/件</div>
+    </div>`;
+}
+
+// === 内訳描画 ===
+function groupBy(rows, keyFn) {
+  const map = new Map();
+  rows.forEach(e => {
+    const k = keyFn(e);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(e);
+  });
+  return map;
+}
+function renderBreakdown(containerId, rows, keyFn, sortKey) {
+  const map = groupBy(rows, keyFn);
+  const items = [];
+  let maxVal = 0;
+  map.forEach((group, key) => {
+    let total = 0, cost = 0;
+    group.forEach(e => {
+      total += estimateTotal(e);
+      cost += materialTotal(e) + orderTotal(e);
+    });
+    const profit = total - cost;
+    const rate = total > 0 ? (profit/total*100) : 0;
+    items.push({ key, total, profit, rate, count: group.length });
+    if (total > maxVal) maxVal = total;
+  });
+  // ソート
+  if (sortKey === 'date') {
+    items.sort((a,b) => String(a.key).localeCompare(String(b.key)));
+  } else {
+    items.sort((a,b) => b.total - a.total);
+  }
+  const c = document.getElementById(containerId);
+  if (!items.length) { c.innerHTML = '<div class="empty">データなし</div>'; return; }
+  c.innerHTML = items.map(it => {
+    const pct = maxVal > 0 ? (it.total / maxVal * 100) : 0;
+    const profitColor = it.profit < 0 ? '#dc2626' : '#16a34a';
+    return `<div class="bar-row" title="売上 ¥${fmtNum(it.total)} / 粗利 ¥${fmtNum(it.profit)} (${it.rate.toFixed(1)}%) / ${it.count}件">
+      <div class="lbl">${escapeHtml(it.key)}</div>
+      <div class="bar-wrap"><div class="bar" style="width:${pct.toFixed(1)}%;"></div></div>
+      <div class="val">¥${fmtNum(it.total)}<br><small style="color:${profitColor};">利${fmtNum(it.profit)}</small></div>
+    </div>`;
+  }).join('');
+}
+
+// === 詳細リスト ===
+function renderDetail(rows) {
+  // 完了日昇順
+  rows.sort((a,b) => {
+    const da = parseCompleteDate(a.meta.hatchuOrder.completeDate);
+    const db = parseCompleteDate(b.meta.hatchuOrder.completeDate);
+    return (da?.getTime()||0) - (db?.getTime()||0);
+  });
+  document.getElementById('detail-count').textContent = `${rows.length}件`;
+  const tbody = document.getElementById('detail-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="15" class="empty">対象案件なし(✅確定版マーク + 完了日入力 で集計対象)</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(e => {
+    const total = estimateTotal(e);
+    const mat = materialTotal(e);
+    const ord = orderTotal(e);
+    const cost = mat + ord;
+    const profit = total - cost;
+    const rate = total > 0 ? (profit/total*100) : 0;
+    const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+    const cdStr = cd ? `${cd.getFullYear()}/${cd.getMonth()+1}/${cd.getDate()}` : (e.meta.hatchuOrder.completeDate||'');
+    const motouke = getMotouke(e);
+    const closeKey = cd ? getClosingMonthKey(cd, motouke) : '';
+    const isYama = /山一/.test(motouke);
+    const closeBg = isYama ? '#fef3c7' : '';
+    const profitColor = profit < 0 ? '#dc2626' : '#16a34a';
+    const invSt = e.meta?.invoiceStatus || '未';
+    const paySt = e.meta?.paymentStatus || '未';
+    const invSubmittedAt = e.meta?.invoiceSubmittedAt || '';
+    const payReceivedAt = e.meta?.paymentReceivedAt || '';
+    const invBadge = invSt === '済'
+      ? `<span style="background:#dbeafe; color:#1e40af; padding:1px 6px; border-radius:8px; font-size:10px;" title="提出日: ${escapeHtml(invSubmittedAt)}">📤 済</span>`
+      : `<span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:8px; font-size:10px;">📝 未</span>`;
+    const payBadge = paySt === '済'
+      ? `<span style="background:#bbf7d0; color:#14532d; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:600;" title="入金日: ${escapeHtml(payReceivedAt)}">✅ 済</span>`
+      : `<span style="background:#fee2e2; color:#7f1d1d; padding:1px 6px; border-radius:8px; font-size:10px;">⏳ 未</span>`;
+    return `<tr>
+      <td><small>${escapeHtml(cdStr)}</small></td>
+      <td style="background:${closeBg};"><small>${escapeHtml(closeKey)}${isYama?'<br><span style="color:#92400e; font-size:9px;">21日締</span>':''}</small></td>
+      <td><small>${escapeHtml(motouke)}</small></td>
+      <td><b>${escapeHtml(e.meta?.bukken||'')}</b></td>
+      <td><small>${escapeHtml(e.meta?.roomNo||'')}</small></td>
+      <td><small>${escapeHtml(getKojiName(e))}</small></td>
+      <td><small>${escapeHtml(getCreator(e))}</small></td>
+      <td class="num">¥${fmtNum(total)}</td>
+      <td class="num"><small>¥${fmtNum(mat)}</small></td>
+      <td class="num"><small>¥${fmtNum(ord)}</small></td>
+      <td class="num">¥${fmtNum(cost)}</td>
+      <td class="num" style="color:${profitColor}; font-weight:600;">¥${fmtNum(profit)}</td>
+      <td class="num" style="color:${profitColor};"><small>${rate.toFixed(1)}%</small></td>
+      <td>${invBadge}</td>
+      <td>${payBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// === フィルタオプション初期化 ===
+function initFilterOptions(allRows) {
+  const motoukes = [...new Set(allRows.map(getMotouke).filter(Boolean))].sort();
+  const creators = [...new Set(allRows.map(getCreator).filter(Boolean))].sort();
+  const motoSel = document.getElementById('filter-motouke');
+  const cur1 = motoSel.value;
+  motoSel.innerHTML = '<option value="">(全部)</option>' + motoukes.map(m => `<option value="${escapeHtml(m)}" ${m===cur1?'selected':''}>${escapeHtml(m)}</option>`).join('');
+  const creSel = document.getElementById('filter-creator');
+  const cur2 = creSel.value;
+  creSel.innerHTML = '<option value="">(全部)</option>' + creators.map(c => `<option value="${escapeHtml(c)}" ${c===cur2?'selected':''}>${escapeHtml(c)}</option>`).join('');
+}
+
+// === メイン更新 ===
+function refresh() {
+  const allRows = getEligibleEstimates();
+  initFilterOptions(allRows);
+  const rows = applyFilters(allRows);
+  const summary = calcSummary(rows);
+  renderSummaryCards(summary);
+  // 月別: YYYY/MM 形式キー(締め日基準なら 山一は21日締めで翌月扱い)
+  const closingMode = document.getElementById('filter-closing-mode')?.value || 'closing';
+  renderBreakdown('by-month', rows, e => {
+    const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+    if (!cd) return '不明';
+    if (closingMode === 'closing') {
+      const k = getClosingMonthKey(cd, getMotouke(e));
+      return /山一/.test(getMotouke(e)) ? `${k} (山一21日締)` : k;
+    }
+    return `${cd.getFullYear()}/${String(cd.getMonth()+1).padStart(2,'0')}`;
+  }, 'date');
+  renderBreakdown('by-motouke', rows, getMotouke);
+  renderBreakdown('by-koji', rows, getKojiName);
+  renderBreakdown('by-creator', rows, getCreator);
+  renderDetail([...rows]); // 元配列を保つためコピー
+  document.getElementById('data-info').textContent = `集計対象 ${allRows.length}件 / 表示 ${rows.length}件`;
+}
+
+// === 期間モード切替 ===
+function syncPeriodControls() {
+  const mode = document.getElementById('period-mode').value;
+  document.getElementById('period-year').style.display = (mode === 'all' || mode === 'custom') ? 'none' : '';
+  document.getElementById('period-month').style.display = (mode === 'month') ? '' : 'none';
+  document.getElementById('period-quarter').style.display = (mode === 'quarter') ? '' : 'none';
+  document.getElementById('period-custom-wrap').style.display = (mode === 'custom') ? 'inline-flex' : 'none';
+}
+
+// === CSV出力 ===
+function exportCsv() {
+  const allRows = getEligibleEstimates();
+  const rows = applyFilters(allRows);
+  rows.sort((a,b) => {
+    const da = parseCompleteDate(a.meta.hatchuOrder.completeDate);
+    const db = parseCompleteDate(b.meta.hatchuOrder.completeDate);
+    return (da?.getTime()||0) - (db?.getTime()||0);
+  });
+  const headers = ['完了日','締め月','締めルール','元請け','物件名','号室','工事種別','担当者','売上(税抜)','材料費','外注費','原価合計','粗利','粗利率(%)'];
+  const csvLines = [headers.join(',')];
+  rows.forEach(e => {
+    const total = estimateTotal(e);
+    const mat = materialTotal(e);
+    const ord = orderTotal(e);
+    const cost = mat + ord;
+    const profit = total - cost;
+    const rate = total > 0 ? (profit/total*100).toFixed(2) : '0.00';
+    const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+    const cdStr = cd ? `${cd.getFullYear()}/${cd.getMonth()+1}/${cd.getDate()}` : (e.meta.hatchuOrder.completeDate||'');
+    const motouke = getMotouke(e);
+    const closeKey = cd ? getClosingMonthKey(cd, motouke) : '';
+    const closeRule = /山一/.test(motouke) ? '21日締' : '月末締';
+    const csvCell = v => {
+      const s = String(v ?? '');
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    csvLines.push([
+      csvCell(cdStr), csvCell(closeKey), csvCell(closeRule),
+      csvCell(motouke), csvCell(e.meta?.bukken||''), csvCell(e.meta?.roomNo||''),
+      csvCell(getKojiName(e)), csvCell(getCreator(e)),
+      total, mat, ord, cost, profit, rate
+    ].join(','));
+  });
+  // 合計行
+  const sum = calcSummary(rows);
+  csvLines.push(['合計','','','','','','','', sum.total, sum.material, sum.order, sum.cost, sum.profit, sum.profitRate.toFixed(2)].join(','));
+  // BOM付きで Excel/Numbers 対応
+  const blob = new Blob(['﻿' + csvLines.join('\r\n')], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date();
+  a.download = `売上集計_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// === 初期化 ===
+document.getElementById('period-year').value = (new Date()).getFullYear();
+document.getElementById('period-month').value = (new Date()).getMonth() + 1;
+document.getElementById('period-mode').addEventListener('change', () => { syncPeriodControls(); refresh(); });
+document.getElementById('period-year').addEventListener('change', refresh);
+document.getElementById('period-month').addEventListener('change', refresh);
+document.getElementById('period-quarter').addEventListener('change', refresh);
+document.getElementById('period-from').addEventListener('change', refresh);
+document.getElementById('period-to').addEventListener('change', refresh);
+document.getElementById('filter-motouke').addEventListener('change', refresh);
+document.getElementById('filter-koji').addEventListener('change', refresh);
+document.getElementById('filter-creator').addEventListener('change', refresh);
+document.getElementById('filter-invoice').addEventListener('change', refresh);
+document.getElementById('filter-payment').addEventListener('change', refresh);
+document.getElementById('filter-closing-mode').addEventListener('change', refresh);
+document.getElementById('btn-reload').addEventListener('click', refresh);
+document.getElementById('btn-export-csv').addEventListener('click', exportCsv);
+
+// 請求先マッピング: 元請け → 実際の請求書宛先
+// 山一系の業務は光和工業経由なので、山一ではなく光和工業に請求する
+function getInvoicee(motouke, settings) {
+  const mapping = settings?.invoiceeMapping || {
+    // デフォルト: 山一系を含む元請けは「有限会社光和工業」に請求
+    '山一': '有限会社光和工業',
+  };
+  for (const [pattern, invoicee] of Object.entries(mapping)) {
+    if (new RegExp(pattern).test(motouke)) return invoicee;
+  }
+  return motouke; // マッピング無し → 元請けに直接請求
+}
+
+// === 請求書作成 ===
+document.getElementById('btn-make-invoice').addEventListener('click', () => {
+  const allRows = getEligibleEstimates();
+  const rows = applyFilters(allRows);
+  if (!rows.length) {
+    alert('対象案件がありません。\n\n確定版マーク + 完了日入力 が必要です。');
+    return;
+  }
+  const settings = JSON.parse(localStorage.getItem('mitsumori_settings_v1') || '{}');
+  // 請求書宛先(invoicee)ごとにグループ化(山一系 → 光和工業に集約)
+  const groups = new Map();
+  rows.forEach(e => {
+    const m = getMotouke(e);
+    const invoicee = getInvoicee(m, settings);
+    if (!groups.has(invoicee)) groups.set(invoicee, { invoicee, motoukeSet: new Set(), rows: [] });
+    const g = groups.get(invoicee);
+    g.motoukeSet.add(m);
+    g.rows.push(e);
+  });
+  // 期間情報
+  const mode = document.getElementById('period-mode').value;
+  const year = Number(document.getElementById('period-year').value);
+  const month = Number(document.getElementById('period-month').value);
+  const closingMode = document.getElementById('filter-closing-mode').value;
+  let periodLabel = '';
+  if (mode === 'month') {
+    periodLabel = `${year}年${month}月`;
+    if (closingMode === 'closing') periodLabel += '締';
+  } else if (mode === 'ytd' || mode === 'year') periodLabel = `${year}年`;
+  else if (mode === 'quarter') periodLabel = `${year}年Q${document.getElementById('period-quarter').value}`;
+  else if (mode === 'custom') periodLabel = `${document.getElementById('period-from').value} 〜 ${document.getElementById('period-to').value}`;
+  else periodLabel = '全期間';
+  // 請求書ドラフトを localStorage に保存
+  const draft = {
+    generatedAt: new Date().toISOString(),
+    periodLabel,
+    closingMode,
+    invoices: [],
+  };
+  // 期間の年月を取得(対象期間範囲計算用)
+  const targetYear = year;
+  const targetMonth = month;
+  groups.forEach((g) => {
+    const { invoicee, motoukeSet, rows: groupRows } = g;
+    const motoukes = Array.from(motoukeSet);
+    // 元請け代表(複数あれば最頻出の motouke を採用)
+    const motoukeCount = {};
+    groupRows.forEach(e => { const m = getMotouke(e); motoukeCount[m] = (motoukeCount[m]||0) + 1; });
+    const repMotouke = motoukes.sort((a,b) => (motoukeCount[b]||0) - (motoukeCount[a]||0))[0];
+    const lines = groupRows.map(e => {
+      const total = estimateTotal(e);
+      const cd = parseCompleteDate(e.meta.hatchuOrder.completeDate);
+      const cdStr = cd ? `${cd.getFullYear()}/${cd.getMonth()+1}/${cd.getDate()}` : '';
+      const m = getMotouke(e);
+      const closeKey = cd ? getClosingMonthKey(cd, m) : '';
+      return {
+        estimateId: e.id,
+        completeDate: cdStr,
+        closingMonth: closeKey,
+        motouke: m, // 元請け(明細レベル: 元請けが複数ある時の追跡用)
+        bukken: e.meta?.bukken || '',
+        roomNo: e.meta?.roomNo || '',
+        kojiName: getKojiName(e),
+        creator: getCreator(e),
+        amountTaxExcl: total,
+      };
+    });
+    // 完了日昇順
+    lines.sort((a,b) => String(a.completeDate).localeCompare(String(b.completeDate)));
+    const subtotal = lines.reduce((s,l) => s + l.amountTaxExcl, 0);
+    const tax = Math.round(subtotal * 0.1);
+    const total = subtotal + tax;
+    const isYamaichiViaKowa = /光和/.test(invoicee) && motoukes.some(m => /山一/.test(m));
+    const isYamaichi = motoukes.some(m => /山一/.test(m));
+    // 対象期間の実日付を計算: 山一系は21日〜翌20日 / その他は1日〜末日
+    let periodStart = null, periodEnd = null;
+    if (mode === 'month' && targetMonth) {
+      const range = getClosingPeriodRange(targetYear, targetMonth, isYamaichi);
+      periodStart = range.start;
+      periodEnd = range.end;
+    }
+    const fmtMD = (d) => d ? `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日` : '';
+    const periodRangeLabel = (periodStart && periodEnd)
+      ? `${fmtMD(periodStart)} 〜 ${fmtMD(periodEnd)}`
+      : '';
+    draft.invoices.push({
+      motouke: repMotouke,           // 元請け代表(後方互換のため残す)
+      invoicee,                       // 実際の請求書宛先
+      motoukes,                       // 含まれる元請け一覧(複数の山一系を光和に集約等)
+      isYamaichi,
+      isYamaichiViaKowa,
+      closingRule: isYamaichi ? '21日〜翌20日締' : '1日〜末日締',
+      periodRangeLabel,               // 対象期間の実日付表示
+      periodStart: periodStart ? periodStart.toISOString().slice(0,10) : '',
+      periodEnd: periodEnd ? periodEnd.toISOString().slice(0,10) : '',
+      lines,
+      subtotal,
+      tax,
+      total,
+    });
+  });
+  localStorage.setItem('mitsumori_invoice_draft_v1', JSON.stringify(draft));
+  // 請求書ページへ遷移
+  window.location.href = 'invoice.html';
+});
+syncPeriodControls();
+refresh();
+
+// F5 / Ctrl+R リロード
+window.addEventListener('keydown', (e) => {
+  const k = (e.key || '').toLowerCase();
+  if (k === 'f5' || (e.ctrlKey && k === 'r' && !e.shiftKey)) { e.preventDefault(); location.reload(); }
+  else if (e.ctrlKey && e.shiftKey && k === 'r') { e.preventDefault(); location.reload(); }
+});
+</script>
+</body>
+</html>

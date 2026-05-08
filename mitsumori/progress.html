@@ -1,0 +1,1536 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>工事進捗 - ビルドクラスタ</title>
+<style>
+  :root {
+    --bg:#f5f5f7; --panel:#fff; --line:#e1e1e6; --accent:#2563eb; --accent-dk:#1d4ed8;
+    --text:#111; --muted:#666; --warn:#d97706; --ok:#16a34a; --danger:#dc2626;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo","Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif,emoji; background:var(--bg); color:var(--text); }
+  nav.app-switcher { display:flex; gap:1px; background:#0f172a; padding:0; }
+  nav.app-switcher a { padding:8px 18px; background:#1e293b; color:#cbd5e1; text-decoration:none; font-size:13px; transition:0.15s; }
+  nav.app-switcher a:hover { background:#334155; color:#fff; }
+  nav.app-switcher a.active { background:#2563eb; color:#fff; font-weight:600; }
+  header { background:#111; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header .meta { font-size:12px; color:#bbb; }
+  main { padding:12px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--muted); }
+  input[type=text], input[type=date], input[type=number], select, textarea {
+    font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:#fff;
+  }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:hover { background:var(--accent-dk); }
+  button.danger { color:var(--danger); }
+  button:hover { background:#f0f0f3; }
+  button.primary:hover { background:var(--accent-dk); color:#fff; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; background:#eee; }
+  .grow { flex:1; }
+  /* モード切替タブ */
+  .mode-tabs { display:flex; gap:0; border-bottom:2px solid var(--line); margin-bottom:8px; }
+  .mode-tab { padding:8px 18px; cursor:pointer; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-2px; }
+  .mode-tab:hover { background:#f0f0f3; }
+  .mode-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; background:#eff6ff; }
+  /* テーブル */
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:#fafafa; position:sticky; top:0; z-index:1; font-weight:600; font-size:11px; color:#444; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  tr.row-clickable { cursor:pointer; }
+  tr.row-clickable:hover td { background:#f0f9ff; }
+  tr.row-confirmed td { background:#f0fdf4; }
+  tr.row-confirmed:hover td { background:#dcfce7; }
+  .viewer-wrap { max-height: calc(100vh - 220px); overflow:auto; }
+  /* バッジ */
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+  .badge-juchu { background:#bbf7d0; color:#14532d; }
+  .badge-shutsumai { background:#dbeafe; color:#1e40af; }
+  .badge-shitsuchu { background:#fecaca; color:#7f1d1d; }
+  .badge-kanryou { background:#d1fae5; color:#065f46; }
+  .badge-shitagaki { background:#e5e7eb; color:#374151; }
+  .badge-confirmed { background:#16a34a; color:#fff; }
+  .badge-paid { background:#bbf7d0; color:#14532d; }
+  .badge-unpaid { background:#fee2e2; color:#7f1d1d; }
+  .badge-juchugata { background:#fef3c7; color:#92400e; }
+  /* 詳細モーダル */
+  #detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px; }
+  #detail-overlay.open { display:flex; }
+  #detail-modal { background:#fff; border-radius:8px; max-width:920px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); }
+  #detail-modal .modal-head { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+  #detail-modal .modal-head h2 { margin:0; font-size:16px; flex:1; }
+  #detail-modal .modal-body { padding:16px 18px; }
+  #detail-modal fieldset { border:1px solid #e5e7eb; padding:10px 14px; margin:0 0 12px; border-radius:6px; }
+  #detail-modal legend { font-weight:600; font-size:12px; color:#374151; padding:0 6px; }
+  #detail-modal .grid {
+    display:grid; grid-template-columns: 110px 1fr 110px 1fr; gap:6px 10px; align-items:center; font-size:12px;
+  }
+  #detail-modal .grid label { font-size:11px; color:var(--muted); }
+  #detail-modal .grid input[type=text], #detail-modal .grid input[type=date], #detail-modal .grid select { width:100%; font-size:12px; }
+  #detail-modal .grid .span2 { grid-column: span 3; }
+  #detail-modal .modal-foot { padding:12px 18px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; }
+  /* チェック行 */
+  .checkrow { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; }
+  .checkrow label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .checkrow input[type=checkbox] { width:16px; height:16px; }
+  /* 元請けタグ(色はJS側で動的指定) */
+  .motouke-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+  /* 業者タグ */
+  .supplier-tag { display:inline-block; padding:1px 6px; border-radius:8px; font-size:11px; font-weight:600; white-space:nowrap; }
+  /* 業者列セクション境界(業者①の業者名列の左に縦線) */
+  th.sup-section-start, td.sup-section-start { border-left:2px solid #f59e0b; }
+  /* 業者列の薄い背景 */
+  th.sup-col, td.sup-col { background:#fffbeb; }
+  td.sup-col.sup-empty { background:#f9fafb; color:#d1d5db; }
+  /* ビュー切替(一覧 / ガント) */
+  .view-tabs { display:flex; gap:4px; margin-left:auto; }
+  .view-tab { padding:4px 12px; cursor:pointer; font-size:12px; border:1px solid var(--line); background:#fff; border-radius:4px; }
+  .view-tab.active { background:#1e3a8a; color:#fff; border-color:#1e3a8a; font-weight:600; }
+  /* ガントチャート(table-layout: fixed + colgroup + ボーダーレス → セル幅と絶対配置位置を完全一致)
+     セル罫線は背景 gradient で描画 → ボーダー幅累積によるズレを排除 */
+  /* min-width:100% を外す → table-layout:fixed の colgroup 28px が忠実に守られる */
+  /* 親要素より狭ければ右側に余白(画面いっぱいまで広げない)・JSのcellWidth=28と一致 */
+  .gantt-table { width:max-content; border-collapse:separate; border-spacing:0; font-size:11px; table-layout:fixed; border:1px solid var(--line); }
+  .gantt-table th, .gantt-table td { border:none; padding:0; box-sizing:border-box; }
+  .gantt-table thead tr { border-bottom:2px solid var(--line); }
+  .gantt-table thead { background:#fafafa; }
+  /* ヘッダーセル(各日)に縦罫線を gradient で(28px ごと) */
+  .gantt-table thead th.gantt-day {
+    background-image: linear-gradient(to right, #e2e8f0 0px, #e2e8f0 1px, transparent 1px);
+    background-size: 100% 100%; background-repeat: no-repeat;
+  }
+  .gantt-table th { padding:2px 0; }
+  .gantt-day { padding:2px 0; text-align:center; line-height:1.2; }
+  /* メタセルの右に縦線を入れる(タイムライン領域との境界) */
+  .gantt-table .gantt-meta-cell { border-right:1px solid var(--line); }
+  /* データ行の境界(各物件) */
+  .gantt-table tbody tr { border-bottom:1px solid var(--line); }
+  .gantt-table tbody tr td { border-bottom:1px solid var(--line); }
+  /* background-color で指定(background ショートハンドだと gradient罫線が消える) */
+  .gantt-day.holiday { color:#dc2626; background-color:#fef2f2; }
+  .gantt-day.saturday { color:#2563eb; background-color:#eff6ff; }
+  .gantt-day.today { background-color:#fef9c3; font-weight:bold; box-shadow: inset 0 0 0 1px #f59e0b; }
+  .gantt-day small { font-size:9px; color:inherit; opacity:0.85; }
+  .gantt-row { cursor:pointer; }
+  .gantt-row:hover .gantt-meta-cell { background:#f0f9ff; }
+  .gantt-row td { padding:0; }
+  .gantt-track {
+    position:relative; padding:0; height:100%;
+    background-image: linear-gradient(to right, #f1f5f9 0px, #f1f5f9 1px, transparent 1px);
+    background-size: 42px 100%; background-repeat: repeat-x;
+  }
+  .gantt-bar {
+    position:absolute; height:18px; line-height:18px;
+    padding:0 5px; font-size:10px; white-space:nowrap;
+    border-radius:3px; overflow:hidden; text-overflow:ellipsis;
+    color:#fff; font-weight:600; box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  .gantt-bar.bar-clipped-left { border-top-left-radius:0; border-bottom-left-radius:0; padding-left:2px; }
+  .gantt-bar.bar-clipped-right { border-top-right-radius:0; border-bottom-right-radius:0; padding-right:2px; }
+  .gantt-marker { position:absolute; top:0; bottom:0; width:2px; pointer-events:none; }
+  .gantt-marker-label {
+    position:absolute; top:1px; font-size:9px; font-weight:700; pointer-events:none;
+    white-space:nowrap; transform:translateX(-50%);
+    background:rgba(255,255,255,0.8); padding:0 1px; border-radius:2px;
+  }
+  .gantt-meta-cell { width:200px; min-width:200px; max-width:200px; padding:4px 8px; vertical-align:middle; background:#fff; position:sticky; left:0; z-index:2; }
+  .gantt-controls { display:flex; gap:8px; align-items:center; padding:8px 0; }
+  .gantt-month-label { font-size:14px; font-weight:600; padding:0 12px; }
+  .gantt-empty { padding:30px; text-align:center; color:#9ca3af; }
+  .gantt-legend { display:flex; gap:14px; font-size:11px; color:#475569; padding:6px 10px; background:#f8fafc; border:1px solid var(--line); border-radius:4px; margin-top:8px; flex-wrap:wrap; }
+  .gantt-legend-mark { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle; margin-right:3px; }
+  /* 集計サマリー */
+  .stats-bar { display:flex; gap:14px; font-size:12px; padding:6px 10px; background:#f1f5f9; border-radius:4px; margin-top:8px; }
+  .stats-bar b { color:#0f172a; }
+</style>
+</head>
+<body>
+<nav class="app-switcher">
+  <a href="index.html">📝 見積作成</a>
+  <a href="invoice.html">💰 請求書</a>
+  <a href="sales.html">📊 売上集計</a>
+  <a href="progress.html" class="active">🔨 工事進捗</a>
+  <a href="index.html#settings">⚙ 設定</a>
+</nav>
+<header>
+  <h1>🔨 工事進捗</h1>
+  <span class="meta">ビルドクラスタ / 原状回復・修繕</span>
+  <span class="pill" id="data-info" style="margin-left:auto; background:#1e3a8a; color:#fff;">読込中…</span>
+</header>
+<main>
+  <div class="mode-tabs">
+    <div class="mode-tab active" data-mode="restoration" title="工事名称=「原状回復工事」のみ表示(空室・退去後の工事)">🔑 原状回復(空室)</div>
+    <div class="mode-tab" data-mode="repair" title="原状回復以外すべて(修繕・リフォーム・植栽剪定・漏水復旧 等。入居中で日程調整が必要な工事)">🛠 修繕系(入居中)</div>
+    <div class="mode-tab" data-mode="all">🌐 すべて</div>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="search-input" placeholder="現場名/号室/お客様名 などで検索" style="min-width:240px;" class="grow">
+      <select id="motouke-filter" title="元請けで絞込"><option value="">(全元請け)</option></select>
+      <select id="status-filter" title="営業ステータスで絞込">
+        <option value="">(全ステータス)</option>
+        <option value="__juchu__">🎯 受注のみ</option>
+        <option value="__not_juchu__">⏳ 未受注(受注以外)</option>
+        <option value="下書き">📝 下書き</option>
+        <option value="提出済">📤 提出済</option>
+        <option value="受注">🎯 受注</option>
+        <option value="失注">❌ 失注</option>
+        <option value="完了">✅ 完了</option>
+        <option value="キャンセル">✖ キャンセル</option>
+      </select>
+      <select id="workflow-filter" title="進行ステータスで絞込">
+        <option value="">(全進行ステータス)</option>
+        <option value="待機">⏳ 待機</option>
+        <option value="工事指示済">📤 工事指示済</option>
+        <option value="着工">🔨 着工</option>
+        <option value="完工">✅ 完工</option>
+        <option value="鍵交換済">🔑 鍵交換済</option>
+        <option value="入居済">🏠 入居済</option>
+        <option value="クローズ">📦 クローズ</option>
+      </select>
+      <select id="invoice-filter" title="請求/入金">
+        <option value="">(請求/入金 全て)</option>
+        <option value="invoice_unpaid">🟡 請求未</option>
+        <option value="invoice_paid">✅ 請求済</option>
+        <option value="payment_unpaid">🟡 入金未</option>
+        <option value="payment_paid">✅ 入金済</option>
+      </select>
+      <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px;" title="完了日が入っている案件 / 進行ステータスがクローズの案件を非表示">
+        <input type="checkbox" id="hide-completed" checked style="width:auto;"> ✅ 完了案件を非表示
+      </label>
+      <button id="btn-clear-filters" title="絞込クリア" style="font-size:11px;">↺ 絞込解除</button>
+      <span class="pill" id="row-count">0件</span>
+      <button id="btn-reload" title="localStorage を再読込" style="font-size:11px;">🔄 再読込</button>
+      <div class="view-tabs">
+        <div class="view-tab active" data-view="list">📋 一覧</div>
+        <div class="view-tab" data-view="gantt">📊 ガント</div>
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="gantt-controls" id="gantt-controls" style="display:none;">
+      <select id="gantt-range-mode" title="表示範囲モード" style="font-size:12px;">
+        <option value="month">月単位</option>
+        <option value="rolling30">±30日(今日基準)</option>
+        <option value="rolling60">±60日(今日基準)</option>
+        <option value="rolling90">±90日(今日基準)</option>
+      </select>
+      <span id="gantt-month-nav" style="display:flex; gap:6px; align-items:center;">
+        <button id="btn-gantt-prev" title="前月">◀</button>
+        <span class="gantt-month-label" id="gantt-month-label"></span>
+        <button id="btn-gantt-next" title="翌月">▶</button>
+        <button id="btn-gantt-today" title="今月へ" style="font-size:11px;">📅 今月</button>
+      </span>
+      <span style="color:var(--muted); font-size:11px; margin-left:14px;">バー = 業者工期 / マーカー = ▼完了 / ▼入居 / 🔑鍵 / △確認 / 💊除菌</span>
+    </div>
+  </div>
+  <div class="panel" style="padding:0;">
+    <div class="viewer-wrap">
+      <table id="progress-table">
+        <thead id="progress-thead"></thead>
+        <tbody id="progress-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="vendor-workload" class="gantt-legend" style="display:none; background:#fffbeb; border-color:#fcd34d;"></div>
+  <div id="gantt-legend" class="gantt-legend" style="display:none;"></div>
+</main>
+
+<!-- 詳細編集モーダル -->
+<div id="detail-overlay">
+  <div id="detail-modal">
+    <div class="modal-head">
+      <h2 id="detail-title">詳細</h2>
+      <span class="badge" id="detail-koji"></span>
+      <button id="btn-detail-close">×</button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-foot">
+      <button id="btn-detail-open-est" title="この見積を見積作成タブで開く">📝 見積を開く</button>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-detail-cancel">キャンセル</button>
+        <button id="btn-detail-save" class="primary">💾 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// localStorage 直読み (見積アプリと共通の保存キー)
+// ============================================================
+const STORAGE_KEY = 'mitsumori_estimates_v1';
+const SETTINGS_KEY = 'mitsumori_settings_v1';
+
+function loadEstimates() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (!s) return {};
+    return JSON.parse(s) || {};
+  } catch (e) {
+    console.error('[progress] localStorage 読込失敗', e);
+    return {};
+  }
+}
+function saveEstimates(estimates) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(estimates));
+    return true;
+  } catch (e) {
+    console.error('[progress] localStorage 保存失敗', e);
+    alert('保存失敗: ' + e.message);
+    return false;
+  }
+}
+function loadSettings() {
+  try {
+    const s = localStorage.getItem(SETTINGS_KEY);
+    if (!s) return {};
+    return JSON.parse(s) || {};
+  } catch (e) { return {}; }
+}
+
+// GAS Web App 経由で見積を Drive 台帳に push
+async function gasSaveLedgerFromProgress(est) {
+  const settings = loadSettings();
+  const url = (settings.gasSyncUrl || '').trim();
+  const token = (settings.gasSyncToken || '').trim();
+  if (!url || !token) return null;
+  const body = JSON.stringify({
+    token,
+    action: 'save-ledger',
+    content: JSON.stringify(est),
+    fileId: est._driveFileId || '',
+  });
+  let r;
+  if (window.bcApi?.fetchUrl) {
+    r = await window.bcApi.fetchUrl({
+      url, method: 'POST', body, headers: { 'Content-Type': 'text/plain' },
+    });
+  } else {
+    const res = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' } });
+    r = { ok: res.ok, status: res.status, text: await res.text() };
+  }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = JSON.parse(r.text);
+  if (!data.ok) throw new Error(data.error || 'GAS応答エラー');
+  return data; // { fileId, id, month }
+}
+
+// 進捗タブ: 詳細編集後に Drive 台帳へ silent auto-push(debounce 1.5s)
+function autoPushFromProgress(id) {
+  if (!id) return;
+  if (autoPushFromProgress._timer) clearTimeout(autoPushFromProgress._timer);
+  autoPushFromProgress._timer = setTimeout(async () => {
+    autoPushFromProgress._timer = null;
+    const est = allEstimates[id];
+    if (!est) return;
+    try {
+      const r = await gasSaveLedgerFromProgress(est);
+      if (r && r.fileId) {
+        est._driveFileId = r.fileId;
+        est._driveMonth = r.month;
+        saveEstimates(allEstimates);
+        // 軽い通知(data-info を一瞬書換え)
+        const info = document.getElementById('data-info');
+        if (info) {
+          const orig = info.textContent;
+          info.textContent = '☁ Drive保存済';
+          info.style.background = '#16a34a';
+          setTimeout(() => { info.textContent = orig; info.style.background = '#1e3a8a'; }, 2000);
+        }
+      }
+    } catch (e) {
+      console.warn('[progress auto push 失敗]', e);
+    }
+  }, 1500);
+}
+
+// ============================================================
+// 共通ユーティリティ(見積アプリから必要分のみコピー)
+// ============================================================
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtNum(n) { const v = Number(n); return Number.isFinite(v) ? v.toLocaleString() : '0'; }
+function lineAmount(l) {
+  if (l.amountOverride != null && l.amountOverride !== '') return Number(l.amountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.unitPrice)||0);
+}
+function lineOrderAmount(l) {
+  if (l.orderAmountOverride != null && l.orderAmountOverride !== '') return Number(l.orderAmountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.orderPrice)||0);
+}
+function lineMaterialAmount(l) {
+  return (Number(l.qty)||0) * (Number(l.materialPrice)||0);
+}
+function shortenMotouke(long) {
+  if (!long) return '';
+  const s = String(long).trim();
+  if (/^山一/.test(s)) return '山一';
+  if (/みどり/.test(s)) return 'みどり';
+  if (/JSB|ジェイ.?エス.?ビー/i.test(s)) return 'JSB';
+  // WIC / WRD / ワールドレジデンシャル / ワールドアイシティ(廃止旧称) を全て「ワールド」に統一
+  if (/ワールド|^WIC$|^WRD$/i.test(s)) return 'ワールド';
+  if (/丸山/.test(s)) return '丸山';
+  if (/フリューゲル/.test(s)) return 'フリューゲル';
+  return s;
+}
+function getMotoukeName(est) {
+  const raw = (est.meta?.motouke || est.meta?.taikyo?.motouke || '').trim();
+  return raw ? shortenMotouke(raw) : '';
+}
+// 元請け名 → タグ色(固定パレット + 未知名はハッシュ自動色)
+const MOTOUKE_COLORS = {
+  '山一':       { bg:'#dbeafe', color:'#1e40af' },
+  'みどり':     { bg:'#dcfce7', color:'#166534' },
+  'JSB':        { bg:'#e9d5ff', color:'#6b21a8' },
+  'ワールド':   { bg:'#fed7aa', color:'#7c2d12' },
+  '丸山':       { bg:'#fef3c7', color:'#78350f' },
+  'フリューゲル':{ bg:'#fce7f3', color:'#9d174d' },
+  '自社':       { bg:'#e5e7eb', color:'#374151' },
+  'JA':         { bg:'#cffafe', color:'#155e75' },
+  '東北分譲':   { bg:'#ddd6fe', color:'#4c1d95' },
+  // WIC は廃止。「ワールド」エントリに統合(WIC=WRD=株式会社ワールドレジデンシャル)
+};
+// 業者名 → タグ色(GAS版スクリプトと同じ実運用パレット)
+// 部分一致でマッチ(「思綺美装(株)」「FKK MOTORS」等にも対応)
+const VENDOR_COLORS = [
+  { match: 'FKK',         bg:'#F8BBD0', color:'#880E4F' }, // ピンク
+  { match: '思綺美装',    bg:'#A5D6A7', color:'#1B5E20' }, // 緑
+  { match: '赤間',        bg:'#FFF9C4', color:'#F57F17' }, // 黄
+  { match: 'ムラカベ',    bg:'#CE93D8', color:'#4A148C' }, // 紫
+  { match: 'ハルノデザイン',bg:'#E1BEE7', color:'#6A1B9A' }, // 淡紫
+  { match: 'はやでん',    bg:'#FFCC80', color:'#E65100' }, // オレンジ
+  { match: 'ヒラヤマ',    bg:'#B3E5FC', color:'#01579B' }, // 水色
+  { match: '戸引製畳',    bg:'#2E7D32', color:'#FFFFFF' }, // 深緑
+  { match: "OM'S",        bg:'#90CAF9', color:'#0D47A1' }, // 青
+  { match: 'OMsONE',      bg:'#90CAF9', color:'#0D47A1' }, // 青(別表記)
+  { match: 'こころ',      bg:'#FFD180', color:'#BF360C' }, // 暖色
+  { match: 'クマガイ',    bg:'#80CBC4', color:'#004D40' }, // ティール
+];
+function vendorColor(name) {
+  if (!name) return null;
+  const upper = name.toUpperCase();
+  for (const v of VENDOR_COLORS) {
+    const u = v.match.toUpperCase();
+    if (upper === u || upper.includes(u) || u.includes(upper)) {
+      return { bg: v.bg, color: v.color };
+    }
+  }
+  return null;
+}
+function motoukeColor(name) {
+  if (!name) return { bg:'#f3f4f6', color:'#6b7280' };
+  if (MOTOUKE_COLORS[name]) return MOTOUKE_COLORS[name];
+  // 未知名 → 文字列ハッシュから HSL 自動色生成
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return { bg: `hsl(${h}, 65%, 90%)`, color: `hsl(${h}, 65%, 28%)` };
+}
+function motoukeTagHtml(name) {
+  if (!name) return '<span style="color:#9ca3af; font-size:11px;">-</span>';
+  const c = motoukeColor(name);
+  return `<span class="motouke-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(name)}</span>`;
+}
+// 業者名 → タグ色(固定パレット優先、未登録は元請けハッシュ流用)
+function supplierColor(name) {
+  return vendorColor(name) || motoukeColor(name);
+}
+function supplierTagHtml(name) {
+  if (!name) return '';
+  const c = supplierColor(name);
+  return `<span class="supplier-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(name)}</span>`;
+}
+function isJishaSupplier(s) {
+  const v = (s || '').trim();
+  return !v || v === 'ビルドクラスタ';
+}
+
+// 業者ごとの集計(発注金額・開始/終了工期)
+function suppliersFor(est) {
+  const lines = est.lines || [];
+  const map = new Map(); // supplier → { amount, qtyTotal, periods:[{start,end}], items:[] }
+  lines.forEach(l => {
+    if (!l.item || l.reduced) return;
+    if (isJishaSupplier(l.supplier)) return; // 自社工事は集計対象外(発注先ではない)
+    const sup = l.supplier;
+    if (!map.has(sup)) map.set(sup, { supplier: sup, amount: 0, periods: [], items: [] });
+    const e = map.get(sup);
+    e.amount += lineOrderAmount(l);
+    if (l.hatchuPeriodStart || l.hatchuPeriodEnd) {
+      e.periods.push({ start: l.hatchuPeriodStart || '', end: l.hatchuPeriodEnd || '' });
+    }
+    e.items.push(l.item);
+  });
+  // 開始工期=最早 / 終了工期=最遅 (M/D 文字列ベースで簡易ソート)
+  const result = [];
+  map.forEach(e => {
+    const starts = e.periods.map(p => p.start).filter(Boolean).sort(cmpMonthDay);
+    const ends = e.periods.map(p => p.end).filter(Boolean).sort(cmpMonthDay);
+    result.push({
+      supplier: e.supplier,
+      amount: Math.round(e.amount),
+      periodStart: starts[0] || '',
+      periodEnd: ends[ends.length - 1] || '',
+      itemCount: e.items.length,
+    });
+  });
+  // 金額降順
+  result.sort((a, b) => b.amount - a.amount);
+  return result;
+}
+function cmpMonthDay(a, b) {
+  const pa = parseMd(a), pb = parseMd(b);
+  if (!pa.m || !pb.m) return a.localeCompare(b);
+  return (pa.m * 100 + pa.d) - (pb.m * 100 + pb.d);
+}
+function parseMd(s) {
+  if (!s) return {m:0,d:0};
+  const m = /^(\d{1,2})\/(\d{1,2})/.exec(String(s).trim());
+  return m ? { m:Number(m[1]), d:Number(m[2]) } : {m:0,d:0};
+}
+
+// 見積金額集計
+function estimateTotal(est) {
+  return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineAmount(l), 0);
+}
+function materialTotal(est) {
+  return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineMaterialAmount(l), 0);
+}
+// 業務種別判定: '原状回復工事' のみ restoration、それ以外(修繕/リフォーム/植栽剪定/漏水復旧/その他/未設定)は全て repair 扱い
+// → 入居中物件で日程調整が必要な工事はすべて修繕系のフローで管理する方針
+function workflowOf(est) {
+  const k = (est.meta?.kojiName || '').trim();
+  return k === '原状回復工事' ? 'restoration' : 'repair';
+}
+
+// 鍵回収・鍵残しの自動判定(GAS版スクリプトのロジック移植)
+// 鍵交換日 vs 業者最終日 vs 除菌日 の前後関係から判定
+//   - 業者も除菌も鍵交換前  → 「鍵業者」回収・残し不要
+//   - 除菌だけ後            → 「除菌業者」回収・残し不要
+//   - 業者だけ後            → 「弊社」回収・後続業者用に「要連絡」
+//   - 両方後                → 後の方で判定
+//   戻り値: { collector, nokoshi } どちらも空文字可
+function autoDetectKeyHandling(est) {
+  const m = est.meta || {};
+  const ho = m.hatchuOrder || {};
+  const keyExDate = mdToDateOf(ho.keyChangeDate);
+  if (!keyExDate) return { collector: '', nokoshi: '' }; // 鍵交換日が無ければ判定不能
+  const sterilDate = mdToDateOf(ho.jokinDate);
+  const hasSteril = !!m.jokinDone || !!sterilDate;
+  // 業者最終日 = 完了予定日(finalCheckDate) または 業者の最遅終了日
+  let companyLastDate = mdToDateOf(ho.finalCheckDate);
+  if (!companyLastDate) {
+    const sups = suppliersFor(est);
+    let latest = null;
+    for (const s of sups) {
+      const d = mdToDateOf(s.periodEnd) || mdToDateOf(s.periodStart);
+      if (d && (!latest || d > latest)) latest = d;
+    }
+    companyLastDate = latest;
+  }
+  const companyAfterKey = companyLastDate && companyLastDate >= keyExDate;
+  const sterilAfterKey = (sterilDate && sterilDate > keyExDate) || (hasSteril && !sterilDate);
+  if (!companyAfterKey && !sterilAfterKey) {
+    return { collector: '鍵業者', nokoshi: '' };
+  } else if (sterilAfterKey && !companyAfterKey) {
+    return { collector: '除菌業者', nokoshi: '' };
+  } else if (companyAfterKey && !sterilAfterKey) {
+    return { collector: '弊社', nokoshi: '要連絡' };
+  } else {
+    // 両方後 → 後の方で判定
+    if (sterilDate && companyLastDate) {
+      if (companyLastDate >= sterilDate) {
+        return { collector: '弊社', nokoshi: '' };
+      } else {
+        return { collector: '除菌業者', nokoshi: '要連絡' };
+      }
+    }
+    return { collector: '要確認', nokoshi: '要連絡' };
+  }
+}
+// "M/D" or "M/D(曜)" or ISO 文字列 → Date(0時0分)
+// M/D 形式は「今日に最も近い年(去年/今年/来年の中)」を選ぶ
+//   例: 今日=5/7 で "3/15" → 今年3/15(過去53日)
+//       今日=5/7 で "11/15" → 去年11/15(過去173日)or 今年11/15(未来192日)→ 過去の方が近いので去年
+function mdToDateOf(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+  // ISO形式 (YYYY-MM-DD)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2])-1, Number(iso[3]));
+  // M/D 形式
+  const md = /^(\d{1,2})\/(\d{1,2})/.exec(str);
+  if (md) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const m = Number(md[1]), d = Number(md[2]);
+    // 去年・今年・来年 の3候補から「今日に最も近い」を選ぶ
+    const candidates = [
+      new Date(today.getFullYear() - 1, m - 1, d),
+      new Date(today.getFullYear(),     m - 1, d),
+      new Date(today.getFullYear() + 1, m - 1, d),
+    ];
+    let best = candidates[1];
+    let bestDiff = Math.abs(best - today);
+    for (const c of candidates) {
+      const diff = Math.abs(c - today);
+      if (diff < bestDiff) { bestDiff = diff; best = c; }
+    }
+    return best;
+  }
+  return null;
+}
+
+// ============================================================
+// 状態
+// ============================================================
+let allEstimates = {};       // localStorage の全見積
+let currentMode = 'restoration'; // restoration / repair / all
+let currentView = 'list';    // list / gantt
+let currentGanttYM = null;   // {y, m} 表示中の月(月単位モード用)
+let currentGanttRangeMode = 'month';  // 'month' / 'rolling30' / 'rolling60' / 'rolling90'
+let editingId = null;        // 詳細モーダルで編集中の id
+
+const STATUS_BADGES = {
+  '下書き':     { cls:'badge-shitagaki', icon:'📝' },
+  '提出済':     { cls:'badge-shutsumai', icon:'📤' },
+  '受注':       { cls:'badge-juchu', icon:'🎯' },
+  '失注':       { cls:'badge-shitsuchu', icon:'❌' },
+  '完了':       { cls:'badge-kanryou', icon:'✅' },
+  'キャンセル': { cls:'badge-shitsuchu', icon:'✖' },
+};
+const WORKFLOW_OPTIONS_RESTORATION = ['待機','工事指示済','着工','完工','鍵交換済','入居済','クローズ'];
+const WORKFLOW_OPTIONS_REPAIR = ['待機','アポ済','対応中','施工指示あり','完了','クローズ'];
+
+// ============================================================
+// 描画
+// ============================================================
+function reload() {
+  allEstimates = loadEstimates();
+  // テンプレ・ゴミ箱・未確定は表示対象外(フィルタは render 側で実施)
+  const all = Object.values(allEstimates).filter(e => e && !e.deleted && !e.meta?.isTemplate);
+  const confirmed = all.filter(e => e.meta?.isConfirmed);
+  document.getElementById('data-info').textContent = `✅確定版 ${confirmed.length}件 / 全 ${all.length}件`;
+  // 元請けフィルタ候補を再構築(確定版のみから)
+  const motoukes = [...new Set(confirmed.map(getMotoukeName).filter(Boolean))].sort();
+  const sel = document.getElementById('motouke-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">(全元請け)</option>' + motoukes.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  if (motoukes.includes(cur)) sel.value = cur;
+  renderProgress();
+}
+
+function getFilteredRows() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const motouke = document.getElementById('motouke-filter').value.trim();
+  const status = document.getElementById('status-filter').value.trim();
+  const workflow = document.getElementById('workflow-filter').value.trim();
+  const invoice = document.getElementById('invoice-filter').value.trim();
+  // 工事進捗タブは「✅確定版」マーク付きの見積のみ表示
+  let rows = Object.values(allEstimates).filter(e => e && !e.deleted && !e.meta?.isTemplate && e.meta?.isConfirmed);
+  // 完了案件を非表示
+  // - 完了日が「今日以前」になったら非表示(=実際に完了が到来した時点で隠す)
+  // - 完了日が「未来」のうちは表示維持(予定段階では一覧に残す)
+  // - 進行ステータスがクローズ/完了なら無条件で非表示
+  // ※ 編集セッション中の案件(_recentlyEdited)はフィルタ対象外
+  const hideCompleted = document.getElementById('hide-completed')?.checked;
+  if (hideCompleted) {
+    const today0 = new Date();
+    today0.setHours(0,0,0,0);
+    rows = rows.filter(e => {
+      // 直近編集された案件はフィルタしない(編集セッション中は表示維持)
+      if (window._recentlyEditedIds && window._recentlyEditedIds.has(e.id)) return true;
+      const ho = e.meta?.hatchuOrder || {};
+      const wf = e.meta?.workflowStatus || '待機';
+      if (wf === 'クローズ' || wf === '完了') return false;     // 進行ステータスが完了系 → 無条件で隠す
+      const cd = (ho.completeDate || '').trim();
+      if (cd) {
+        const completeD = (typeof mdToDateOf === 'function') ? mdToDateOf(cd) : null;
+        if (completeD && completeD <= today0) return false;     // 完了日が今日以前なら隠す
+        // 完了日が未来 or パース失敗 → 表示維持
+      }
+      return true;
+    });
+  }
+  // モード別 (修繕工事 / それ以外)
+  if (currentMode === 'restoration') rows = rows.filter(e => workflowOf(e) === 'restoration');
+  else if (currentMode === 'repair') rows = rows.filter(e => workflowOf(e) === 'repair');
+  // 元請け
+  if (motouke) rows = rows.filter(e => getMotoukeName(e) === motouke);
+  // 営業ステータス
+  if (status) {
+    if (status === '__juchu__') rows = rows.filter(e => (e.meta?.status||'下書き') === '受注');
+    else if (status === '__not_juchu__') rows = rows.filter(e => (e.meta?.status||'下書き') !== '受注');
+    else rows = rows.filter(e => (e.meta?.status||'下書き') === status);
+  }
+  // 進行ステータス
+  if (workflow) rows = rows.filter(e => (e.meta?.workflowStatus||'待機') === workflow);
+  // 請求/入金
+  if (invoice === 'invoice_unpaid') rows = rows.filter(e => (e.meta?.invoiceStatus||'未') === '未');
+  else if (invoice === 'invoice_paid') rows = rows.filter(e => (e.meta?.invoiceStatus||'未') === '済');
+  else if (invoice === 'payment_unpaid') rows = rows.filter(e => (e.meta?.paymentStatus||'未') === '未');
+  else if (invoice === 'payment_paid') rows = rows.filter(e => (e.meta?.paymentStatus||'未') === '済');
+  // 全文検索
+  if (q) {
+    rows = rows.filter(e => {
+      const hay = [
+        e.meta?.bukken, e.meta?.roomNo, e.meta?.atena, e.meta?.folderName,
+        e.meta?.kojiName, e.meta?.taikyo?.contractorName, e.meta?.taikyo?.contractorTel,
+        e.meta?.requestDetail, e.meta?.contactPerson,
+        ...(e.lines||[]).map(l => l.item),
+        ...(e.lines||[]).map(l => l.supplier),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  // 並び順: 更新日時降順
+  rows.sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+  return rows;
+}
+
+function renderProgress() {
+  const rows = getFilteredRows();
+  document.getElementById('row-count').textContent = `${rows.length}件`;
+  // 統計
+  const stats = computeStats(rows);
+  document.getElementById('stats-bar').innerHTML = `
+    💰 売上(税別): <b>¥${fmtNum(stats.totalAmount)}</b>
+    / 🎯 受注: <b>${stats.juchu}件</b>
+    / ⏳ 未受注: <b>${stats.notJuchu}件</b>
+    / ✅ 完了: <b>${stats.kanryou}件</b>
+    / 🟡 請求未: <b>${stats.invoiceUnpaid}件</b>
+    / 🟡 入金未: <b>${stats.paymentUnpaid}件</b>
+  `;
+  // ビュー切替: 一覧 / ガント
+  const ganttCtrl = document.getElementById('gantt-controls');
+  const tableEl = document.getElementById('progress-table');
+  const legendEl = document.getElementById('gantt-legend');
+  const workloadEl = document.getElementById('vendor-workload');
+  if (currentView === 'gantt') {
+    ganttCtrl.style.display = 'flex';
+    if (legendEl) legendEl.style.display = 'block';
+    if (workloadEl) workloadEl.style.display = 'block';
+    tableEl.classList.add('gantt-table');
+    renderGantt(rows);
+  } else {
+    ganttCtrl.style.display = 'none';
+    if (legendEl) legendEl.style.display = 'none';
+    if (workloadEl) workloadEl.style.display = 'none';
+    tableEl.classList.remove('gantt-table');
+    renderList(rows);
+  }
+}
+
+function renderList(rows) {
+  const thead = document.getElementById('progress-thead');
+  const tbody = document.getElementById('progress-tbody');
+  // 一覧時は colgroup を削除(ガント時の固定幅指定が残ってると一覧の列幅が壊れる)
+  const tableEl = document.getElementById('progress-table');
+  const cg = tableEl?.querySelector('colgroup');
+  if (cg) cg.remove();
+  thead.innerHTML = headerHtmlFor(currentMode);
+  tbody.innerHTML = rows.map((est, i) => rowHtmlFor(currentMode, est, i+1)).join('');
+  // 行クリックで詳細モーダル(input/checkbox クリックは弾く)
+  tbody.querySelectorAll('tr.row-clickable').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      // input/checkbox 上のクリックはモーダル開かない(編集に集中)
+      if (e.target.closest('input, select, textarea, button, .prg-edit')) return;
+      openDetailModal(tr.dataset.id);
+    });
+  });
+  // インライン編集ハンドラ(delegated): change/blur で値を保存
+  tbody.querySelectorAll('.prg-edit').forEach(inp => {
+    inp.addEventListener('click', e => e.stopPropagation()); // 行クリックを止める
+    inp.addEventListener('change', e => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      const id = tr.dataset.id;
+      const est = allEstimates[id];
+      if (!est) return;
+      const path = e.target.dataset.path; // 'meta' | 'hatchuOrder' | 'taikyo'
+      const f = e.target.dataset.f;
+      let val;
+      if (e.target.type === 'checkbox') val = e.target.checked;
+      else val = e.target.value.trim();
+      // パス: meta直下 / meta.hatchuOrder / meta.taikyo
+      if (!est.meta) est.meta = {};
+      if (path === 'meta') {
+        est.meta[f] = val;
+      } else if (path === 'hatchuOrder') {
+        if (!est.meta.hatchuOrder) est.meta.hatchuOrder = {};
+        est.meta.hatchuOrder[f] = val;
+      } else if (path === 'taikyo') {
+        if (!est.meta.taikyo) est.meta.taikyo = {};
+        est.meta.taikyo[f] = val;
+      }
+      est.updatedAt = new Date().toISOString();
+      // 編集セッション記録: この案件はフィルタで隠さない(再描画時に消えるのを防ぐ)
+      if (!window._recentlyEditedIds) window._recentlyEditedIds = new Set();
+      window._recentlyEditedIds.add(id);
+      saveEstimates(allEstimates);
+      // Drive 自動push(他PCに反映)
+      if (typeof autoPushFromProgress === 'function') autoPushFromProgress(id);
+    });
+  });
+}
+
+// ============================================================
+// ガントチャート
+// ============================================================
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); } // m = 1〜12
+const DOW_CHARS = ['日','月','火','水','木','金','土'];
+function dowOf(y, m, d) { return DOW_CHARS[new Date(y, m-1, d).getDay()]; }
+function shiftMonth(y, m, delta) {
+  let mm = m + delta;
+  let yy = y;
+  while (mm < 1) { mm += 12; yy -= 1; }
+  while (mm > 12) { mm -= 12; yy += 1; }
+  return { y: yy, m: mm };
+}
+
+// ローカル日付ベースで2つのDateの日数差を計算(タイムゾーン影響を排除)
+function dayDiff(a, b) {
+  const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((a0 - b0) / 86400000);
+}
+
+// 日付範囲ベースでバー範囲を計算(月単位もローリングも共通)
+// {sd,ed,clipL,clipR} or null  (sd/ed は範囲開始日からのオフセット 0始まり)
+function ganttBarRangeByDates(periodStart, periodEnd, rangeStart, rangeEnd) {
+  const sD = mdToDateOf(periodStart);
+  const eD_ = mdToDateOf(periodEnd) || sD;
+  if (!sD) return null;
+  const eD = eD_ || sD;
+  // 期間が範囲と重ならない
+  if (sD > rangeEnd) return null;
+  if (eD < rangeStart) return null;
+  const offsetStart = Math.max(0, dayDiff(sD, rangeStart));
+  const offsetEnd = Math.min(
+    dayDiff(rangeEnd, rangeStart),
+    dayDiff(eD, rangeStart)
+  );
+  return {
+    sd: offsetStart,
+    ed: offsetEnd,
+    clipL: sD < rangeStart,
+    clipR: eD > rangeEnd,
+  };
+}
+
+// 表示範囲を {start, end, totalDays, label} で返す
+function getGanttDateRange() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const mode = currentGanttRangeMode;
+  if (mode === 'month') {
+    if (!currentGanttYM) currentGanttYM = { y: today.getFullYear(), m: today.getMonth()+1 };
+    const { y, m } = currentGanttYM;
+    const dim = daysInMonth(y, m);
+    const start = new Date(y, m-1, 1);
+    const end = new Date(y, m-1, dim);
+    return { start, end, totalDays: dim, label: `${y}年 ${m}月` };
+  }
+  // ローリング: 今日〜N日先(過去は表示しない、未来重視)
+  const days = mode === 'rolling30' ? 30 : (mode === 'rolling60' ? 60 : 90);
+  const start = new Date(today);
+  const end = new Date(today);
+  end.setDate(end.getDate() + days);
+  return { start, end, totalDays: days+1, label: `${formatYmd(start)} 〜 ${formatYmd(end)} (今日+${days}日)` };
+}
+function formatYmd(d) {
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function renderGantt(rows) {
+  const { start: rangeStart, end: rangeEnd, totalDays, label } = getGanttDateRange();
+  const cellWidth = 42;
+  document.getElementById('gantt-month-label').textContent = label;
+  // 月単位以外は月送りボタン非表示
+  const monthNav = document.getElementById('gantt-month-nav');
+  if (monthNav) monthNav.style.display = (currentGanttRangeMode === 'month') ? 'flex' : 'none';
+  // ヘッダ(範囲開始日から totalDays 分の日付セル)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let headerCells = '';
+  const cur = new Date(rangeStart);
+  for (let i = 0; i < totalDays; i++) {
+    const dow = ['日','月','火','水','木','金','土'][cur.getDay()];
+    const m = cur.getMonth()+1;
+    const d = cur.getDate();
+    let cls = 'gantt-day';
+    if (dow === '日') cls += ' holiday';
+    else if (dow === '土') cls += ' saturday';
+    if (cur.getTime() === today.getTime()) cls += ' today';
+    // 月初は月ラベル付与
+    const monthLbl = (d === 1 || i === 0) ? `<small style="color:#1e3a8a; font-weight:700;">${m}月</small><br>` : '';
+    headerCells += `<th class="${cls}">${monthLbl}${d}<br><small>${dow}</small></th>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+  // colgroup でセル幅を厳密に固定(table-layout:fixed と組み合わせ → ヘッダ・データ行で位置が完全一致)
+  let colgroupHtml = '<colgroup><col style="width:200px;">';
+  for (let i = 0; i < totalDays; i++) colgroupHtml += `<col style="width:${cellWidth}px;">`;
+  colgroupHtml += '</colgroup>';
+  // 既存 colgroup を置換 or 追加
+  const tableEl = document.getElementById('progress-table');
+  if (tableEl) {
+    let cg = tableEl.querySelector('colgroup');
+    if (cg) cg.remove();
+    tableEl.insertAdjacentHTML('afterbegin', colgroupHtml);
+  }
+  document.getElementById('progress-thead').innerHTML = `<tr>
+    <th class="gantt-meta-cell">物件 / 元請</th>
+    ${headerCells}
+  </tr>`;
+  // データ行
+  const tbody = document.getElementById('progress-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">表示できる物件がありません(✅確定版マーク済の見積のみ表示)</td></tr>`;
+    return;
+  }
+  // 各見積を行として描画 (範囲内に何らかの工期/マーカーがある物件のみ表示)
+  const visibleRows = rows.filter(est => hasGanttItemsInRange(est, rangeStart, rangeEnd));
+  if (!visibleRows.length) {
+    tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">${label} に該当する工期/マーカーがある物件はありません</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = visibleRows.map(est => ganttRowHtml(est, rangeStart, rangeEnd, totalDays, cellWidth)).join('');
+  // 行クリック → モーダル
+  tbody.querySelectorAll('tr.gantt-row').forEach(tr => {
+    tr.addEventListener('click', () => openDetailModal(tr.dataset.id));
+  });
+  // 業者稼働集計 + 凡例エリア(ガント下部)
+  renderVendorWorkload(visibleRows);
+  renderGanttLegend(visibleRows);
+}
+
+function renderVendorWorkload(rows) {
+  // 当日以降に工期がある業者をカウント(物件単位で重複排除)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const counts = {};
+  rows.forEach(est => {
+    const seen = new Set();
+    suppliersFor(est).forEach(s => {
+      const sd = mdToDateOf(s.periodStart);
+      const ed = mdToDateOf(s.periodEnd);
+      let future = false;
+      if (ed && ed >= today) future = true;
+      else if (!ed && sd && sd >= today) future = true;
+      if (future && !seen.has(s.supplier)) {
+        counts[s.supplier] = (counts[s.supplier] || 0) + 1;
+        seen.add(s.supplier);
+      }
+    });
+  });
+  const ordered = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const el = document.getElementById('vendor-workload');
+  if (!el) return;
+  if (!ordered.length) {
+    el.innerHTML = '<span style="color:#9ca3af; font-size:11px;">(当日以降の業者稼働なし)</span>';
+    return;
+  }
+  const cells = ordered.map(([name, count]) => {
+    const c = supplierColor(name);
+    return `<span style="display:inline-flex; gap:6px; padding:2px 8px; border-radius:4px; background:${c.bg}; color:${c.color}; font-size:11px; font-weight:600;">
+      ${escapeHtml(name)} <b>${count}件</b>
+    </span>`;
+  }).join('');
+  el.innerHTML = `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+    <span style="font-weight:700; color:#0f172a;">🏗 業者稼働(当日以降):</span>
+    ${cells}
+  </div>`;
+}
+
+function renderGanttLegend(visibleRows) {
+  const legendEl = document.getElementById('gantt-legend');
+  if (!legendEl) return;
+  // 表示中の業者一覧(ガントバー対象のみ)
+  const visibleSuppliers = new Set();
+  visibleRows.forEach(est => {
+    suppliersFor(est).forEach(s => { if (s.periodStart || s.periodEnd) visibleSuppliers.add(s.supplier); });
+  });
+  // 既知パレット業者(常に表示) + 表示中の未登録業者
+  const knownNames = VENDOR_COLORS.map(v => v.match);
+  const allNames = [...new Set([...knownNames, ...visibleSuppliers])].filter(Boolean);
+  const supChips = allNames.map(name => {
+    const c = supplierColor(name);
+    const usedMark = visibleSuppliers.has(name) ? '' : '<small style="opacity:0.5;">未稼働</small>';
+    return `<span class="supplier-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(name)}${usedMark}</span>`;
+  }).join('');
+  const markers = [
+    { label:'▼完了', bg:'#16a34a', color:'#fff' },
+    { label:'▼入居', bg:'#0ea5e9', color:'#fff' },
+    { label:'🔑鍵', bg:'#f59e0b', color:'#fff' },
+    { label:'△確認', bg:'#a855f7', color:'#fff' },
+    { label:'💊除菌', bg:'#E1BEE7', color:'#4A148C' },
+  ].map(mk => `<span style="display:inline-block; padding:1px 6px; border-radius:3px; font-size:11px; font-weight:700; background:${mk.bg}; color:${mk.color};">${mk.label}</span>`).join(' ');
+  legendEl.innerHTML = `
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <span style="font-weight:700; color:#0f172a;">凡例:</span>
+      <span style="color:#475569;">業者</span> ${supChips}
+      <span style="margin-left:auto; color:#475569;">マーカー</span> ${markers}
+    </div>
+  `;
+}
+
+function hasGanttItemsInRange(est, rangeStart, rangeEnd) {
+  const sups = suppliersFor(est);
+  for (const s of sups) {
+    if (ganttBarRangeByDates(s.periodStart, s.periodEnd, rangeStart, rangeEnd)) return true;
+  }
+  const ho = est.meta?.hatchuOrder || {};
+  for (const dStr of [ho.completeDate, ho.nyukyoDate, ho.keyChangeDate, ho.finalCheckDate, ho.jokinDate]) {
+    const d = mdToDateOf(dStr);
+    if (d && d >= rangeStart && d <= rangeEnd) return true;
+  }
+  return false;
+}
+
+function ganttRowHtml(est, rangeStart, rangeEnd, totalDays, cellWidth) {
+  const sups = suppliersFor(est).filter(s => s.periodStart || s.periodEnd);
+  // レーン分割: 重ならない複数業者は同じレーン、重なる業者は下のレーンに自動配置
+  // 重なりが無ければ 1工事1行(従来通り) / 重なりがあれば必要なレーン数だけ縦に積む
+  const placed = [];
+  for (const s of sups) {
+    const r = ganttBarRangeByDates(s.periodStart, s.periodEnd, rangeStart, rangeEnd);
+    if (!r) continue;
+    placed.push({ s, ...r });
+  }
+  // 開始日昇順 → Greedy interval scheduling でレーン割当
+  placed.sort((a, b) => (a.sd - b.sd) || (a.ed - b.ed));
+  const laneEnd = []; // laneEnd[i] = レーン i の最後のバーの終端日
+  placed.forEach(p => {
+    let lane = -1;
+    for (let i = 0; i < laneEnd.length; i++) {
+      if (laneEnd[i] < p.sd) { lane = i; laneEnd[i] = p.ed; break; }
+    }
+    if (lane < 0) { lane = laneEnd.length; laneEnd.push(p.ed); }
+    p.lane = lane;
+  });
+  const numLanes = Math.max(1, laneEnd.length);
+  const BAR_HEIGHT = 20;
+  const LANE_GAP = 2;
+  const VPADDING = 4;
+  // マーカー(完了日 / 入居予定 / 鍵交換 / 完了予定 / 除菌) — 先に配置決定して行高に反映
+  const ho = est.meta?.hatchuOrder || {};
+  const markerDefs = [
+    { d: mdToDateOf(ho.completeDate), label:'▼完了', color:'#16a34a' },
+    { d: mdToDateOf(ho.nyukyoDate), label:'▼入居', color:'#0ea5e9' },
+    { d: mdToDateOf(ho.keyChangeDate), label:'🔑鍵', color:'#f59e0b' },
+    { d: mdToDateOf(ho.finalCheckDate), label:'△確認', color:'#a855f7' },
+    { d: mdToDateOf(ho.jokinDate), label:'💊除菌', color:'#a21caf' },
+  ].filter(mk => mk.d && mk.d >= rangeStart && mk.d <= rangeEnd);
+  // マーカーもバーチャート風のチップで表示(1セル幅・バーに重ねる)
+  markerDefs.sort((a, b) => a.d - b.d);
+  const markerPlaces = markerDefs.map(mk => {
+    const offset = dayDiff(mk.d, rangeStart);
+    const left = offset * cellWidth + 1;            // セル左端
+    const width = Math.max(2, cellWidth - 2);        // 1セル分
+    return { ...mk, left, width };
+  });
+  // 1行で完結 — マーカー段組みは廃止、バーの上に重ねる
+  const TOP_MARGIN = VPADDING;
+  const FIXED_ROW_HEIGHT = TOP_MARGIN + numLanes * BAR_HEIGHT + (numLanes - 1) * LANE_GAP + VPADDING;
+  const rowHeight = FIXED_ROW_HEIGHT;
+  // 業者バー(レーン別配置・マーカー領域の下に配置)
+  const barsHtml = placed.map((p) => {
+    const c = supplierColor(p.s.supplier);
+    const left = p.sd * cellWidth;
+    const width = Math.max(2, (p.ed - p.sd + 1) * cellWidth - 2);
+    const top = TOP_MARGIN + p.lane * (BAR_HEIGHT + LANE_GAP);
+    const clipCls = (p.clipL ? ' bar-clipped-left' : '') + (p.clipR ? ' bar-clipped-right' : '');
+    const clipPrefix = p.clipL ? '◀' : '';
+    const clipSuffix = p.clipR ? '▶' : '';
+    return `<div class="gantt-bar${clipCls}" style="left:${left}px; width:${width}px; top:${top}px; height:${BAR_HEIGHT}px; line-height:${BAR_HEIGHT}px; background:${c.bg}; color:${c.color};" title="${escapeHtml(p.s.supplier)} / ¥${fmtNum(p.s.amount)}\n工期: ${escapeHtml(p.s.periodStart||'-')}〜${escapeHtml(p.s.periodEnd||'-')}">${clipPrefix}${escapeHtml(p.s.supplier)}${clipSuffix}</div>`;
+  }).join('');
+  // マーカーをチップ(塗りつぶしバー)として描画 — 1セル幅・バー上に重ねる
+  // 同日に複数マーカーがある場合は z-index を上げて最後に描画したものが見える
+  const markersHtml = markerPlaces.map((mk, i) => {
+    const dateLabel = `${mk.d.getMonth()+1}/${mk.d.getDate()}`;
+    return `<div class="gantt-bar gantt-marker-chip" style="left:${mk.left}px; width:${mk.width}px; top:${TOP_MARGIN}px; height:${BAR_HEIGHT}px; line-height:${BAR_HEIGHT}px; background:${mk.color}; color:#fff; z-index:${100 + i}; text-align:center; font-size:10px; padding:0 2px;" title="${mk.label} ${dateLabel}">${mk.label}</div>`;
+  }).join('');
+  // メタセル
+  const m_ = est.meta || {};
+  const metaCellHtml = `${motoukeTagHtml(getMotoukeName(est))} <b>${escapeHtml(m_.bukken||'')}</b><br>
+    <small style="color:#6b7280;">${escapeHtml(m_.roomNo||'')} ${escapeHtml(m_.kojiName||'')}</small>`;
+  return `<tr class="gantt-row" data-id="${escapeHtml(est.id)}" style="height:${rowHeight}px;">
+    <td class="gantt-meta-cell">${metaCellHtml}</td>
+    <td colspan="${totalDays}" class="gantt-track" style="height:${rowHeight}px;">
+      ${barsHtml}
+      ${markersHtml}
+    </td>
+  </tr>`;
+}
+
+function computeStats(rows) {
+  let totalAmount = 0, juchu = 0, notJuchu = 0, kanryou = 0, invoiceUnpaid = 0, paymentUnpaid = 0;
+  rows.forEach(e => {
+    totalAmount += estimateTotal(e);
+    const st = e.meta?.status || '下書き';
+    if (st === '受注') juchu++; else notJuchu++;
+    if (st === '完了') kanryou++;
+    if ((e.meta?.invoiceStatus||'未') === '未') invoiceUnpaid++;
+    if ((e.meta?.paymentStatus||'未') === '未') paymentUnpaid++;
+  });
+  return { totalAmount, juchu, notJuchu, kanryou, invoiceUnpaid, paymentUnpaid };
+}
+
+// 業者①〜⑥ × 4列(業者名/発注金額/開始工期/終了工期)のヘッダ HTML を生成
+function supplierHeaderHtml() {
+  let h = '';
+  for (let i = 1; i <= 6; i++) {
+    const startCls = (i === 1) ? ' sup-section-start' : '';
+    h += `
+      <th class="sup-col${startCls}" style="width:90px;">業者${'①②③④⑤⑥'[i-1]}</th>
+      <th class="sup-col num" style="width:80px;">発注金額</th>
+      <th class="sup-col" style="width:60px;">開始工期</th>
+      <th class="sup-col" style="width:60px;">終了工期</th>`;
+  }
+  return h;
+}
+
+function headerHtmlFor(mode) {
+  if (mode === 'repair') {
+    return `<tr>
+      <th style="width:40px;">No.</th>
+      <th style="width:80px;">クライアント</th>
+      <th>物件名</th>
+      <th style="width:60px;">号室</th>
+      <th style="width:90px;">依頼日</th>
+      <th style="width:90px;">対応予定日</th>
+      <th style="width:90px;">完了日</th>
+      <th style="width:130px;">お客様</th>
+      <th style="width:110px;">TEL</th>
+      <th>依頼内容</th>
+      <th style="width:90px;">営業担当</th>
+      <th style="width:80px;">連絡者</th>
+      <th style="width:110px;">ステータス</th>
+      <th>進捗詳細</th>
+      <th class="num" style="width:90px;">売上(税別)</th>
+      ${supplierHeaderHtml()}
+      <th class="num" style="width:80px;">材料費</th>
+      <th style="width:90px;">請求/入金</th>
+    </tr>`;
+  }
+  // 原状回復 + すべて
+  return `<tr>
+    <th style="width:30px;">No.</th>
+    <th style="width:80px;">管理</th>
+    <th>物件名</th>
+    <th style="width:60px;">号室</th>
+    <th style="width:80px;">工事指示</th>
+    <th style="width:80px;">入居予定</th>
+    <th style="width:90px;">完了予定日</th>
+    <th style="width:80px;">完了日</th>
+    <th style="width:80px;">鍵交換日</th>
+    <th style="width:80px;">鍵回収</th>
+    <th style="width:80px;">鍵残し</th>
+    <th style="width:80px;">鍵業者</th>
+    <th style="width:50px;">除菌</th>
+    <th style="width:80px;">除菌日</th>
+    <th style="width:90px;">見積担当</th>
+    <th style="width:80px;">発注担当</th>
+    <th style="width:50px;">手配</th>
+    <th style="width:50px;">予定表</th>
+    <th style="width:50px;">水道</th>
+    <th style="width:110px;">進行</th>
+    <th class="num" style="width:90px;">売上(税別)</th>
+    ${supplierHeaderHtml()}
+    <th class="num" style="width:80px;">材料費</th>
+    <th style="width:90px;">請求/入金</th>
+  </tr>`;
+}
+
+// 業者①〜⑥ の 4セル を行毎に生成(空き枠は淡いグレー)
+function supplierCellsHtml(est) {
+  const sups = suppliersFor(est);
+  let h = '';
+  for (let i = 0; i < 6; i++) {
+    const s = sups[i];
+    const startCls = (i === 0) ? ' sup-section-start' : '';
+    if (!s) {
+      h += `<td class="sup-col sup-empty${startCls}">-</td><td class="sup-col sup-empty num">-</td><td class="sup-col sup-empty">-</td><td class="sup-col sup-empty">-</td>`;
+    } else {
+      h += `
+        <td class="sup-col${startCls}">${supplierTagHtml(s.supplier)}</td>
+        <td class="sup-col num">¥${fmtNum(s.amount)}</td>
+        <td class="sup-col">${escapeHtml(s.periodStart||'')}</td>
+        <td class="sup-col">${escapeHtml(s.periodEnd||'')}</td>`;
+    }
+  }
+  return h;
+}
+
+function rowHtmlFor(mode, est, no) {
+  const m = est.meta || {};
+  const supplierCells = supplierCellsHtml(est);
+  const motoukeCell = motoukeTagHtml(getMotoukeName(est));
+  const statusKey = m.status || '下書き';
+  const sb = STATUS_BADGES[statusKey] || STATUS_BADGES['下書き'];
+  const statusBadge = `<span class="badge ${sb.cls}">${sb.icon} ${escapeHtml(statusKey)}</span>`;
+  const wf = m.workflowStatus || '待機';
+  const wfBadge = `<span class="badge badge-juchugata">${escapeHtml(wf)}</span>`;
+  const confirmedBadge = m.isConfirmed ? '<span class="badge badge-confirmed">✅確定</span> ' : '';
+  const invoiceBadge = (m.invoiceStatus === '済') ? '<span class="badge badge-paid">請済</span>' : '<span class="badge badge-unpaid">請未</span>';
+  const paymentBadge = (m.paymentStatus === '済') ? '<span class="badge badge-paid">入済</span>' : '<span class="badge badge-unpaid">入未</span>';
+  const trClass = m.isConfirmed ? 'row-clickable row-confirmed' : 'row-clickable';
+  const ho = m.hatchuOrder || {};
+  if (mode === 'repair') {
+    const t = m.taikyo || {};
+    return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
+      <td class="num">${no}</td>
+      <td>${motoukeCell}</td>
+      <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b></td>
+      <td>${escapeHtml(m.roomNo||'')}</td>
+      <td>${escapeHtml(m.requestDate||'')}</td>
+      <td>${escapeHtml(m.responseDate||'')}</td>
+      <td>${escapeHtml(ho.completeDate||'')}</td>
+      <td>${escapeHtml(t.contractorName||'')}</td>
+      <td>${escapeHtml(t.contractorTel||'')}</td>
+      <td title="${escapeHtml(m.requestDetail||'')}">${escapeHtml(truncate(m.requestDetail||'', 40))}</td>
+      <td>${escapeHtml(t.tachiaiPerson||m.creator||'')}</td>
+      <td>${escapeHtml(m.contactPerson||'')}</td>
+      <td>${statusBadge}<br>${wfBadge}</td>
+      <td title="${escapeHtml(m.creatorMemo||'')}">${escapeHtml(truncate(m.creatorMemo||'', 40))}</td>
+      <td class="num">¥${fmtNum(estimateTotal(est))}</td>
+      ${supplierCells}
+      <td class="num">¥${fmtNum(materialTotal(est))}</td>
+      <td>${invoiceBadge}<br>${paymentBadge}</td>
+    </tr>`;
+  }
+  // 原状回復・すべて
+  const t = m.taikyo || {};
+  // 鍵回収・鍵残し: 手動入力優先、無ければ自動判定 + (auto)バッジ表示
+  const auto = autoDetectKeyHandling(est);
+  // インライン編集セル: data-f= でフィールド名を指定 → tbodyの delegated change で保存
+  // path: meta.{f} or meta.hatchuOrder.{f} or meta.taikyo.{f}
+  const inp = (path, f, val, ph='', w=70) => `<input type="text" class="prg-edit" data-path="${path}" data-f="${f}" value="${escapeHtml(val||'')}" placeholder="${ph}" style="width:${w}px; font-size:11px; padding:1px 3px; border:1px solid #e5e7eb; background:transparent;">`;
+  const chk = (path, f, val) => `<input type="checkbox" class="prg-edit" data-path="${path}" data-f="${f}" ${val ? 'checked' : ''}>`;
+  const kagiKaishuVal = (m.kagiKaishu||'').trim();
+  const kagiNokoshiVal = (m.kagiNokoshi||'').trim();
+  const kagiKaishuPh = !kagiKaishuVal && auto.collector ? `${auto.collector}(自動)` : '';
+  const kagiNokoshiPh = !kagiNokoshiVal && auto.nokoshi ? `${auto.nokoshi}(自動)` : '';
+  return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
+    <td class="num">${no}</td>
+    <td>${motoukeCell}</td>
+    <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b></td>
+    <td>${escapeHtml(m.roomNo||'')}</td>
+    <td>${inp('meta','koujiSijiDate', m.koujiSijiDate, '例:5/4', 60)}</td>
+    <td>${inp('hatchuOrder','nyukyoDate', ho.nyukyoDate, '例:5/15', 60)}</td>
+    <td>${inp('hatchuOrder','finalCheckDate', ho.finalCheckDate, '例:5/14', 60)}</td>
+    <td>${inp('hatchuOrder','completeDate', ho.completeDate, '例:5/13', 60)}</td>
+    <td>${inp('hatchuOrder','keyChangeDate', ho.keyChangeDate, '例:5/13', 60)}</td>
+    <td>${inp('meta','kagiKaishu', kagiKaishuVal, kagiKaishuPh, 80)}</td>
+    <td>${inp('meta','kagiNokoshi', kagiNokoshiVal, kagiNokoshiPh, 80)}</td>
+    <td>${inp('hatchuOrder','keyBiz', ho.keyBiz, '', 80)}</td>
+    <td style="text-align:center;">${chk('meta','jokinDone', m.jokinDone)}</td>
+    <td>${inp('hatchuOrder','jokinDate', ho.jokinDate, '例:5/12', 60)}</td>
+    <td>${inp('meta','creator', t.tachiaiPerson||m.creator, '', 70)}</td>
+    <td>${inp('meta','orderTantou', m.orderTantou, '', 70)}</td>
+    <td style="text-align:center;">${chk('meta','tehaiDone', m.tehaiDone)}</td>
+    <td style="text-align:center;">${chk('meta','scheduleStatus', m.scheduleStatus)}</td>
+    <td style="text-align:center;">${chk('meta','suidoStatus', m.suidoStatus)}</td>
+    <td>${statusBadge}<br>${wfBadge}</td>
+    <td class="num">¥${fmtNum(estimateTotal(est))}</td>
+    ${supplierCells}
+    <td class="num">¥${fmtNum(materialTotal(est))}</td>
+    <td>${invoiceBadge}<br>${paymentBadge}</td>
+  </tr>`;
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+// ============================================================
+// 詳細編集モーダル
+// ============================================================
+function openDetailModal(id) {
+  const est = allEstimates[id];
+  if (!est) return;
+  editingId = id;
+  document.getElementById('detail-title').textContent = `${est.meta?.bukken||'(無題)'} ${est.meta?.roomNo||''}`.trim();
+  const koji = est.meta?.kojiName || '';
+  const kojiBadge = document.getElementById('detail-koji');
+  kojiBadge.textContent = koji || '工事種別未設定';
+  kojiBadge.style.background = (koji === '修繕工事') ? '#fed7aa' : '#bfdbfe';
+  kojiBadge.style.color = (koji === '修繕工事') ? '#7c2d12' : '#1e3a8a';
+  // body 構築
+  document.getElementById('detail-body').innerHTML = detailBodyHtml(est);
+  bindDetailFields(est);
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetailModal() {
+  document.getElementById('detail-overlay').classList.remove('open');
+  editingId = null;
+}
+
+function detailBodyHtml(est) {
+  const m = est.meta || {};
+  const ho = m.hatchuOrder || {};
+  const t = m.taikyo || {};
+  const isRepair = workflowOf(est) === 'repair';
+  // 進行ステータス選択肢
+  const wfOpts = isRepair ? WORKFLOW_OPTIONS_REPAIR : WORKFLOW_OPTIONS_RESTORATION;
+  const wfCur = m.workflowStatus || '待機';
+  const wfOptHtml = wfOpts.map(o => `<option value="${escapeHtml(o)}" ${o===wfCur?'selected':''}>${escapeHtml(o)}</option>`).join('');
+  // 営業ステータス
+  const STATUSES = ['下書き','提出済','受注','失注','完了','キャンセル'];
+  const stCur = m.status || '下書き';
+  const stOptHtml = STATUSES.map(o => `<option value="${escapeHtml(o)}" ${o===stCur?'selected':''}>${escapeHtml(o)}</option>`).join('');
+
+  // 共通: 営業/進行ステータス + 請求/入金
+  const commonFs = `<fieldset>
+    <legend>📋 ステータス・請求入金</legend>
+    <div class="grid">
+      <label>営業ステータス</label>
+      <select data-field="status">${stOptHtml}</select>
+      <label>進行ステータス</label>
+      <select data-field="workflowStatus">${wfOptHtml}</select>
+      <label>請求</label>
+      <select data-field="invoiceStatus">
+        <option value="未" ${m.invoiceStatus==='未'?'selected':''}>🟡 未</option>
+        <option value="済" ${m.invoiceStatus==='済'?'selected':''}>✅ 済</option>
+      </select>
+      <label>入金</label>
+      <select data-field="paymentStatus">
+        <option value="未" ${m.paymentStatus==='未'?'selected':''}>🟡 未</option>
+        <option value="済" ${m.paymentStatus==='済'?'selected':''}>✅ 済</option>
+      </select>
+    </div>
+  </fieldset>`;
+
+  // 業者集計 — 工期セルは編集可能(変更すると同業者の全行に反映)
+  const sups = suppliersFor(est);
+  const supTable = sups.length ? `<table style="width:100%; font-size:11px; border:1px solid #e5e7eb;">
+    <thead><tr><th>業者名</th><th class="num">発注金額</th><th>開始工期</th><th>終了工期</th></tr></thead>
+    <tbody>${sups.map(s => `<tr>
+      <td>${escapeHtml(s.supplier)}</td>
+      <td class="num">¥${fmtNum(s.amount)}</td>
+      <td><input type="text" class="sup-period-edit" data-supplier="${escapeHtml(s.supplier)}" data-period="start" value="${escapeHtml(s.periodStart||'')}" placeholder="例:5/7" style="width:80px; font-size:11px; padding:2px 4px;"></td>
+      <td><input type="text" class="sup-period-edit" data-supplier="${escapeHtml(s.supplier)}" data-period="end" value="${escapeHtml(s.periodEnd||'')}" placeholder="例:5/13" style="width:80px; font-size:11px; padding:2px 4px;"></td>
+    </tr>`).join('')}</tbody>
+  </table>` : '<div style="color:#9ca3af;">(業者発注なし)</div>';
+  const supplierFs = `<fieldset>
+    <legend>🔧 業者発注集計 <small style="color:#6b7280; font-weight:normal;">(発注金額は見積タブで編集 / 工期は ↓ で編集可・同業者の全行に反映)</small></legend>
+    ${supTable}
+    <div style="margin-top:6px; font-size:11px; color:#6b7280;">
+      💰 売上(税別): <b>¥${fmtNum(estimateTotal(est))}</b> / 🧱 材料費: <b>¥${fmtNum(materialTotal(est))}</b>
+    </div>
+  </fieldset>`;
+
+  if (isRepair) {
+    // 修繕用フォーム
+    return commonFs + `<fieldset>
+      <legend>🛠 修繕情報</legend>
+      <div class="grid">
+        <label>依頼日</label><input type="text" data-field="requestDate" value="${escapeHtml(m.requestDate||'')}" placeholder="例: 4/17(金)">
+        <label>対応予定日</label><input type="text" data-field="responseDate" value="${escapeHtml(m.responseDate||'')}" placeholder="例: 4/22">
+        <label>完了日</label><input type="text" data-field="hatchuOrder.completeDate" value="${escapeHtml(ho.completeDate||'')}">
+        <label>営業担当</label><input type="text" data-field="taikyo.tachiaiPerson" value="${escapeHtml(t.tachiaiPerson||'')}">
+        <label>連絡者</label><input type="text" data-field="contactPerson" value="${escapeHtml(m.contactPerson||'')}">
+        <label>修繕補助タグ</label>
+        <select data-field="salesStage">
+          <option value="" ${!m.salesStage?'selected':''}>(未設定)</option>
+          <option value="未対応" ${m.salesStage==='未対応'?'selected':''}>未対応</option>
+          <option value="アポ済" ${m.salesStage==='アポ済'?'selected':''}>アポ済</option>
+          <option value="対応中" ${m.salesStage==='対応中'?'selected':''}>対応中</option>
+          <option value="長期連絡なし" ${m.salesStage==='長期連絡なし'?'selected':''}>長期連絡なし</option>
+        </select>
+        <label>お客様氏名</label><input type="text" data-field="taikyo.contractorName" value="${escapeHtml(t.contractorName||'')}">
+        <label>お客様TEL</label><input type="text" data-field="taikyo.contractorTel" value="${escapeHtml(t.contractorTel||'')}">
+        <label class="span2" style="grid-column: 1 / -1;">依頼内容</label>
+        <textarea data-field="requestDetail" rows="2" style="grid-column: 1 / -1; font-size:12px;">${escapeHtml(m.requestDetail||'')}</textarea>
+        <label class="span2" style="grid-column: 1 / -1;">進捗詳細(連絡履歴メモ)</label>
+        <textarea data-field="creatorMemo" rows="3" style="grid-column: 1 / -1; font-size:12px;">${escapeHtml(m.creatorMemo||'')}</textarea>
+      </div>
+    </fieldset>` + supplierFs;
+  }
+
+  // 原状回復用フォーム + 鍵自動判定ヒント
+  const auto = autoDetectKeyHandling(est);
+  const autoHint = (auto.collector || auto.nokoshi)
+    ? `<div style="margin-top:8px; padding:6px 10px; background:#fef9c3; border:1px solid #fcd34d; border-radius:4px; font-size:11px; color:#78350f;">
+        💡 自動判定(鍵交換日 vs 業者最終日 vs 除菌日 から):
+        <b>鍵回収</b> = ${escapeHtml(auto.collector||'-')} /
+        <b>鍵残し</b> = ${escapeHtml(auto.nokoshi||'-')}
+        ${(m.kagiKaishu||m.kagiNokoshi) ? '<br><small style="color:#9ca3af;">※ 手動入力が空の場合は自動判定値が一覧表示されます</small>' : ''}
+      </div>`
+    : '';
+  return commonFs + `<fieldset>
+    <legend>🔑 原状回復情報</legend>
+    <div class="grid">
+      <label>工事指示日</label><input type="text" data-field="koujiSijiDate" value="${escapeHtml(m.koujiSijiDate||'')}" placeholder="例: 4/4">
+      <label>入居予定</label><input type="text" data-field="hatchuOrder.nyukyoDate" value="${escapeHtml(ho.nyukyoDate||'')}" placeholder="例: 4/30">
+      <label>完了予定日</label><input type="text" data-field="hatchuOrder.finalCheckDate" value="${escapeHtml(ho.finalCheckDate||'')}" placeholder="例: 4/20(月)">
+      <label>完了日</label><input type="text" data-field="hatchuOrder.completeDate" value="${escapeHtml(ho.completeDate||'')}" placeholder="例: 4/19">
+      <label>鍵交換日</label><input type="text" data-field="hatchuOrder.keyChangeDate" value="${escapeHtml(ho.keyChangeDate||'')}">
+      <label>鍵業者</label><input type="text" data-field="hatchuOrder.keyBiz" value="${escapeHtml(ho.keyBiz||'')}" placeholder="例: カギハシ">
+      <label>鍵残し</label><input type="text" data-field="kagiNokoshi" value="${escapeHtml(m.kagiNokoshi||'')}" placeholder="例: 弊社 / 鍵業者 / 要連絡">
+      <label>鍵回収</label><input type="text" data-field="kagiKaishu" value="${escapeHtml(m.kagiKaishu||'')}" placeholder="例: 弊社 / 鍵業者">
+      <label>除菌日</label><input type="text" data-field="hatchuOrder.jokinDate" value="${escapeHtml(ho.jokinDate||'')}">
+      <label>水道(欄)</label><input type="text" data-field="hatchuOrder.suidoDenki" value="${escapeHtml(ho.suidoDenki||'')}">
+      <label>見積担当者</label><input type="text" data-field="taikyo.tachiaiPerson" value="${escapeHtml(t.tachiaiPerson||'')}">
+      <label>発注担当者</label><input type="text" data-field="orderTantou" value="${escapeHtml(m.orderTantou||'')}" placeholder="例: 大村(事務)">
+    </div>
+    ${autoHint}
+    <div class="checkrow" style="margin-top:10px; padding-top:8px; border-top:1px dashed #e5e7eb;">
+      <label><input type="checkbox" data-field="jokinDone" ${m.jokinDone?'checked':''}> 除菌実施済</label>
+      <label><input type="checkbox" data-field="scheduleStatus" ${m.scheduleStatus?'checked':''}> 予定表記入済</label>
+      <label><input type="checkbox" data-field="suidoStatus" ${m.suidoStatus?'checked':''}> 水道手配済</label>
+    </div>
+  </fieldset>` + supplierFs;
+}
+
+function bindDetailFields(est) {
+  // 入力に応じて即時 est オブジェクトに反映 → 保存ボタンで localStorage コミット
+  document.querySelectorAll('#detail-body [data-field]').forEach(el => {
+    el.addEventListener('change', () => writeFieldToEst(est, el));
+    el.addEventListener('input', () => writeFieldToEst(est, el));
+  });
+  // 業者集計の工期インライン編集 → 同業者の全行に反映
+  document.querySelectorAll('#detail-body .sup-period-edit').forEach(el => {
+    el.addEventListener('change', () => {
+      const supplier = el.dataset.supplier;
+      const period = el.dataset.period; // 'start' | 'end'
+      const val = el.value.trim();
+      if (!supplier || !Array.isArray(est.lines)) return;
+      let touched = 0;
+      est.lines.forEach(l => {
+        if (!l.item || l.reduced) return;
+        if ((l.supplier || '') !== supplier) return;
+        if (period === 'start') l.hatchuPeriodStart = val;
+        else l.hatchuPeriodEnd = val;
+        touched++;
+      });
+      if (touched > 0) {
+        // 保存ボタンを押すまでは est オブジェクトに反映するだけ
+        // (modal 保存ボタン押下時に saveEstimates が走る)
+        console.log(`[業者工期編集] ${supplier} ${period}=${val} → ${touched}行に反映`);
+      }
+    });
+  });
+}
+function writeFieldToEst(est, el) {
+  const path = el.dataset.field;
+  const val = (el.type === 'checkbox') ? !!el.checked : el.value;
+  const parts = path.split('.');
+  let target = est.meta;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (target[parts[i]] == null || typeof target[parts[i]] !== 'object') target[parts[i]] = {};
+    target = target[parts[i]];
+  }
+  target[parts[parts.length - 1]] = val;
+}
+
+document.getElementById('btn-detail-close').addEventListener('click', closeDetailModal);
+document.getElementById('btn-detail-cancel').addEventListener('click', () => {
+  // 変更を破棄するためデータを再読込
+  reload();
+  closeDetailModal();
+});
+document.getElementById('btn-detail-save').addEventListener('click', () => {
+  if (!editingId || !allEstimates[editingId]) return;
+  allEstimates[editingId].updatedAt = new Date().toISOString();
+  if (saveEstimates(allEstimates)) {
+    const id = editingId;
+    closeDetailModal();
+    renderProgress();
+    // Drive 台帳に自動 push(進捗管理フィールド変更を他PCに反映)
+    autoPushFromProgress(id);
+  }
+});
+document.getElementById('btn-detail-open-est').addEventListener('click', () => {
+  if (!editingId) return;
+  // 見積作成タブに移動して、その見積を開く
+  // localStorage 経由で「次に開く id」を伝達 (mitsumori_open_id_v1)
+  localStorage.setItem('mitsumori_open_id_v1', editingId);
+  window.location.href = 'index.html';
+});
+document.getElementById('detail-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'detail-overlay') closeDetailModal();
+});
+
+// ============================================================
+// イベント結線
+// ============================================================
+document.querySelectorAll('.mode-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentMode = t.dataset.mode;
+    renderProgress();
+  });
+});
+document.querySelectorAll('.view-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentView = t.dataset.view;
+    renderProgress();
+  });
+});
+document.getElementById('btn-gantt-prev').addEventListener('click', () => {
+  if (!currentGanttYM) currentGanttYM = { y: new Date().getFullYear(), m: new Date().getMonth()+1 };
+  currentGanttYM = shiftMonth(currentGanttYM.y, currentGanttYM.m, -1);
+  renderProgress();
+});
+document.getElementById('btn-gantt-next').addEventListener('click', () => {
+  if (!currentGanttYM) currentGanttYM = { y: new Date().getFullYear(), m: new Date().getMonth()+1 };
+  currentGanttYM = shiftMonth(currentGanttYM.y, currentGanttYM.m, 1);
+  renderProgress();
+});
+document.getElementById('btn-gantt-today').addEventListener('click', () => {
+  const t = new Date();
+  currentGanttYM = { y: t.getFullYear(), m: t.getMonth()+1 };
+  renderProgress();
+});
+document.getElementById('gantt-range-mode').addEventListener('change', (e) => {
+  currentGanttRangeMode = e.target.value;
+  renderProgress();
+});
+['search-input','motouke-filter','status-filter','workflow-filter','invoice-filter','hide-completed'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', renderProgress);
+  el.addEventListener('change', renderProgress);
+});
+document.getElementById('btn-clear-filters').addEventListener('click', () => {
+  ['search-input','motouke-filter','status-filter','workflow-filter','invoice-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderProgress();
+});
+document.getElementById('btn-reload').addEventListener('click', reload);
+
+// 初期ロード
+reload();
+// 別タブで編集された localStorage の変化を反映
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY) reload();
+});
+
+// F5 / Ctrl+R で画面リロード(Ctrl+Shift+R はキャッシュ無視・F12 で DevTools)
+window.addEventListener('keydown', (e) => {
+  const k = (e.key || '').toLowerCase();
+  if (k === 'f5' || (e.ctrlKey && k === 'r' && !e.shiftKey)) {
+    e.preventDefault();
+    location.reload();
+  } else if (e.ctrlKey && e.shiftKey && k === 'r') {
+    e.preventDefault();
+    location.reload();
+  }
+  // F12 / Ctrl+Shift+I は Electron 側の before-input-event で処理(main.js)
+});
+</script>
+</body>
+</html>

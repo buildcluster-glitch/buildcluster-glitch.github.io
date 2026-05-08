@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>請求書 - ビルドクラスタ</title>
+<style>
+  :root { --bg:#f5f5f7; --panel:#fff; --line:#e1e1e6; --accent:#2563eb; --text:#111; --muted:#666; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif; background:var(--bg); color:var(--text); }
+  nav.app-switcher { display:flex; gap:1px; background:#0f172a; padding:0; }
+  nav.app-switcher a { padding:8px 18px; background:#1e293b; color:#cbd5e1; text-decoration:none; font-size:13px; transition:0.15s; }
+  nav.app-switcher a:hover { background:#334155; color:#fff; }
+  nav.app-switcher a.active { background:#2563eb; color:#fff; font-weight:600; }
+  header { background:#111; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:16px; }
+  header h1 { font-size:16px; margin:0; }
+  header .meta { font-size:12px; color:#bbb; }
+  main { padding:14px; max-width:920px; margin:0 auto; }
+  .toolbar { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar label { font-size:12px; color:var(--muted); }
+  .toolbar input, .toolbar select { font:inherit; padding:5px 8px; border:1px solid var(--line); border-radius:4px; background:#fff; font-size:12px; }
+  button { font:inherit; padding:6px 14px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; font-size:12px; }
+  button:hover { background:#f0f0f3; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:hover { background:#1d4ed8; }
+  button.danger { color:#dc2626; }
+  /* 請求書本体(印刷対象) — 100行超でも自動で複数ページに流れる */
+  .invoice {
+    background:#fff; padding:18mm 16mm; border:1px solid var(--line); border-radius:6px;
+    margin-bottom:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);
+    font-family: "Yu Mincho","ヒラギノ明朝 ProN","HG明朝E", serif;
+    color:#000;
+    page-break-after: always;
+  }
+  .invoice:last-child { page-break-after: auto; }
+  /* 多ページ対応: テーブルが複数ページに渡る時、各ページ上部にヘッダ繰り返し */
+  .invoice .inv-table thead { display: table-header-group; }
+  .invoice .inv-table tfoot { display: table-row-group; }
+  .invoice .inv-table tr { page-break-inside: avoid; }
+  .invoice h2 {
+    font-size: 28pt; font-weight:700; letter-spacing: 8px;
+    text-align:center; margin: 0 0 10mm; padding-bottom: 4mm;
+    border-bottom: 2.5px solid #000;
+  }
+  .inv-head {
+    display:grid; grid-template-columns: 1fr auto; gap: 10mm;
+    margin-bottom: 8mm; align-items: flex-start;
+  }
+  .inv-atena { font-size: 16pt; font-weight: 600; }
+  .inv-atena .post { display:block; font-size: 9pt; color:#444; margin-bottom: 2mm; }
+  .inv-atena .name { border-bottom: 1px solid #000; padding-bottom: 2mm; min-width: 80mm; }
+  .inv-issuer { font-size: 10pt; line-height: 1.5; }
+  .inv-issuer .company { font-weight: 700; font-size: 12pt; margin-bottom:1mm; }
+  .inv-issuer .seal {
+    display:inline-block; width: 18mm; height:18mm;
+    border: 2px solid #c00; border-radius:50%; color:#c00;
+    text-align:center; line-height: 18mm; font-size: 10pt; font-weight: bold;
+    margin-left:6mm; vertical-align: middle;
+  }
+  .inv-meta { display:flex; gap: 12px; font-size: 10pt; margin-bottom: 6mm; flex-wrap:wrap; }
+  .inv-meta .item { padding:2mm 4mm; background:#f5f5f5; border-left: 3px solid #888; }
+  .inv-greeting {
+    font-size: 10pt; line-height: 1.6; margin: 0 0 4mm;
+  }
+  .inv-amount {
+    border: 2px solid #000; padding: 5mm 8mm; margin: 6mm 0;
+    display:flex; align-items: center; gap: 12mm; justify-content:center;
+  }
+  .inv-amount .label { font-size: 14pt; font-weight: 600; }
+  .inv-amount .value { font-size: 22pt; font-weight: 700; letter-spacing: 1px; }
+  .inv-amount .tax-note { font-size:9pt; color:#666; }
+  .inv-table { width:100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 4mm; }
+  .inv-table th { background: #efefef; border: 1px solid #000; padding: 2mm 3mm; text-align: center; font-weight: 600; }
+  .inv-table td { border: 1px solid #000; padding: 2mm 3mm; }
+  .inv-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  .inv-table tr.subtotal td { background:#f8f8f8; font-weight: 600; }
+  .inv-table tr.total td { background:#eee; font-weight: 700; }
+  .inv-pay { margin-top: 6mm; padding: 4mm 6mm; border:1px solid #000; font-size: 10pt; line-height:1.6; }
+  .inv-pay .ttl { font-weight:700; margin-bottom:2mm; }
+  .inv-note { margin-top: 4mm; font-size: 9pt; color:#444; line-height:1.6; }
+  /* 編集可能な要素 */
+  .edit { background:#fffbe7; padding:1px 4px; border-radius:2px; outline:none; min-width:20px; }
+  .edit:focus { background:#fef08a; }
+  /* 印刷 + PDF出力モード共通 */
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    body { background:#fff; }
+    nav, header, .toolbar, .no-print, .empty-msg { display:none !important; }
+    main { padding: 0; max-width: none; margin: 0; }
+    .invoice { box-shadow: none; border: none; border-radius: 0; margin: 0; min-height: auto; }
+    .edit { background: transparent !important; }
+  }
+  /* Electron PDF出力モード(画面でも印刷スタイル適用) */
+  body.pdf-export-mode { background:#fff !important; }
+  body.pdf-export-mode nav,
+  body.pdf-export-mode header,
+  body.pdf-export-mode .toolbar,
+  body.pdf-export-mode .no-print { display:none !important; }
+  body.pdf-export-mode main { padding:0 !important; max-width:none !important; margin:0 !important; }
+  body.pdf-export-mode .invoice { box-shadow:none !important; border:none !important; border-radius:0 !important; margin:0 !important; min-height:auto !important; }
+  body.pdf-export-mode .edit { background:transparent !important; }
+  .empty-msg { background:#fff; border:2px dashed #cbd5e1; border-radius:12px; padding:40px; text-align:center; color:#64748b; }
+  .empty-msg h2 { color:#0f172a; }
+</style>
+</head>
+<body>
+<nav class="app-switcher">
+  <a href="index.html">📝 見積作成</a>
+  <a href="invoice.html" class="active">💰 請求書</a>
+  <a href="sales.html">📊 売上集計</a>
+  <a href="progress.html">🔨 工事進捗</a>
+  <a href="index.html#settings">⚙ 設定</a>
+</nav>
+<header>
+  <h1>💰 請求書</h1>
+  <span class="meta" id="header-info"></span>
+</header>
+<main>
+  <div class="toolbar no-print">
+    <label>発行日:</label>
+    <input type="date" id="issue-date">
+    <label>請求書番号プレフィックス:</label>
+    <input type="text" id="invoice-no-prefix" value="" placeholder="例: 2026-05" style="width:120px;">
+    <label>支払期限:</label>
+    <input type="text" id="pay-due" placeholder="例: 翌月末" style="width:120px;">
+    <button id="btn-print" class="primary">👁 プレビュー/印刷</button>
+    <button id="btn-pdf" style="background:#16a34a; color:#fff; border-color:#15803d; font-weight:600;" title="請求書を1枚ずつPDFファイルとして保存(元請けごとに別ファイル)">📥 PDF出力</button>
+    <button id="btn-mark-issued" style="background:#dbeafe; border-color:#60a5fa; font-weight:600;" title="表示中の全請求書の提出日を今日にセット">✅ 全部発行済にする</button>
+    <button id="btn-back" onclick="location.href='sales.html'">← 売上集計に戻る</button>
+    <button id="btn-toggle-ledger" title="過去発行した請求書一覧と提出/入金状況">📚 請求書台帳</button>
+    <button id="btn-clear" class="danger" title="現在のドラフトをクリア">🗑 ドラフトクリア</button>
+  </div>
+  <div id="invoice-list"></div>
+  <div id="ledger-view" style="display:none;"></div>
+</main>
+
+<script>
+const fmtNum = n => Number(n||0).toLocaleString('ja-JP');
+const escapeHtml = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function loadDraft() {
+  try { const s = localStorage.getItem('mitsumori_invoice_draft_v1'); return s ? JSON.parse(s) : null; } catch(e){ return null; }
+}
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem('mitsumori_settings_v1') || '{}'); } catch(e){ return {}; }
+}
+
+// 自社情報: 請求書は常に「ビルドクラスタ」が発行する側
+// → settings.issuerKey が kowa(光和)等になっていても、請求書は必ず buildcluster を使う
+function getIssuerInfo() {
+  const s = loadSettings();
+  const issuer = s.issuers?.buildcluster || {};
+  return {
+    companyName: issuer.jishaName || '株式会社ビルドクラスタ',
+    address: issuer.jishaAddr || '仙台市泉区八乙女2-7-4-101',
+    tel: issuer.jishaTel || '050-5530-6899',
+    fax: issuer.jishaFax || '',
+    tantou: issuer.tantou || '山田 裕貴',
+    tantouTel: issuer.tantouTel || '090-6854-0285',
+    bank: s.bankInfo || '七十七銀行 ○○支店 普通 1234567 ㈱ビルドクラスタ',
+    sealImg: issuer.seal || 'seal_buildcluster.png',
+    logoImg: issuer.logo || 'logo_buildcluster.png',
+  };
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt.getTime())) return d;
+  return `${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日`;
+}
+function todayStr() {
+  const t = new Date();
+  return t.toISOString().slice(0,10);
+}
+
+// 請求書台帳: 永続的に保存された請求書のステータス情報
+function loadInvoiceLedger() {
+  try { return JSON.parse(localStorage.getItem('mitsumori_invoices_v1') || '[]'); } catch(e){ return []; }
+}
+function saveInvoiceLedger(arr) {
+  localStorage.setItem('mitsumori_invoices_v1', JSON.stringify(arr || []));
+}
+function getInvoiceKey(inv, periodLabel) {
+  // 元請け + 期間 + 明細estimateId群のハッシュで一意化
+  const ids = (inv.lines||[]).map(l=>l.estimateId).filter(Boolean).sort().join(',');
+  return `${inv.motouke}|${periodLabel||''}|${ids}`;
+}
+function findOrCreateInvoiceRecord(inv, draft, invNo) {
+  const ledger = loadInvoiceLedger();
+  const key = getInvoiceKey(inv, draft.periodLabel);
+  let rec = ledger.find(r => r._key === key);
+  if (!rec) {
+    rec = {
+      _key: key,
+      invoiceNo: invNo,
+      motouke: inv.motouke,           // 元請け代表(後方互換)
+      invoicee: inv.invoicee || inv.motouke,  // 実際の請求先
+      motoukes: inv.motoukes || [inv.motouke], // 含まれる元請け一覧
+      periodLabel: draft.periodLabel,
+      total: inv.total,
+      subtotal: inv.subtotal,
+      tax: inv.tax,
+      lines: (inv.lines||[]).map(l => ({ estimateId: l.estimateId, bukken: l.bukken, roomNo: l.roomNo, amount: l.amountTaxExcl })),
+      createdAt: new Date().toISOString(),
+      submittedAt: '',
+      paidAt: '',
+      memo: '',
+    };
+    ledger.push(rec);
+    saveInvoiceLedger(ledger);
+  } else {
+    // 既存レコード: 最新のinvNoや金額・宛先情報を更新
+    rec.invoiceNo = invNo;
+    rec.invoicee = inv.invoicee || inv.motouke;
+    rec.motoukes = inv.motoukes || [inv.motouke];
+    rec.total = inv.total;
+    rec.subtotal = inv.subtotal;
+    rec.tax = inv.tax;
+    saveInvoiceLedger(ledger);
+  }
+  return rec;
+}
+function updateInvoiceRecord(key, field, value) {
+  const ledger = loadInvoiceLedger();
+  const rec = ledger.find(r => r._key === key);
+  if (!rec) return;
+  rec[field] = value;
+  saveInvoiceLedger(ledger);
+  // 紐付く各見積の meta も同期(進捗管理タブ・売上集計に反映)
+  try {
+    const ests = JSON.parse(localStorage.getItem('mitsumori_estimates_v1') || '{}');
+    let touched = 0;
+    (rec.lines||[]).forEach(l => {
+      const e = ests[l.estimateId];
+      if (!e || !e.meta) return;
+      if (field === 'submittedAt') {
+        e.meta.invoiceStatus = value ? '済' : '未';
+        e.meta.invoiceSubmittedAt = value;
+      } else if (field === 'paidAt') {
+        e.meta.paymentStatus = value ? '済' : '未';
+        e.meta.paymentReceivedAt = value;
+      }
+      e.updatedAt = new Date().toISOString();
+      touched++;
+    });
+    if (touched > 0) localStorage.setItem('mitsumori_estimates_v1', JSON.stringify(ests));
+  } catch (e) { console.warn('[請求書 → 見積meta 同期失敗]', e); }
+}
+
+function buildInvoiceHtml(inv, idx, draft, issueDate, prefix, payDue, issuer) {
+  const invNo = `${prefix||todayStr().replace(/-/g,'').slice(0,6)}-${String(idx+1).padStart(3,'0')}`;
+  // 永続ledgerに登録 or 取得
+  const rec = findOrCreateInvoiceRecord(inv, draft, invNo);
+  const recKey = rec._key;
+  const submittedAt = rec.submittedAt || '';
+  const paidAt = rec.paidAt || '';
+  // ステータスバッジ
+  let statusBadge = '<span style="background:#e5e7eb; color:#374151; padding:2px 8px; border-radius:10px; font-size:10px;">下書き</span>';
+  if (paidAt) statusBadge = '<span style="background:#bbf7d0; color:#14532d; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">✅ 入金済</span>';
+  else if (submittedAt) statusBadge = '<span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">📤 提出済</span>';
+  // 宛先 = 請求先(invoicee)。元請けと違う場合は明細に元請け列を追加
+  const invoicee = inv.invoicee || inv.motouke;
+  const motoukes = inv.motoukes || [inv.motouke];
+  const showMotoukeCol = motoukes.length > 1;
+  const isViaInvoicee = invoicee !== inv.motouke && motoukes.length > 0 && !motoukes.includes(invoicee);
+  // 件名: 元請けが invoicee と違う場合 = 「○○分工事請求書」(光和宛で山一分等)
+  // 同じ場合 = 期間ご請求分(従来通り)
+  const periodPart = draft.periodLabel ? `${draft.periodLabel}` : '';
+  let subject;
+  if (isViaInvoicee) {
+    // 例: 「山一地所分工事請求書」「山一地所/山一Dクレ分工事請求書」
+    const motoLabel = motoukes.length === 1 ? motoukes[0] : motoukes.join('・');
+    subject = `${motoLabel}分工事請求書${periodPart ? `(${periodPart})` : ''}`;
+  } else {
+    subject = `${periodPart ? periodPart + 'ご請求分' : 'ご請求'}（${inv.lines.length}件）`;
+  }
+  const linesHtml = inv.lines.map(l => `
+    <tr>
+      <td>${escapeHtml(l.completeDate)}</td>
+      ${showMotoukeCol ? `<td><small>${escapeHtml(l.motouke||'')}</small></td>` : ''}
+      <td>${escapeHtml(l.bukken)} ${escapeHtml(l.roomNo)}</td>
+      <td>${escapeHtml(l.kojiName)}</td>
+      <td class="num">¥${fmtNum(l.amountTaxExcl)}</td>
+    </tr>`).join('');
+  return `
+  <div class="invoice" data-inv-idx="${idx}" data-inv-key="${escapeHtml(recKey)}">
+    <!-- 管理パネル(印刷外): 提出日・入金日・メモ -->
+    <div class="no-print" style="margin:-18mm -16mm 8mm; padding:8px 14px; background:#f8fafc; border-bottom:2px solid #cbd5e1; display:flex; gap:14px; align-items:center; flex-wrap:wrap; font-family:'Hiragino Kaku Gothic ProN',sans-serif; font-size:12px;">
+      <span style="font-weight:600; color:#0f172a;">📋 ステータス:</span>
+      ${statusBadge}
+      <label>📤 提出日:</label>
+      <input type="date" class="inv-status-edit" data-field="submittedAt" data-key="${escapeHtml(recKey)}" value="${submittedAt}" style="font-size:12px; padding:3px 6px;">
+      <label>💰 入金日:</label>
+      <input type="date" class="inv-status-edit" data-field="paidAt" data-key="${escapeHtml(recKey)}" value="${paidAt}" style="font-size:12px; padding:3px 6px;">
+      <label style="margin-left:8px;">📝 メモ:</label>
+      <input type="text" class="inv-status-edit" data-field="memo" data-key="${escapeHtml(recKey)}" value="${escapeHtml(rec.memo||'')}" placeholder="例: 請求書コピー保管済 / 入金待ち" style="flex:1; min-width:160px; font-size:12px; padding:3px 6px;">
+    </div>
+    <h2>御請求書</h2>
+    <div style="text-align:center; font-size:14pt; font-weight:600; margin:-6mm 0 8mm; letter-spacing:2px;" contenteditable="true" class="edit">${escapeHtml(subject)}</div>
+    <div class="inv-head">
+      <div class="inv-atena">
+        <span class="post">下記の通りご請求申し上げます。</span>
+        <div class="name">${escapeHtml(invoicee)} <span style="font-size:11pt;">御中</span></div>
+      </div>
+      <div class="inv-issuer" style="position:relative;">
+        <div class="company">${escapeHtml(issuer.companyName)}</div>
+        <div>${escapeHtml(issuer.address)}</div>
+        <div>TEL: ${escapeHtml(issuer.tel)}${issuer.fax ? ` / FAX: ${escapeHtml(issuer.fax)}` : ''}</div>
+        ${issuer.tantou ? `<div style="margin-top:1mm; font-size:9pt;">担当: ${escapeHtml(issuer.tantou)}${issuer.tantouTel ? ` (${escapeHtml(issuer.tantouTel)})` : ''}</div>` : ''}
+        <img src="${escapeHtml(issuer.sealImg)}" alt="印" style="position:absolute; top:-2mm; right:-2mm; width:18mm; height:18mm; object-fit:contain;" onerror="this.style.display='none';">
+      </div>
+    </div>
+    <div class="inv-meta">
+      <div class="item">請求書番号: <b>${escapeHtml(invNo)}</b></div>
+      <div class="item">発行日: ${fmtDate(issueDate)}</div>
+      <div class="item">締日ルール: ${escapeHtml(inv.closingRule)}</div>
+      ${inv.periodRangeLabel
+        ? `<div class="item">対象期間: <b>${escapeHtml(inv.periodRangeLabel)}</b></div>`
+        : (draft.periodLabel ? `<div class="item">対象期間: ${escapeHtml(draft.periodLabel)}</div>` : '')}
+      ${payDue ? `<div class="item">支払期限: <b contenteditable="true" class="edit">${escapeHtml(payDue)}</b></div>` : ''}
+    </div>
+    <p class="inv-greeting">
+      平素は格別のお引立てを賜り厚く御礼申し上げます。<br>
+      下記の通りご請求申し上げますので、ご査収のほどよろしくお願い申し上げます。
+    </p>
+    <div class="inv-amount">
+      <span class="label">ご請求金額</span>
+      <span class="value">¥${fmtNum(inv.total)}</span>
+      <span class="tax-note">(税込)</span>
+    </div>
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th style="width:14%;">完了日</th>
+          ${showMotoukeCol ? `<th style="width:14%;">元請け</th>` : ''}
+          <th>物件名・号室</th>
+          <th style="width:22%;">工事内容</th>
+          <th style="width:16%;">金額(税抜)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${linesHtml}
+        <tr class="subtotal"><td colspan="${showMotoukeCol?4:3}" style="text-align:right;">小計(税抜)</td><td class="num">¥${fmtNum(inv.subtotal)}</td></tr>
+        <tr class="subtotal"><td colspan="${showMotoukeCol?4:3}" style="text-align:right;">消費税(10%)</td><td class="num">¥${fmtNum(inv.tax)}</td></tr>
+        <tr class="total"><td colspan="${showMotoukeCol?4:3}" style="text-align:right;">合計(税込)</td><td class="num">¥${fmtNum(inv.total)}</td></tr>
+      </tbody>
+    </table>
+    <div class="inv-pay">
+      <div class="ttl">お振込先</div>
+      <div contenteditable="true" class="edit">${escapeHtml(issuer.bank)}</div>
+      ${payDue ? `<div style="margin-top:2mm;">お支払期限: <b>${escapeHtml(payDue)}</b></div>` : ''}
+    </div>
+    <div class="inv-note" contenteditable="true" class="edit">
+      ※ 振込手数料は貴社にてご負担くださいますようお願い申し上げます。
+    </div>
+  </div>`;
+}
+
+function render() {
+  const draft = loadDraft();
+  const wrap = document.getElementById('invoice-list');
+  const headerInfo = document.getElementById('header-info');
+  if (!draft || !draft.invoices?.length) {
+    wrap.innerHTML = `<div class="empty-msg">
+      <h2>📭 請求書ドラフトがありません</h2>
+      <p style="margin:12px 0;">「📊 売上集計」タブで対象期間の案件をフィルタしてから<br>
+      <b>「💰 請求書作成」</b> ボタンを押してください。</p>
+      <button class="primary" onclick="location.href='sales.html'">📊 売上集計タブへ</button>
+    </div>`;
+    headerInfo.textContent = '';
+    return;
+  }
+  const issueDate = document.getElementById('issue-date').value || todayStr();
+  const prefix = document.getElementById('invoice-no-prefix').value.trim();
+  const payDue = document.getElementById('pay-due').value.trim();
+  const issuer = getIssuerInfo();
+  wrap.innerHTML = draft.invoices.map((inv, i) => buildInvoiceHtml(inv, i, draft, issueDate, prefix, payDue, issuer)).join('');
+  const totalAmt = draft.invoices.reduce((s,inv) => s + inv.total, 0);
+  // ステータス集計
+  const ledger = loadInvoiceLedger();
+  let submittedCnt = 0, paidCnt = 0;
+  draft.invoices.forEach(inv => {
+    const key = getInvoiceKey(inv, draft.periodLabel);
+    const rec = ledger.find(r => r._key === key);
+    if (rec?.paidAt) paidCnt++;
+    else if (rec?.submittedAt) submittedCnt++;
+  });
+  headerInfo.textContent = `${draft.invoices.length}件 / 合計 ¥${fmtNum(totalAmt)} / 提出済${submittedCnt+paidCnt}・入金済${paidCnt} / 期間: ${draft.periodLabel||'(指定なし)'}`;
+  // ステータス入力ハンドラ
+  document.querySelectorAll('.inv-status-edit').forEach(el => {
+    el.addEventListener('change', e => {
+      const key = e.target.dataset.key;
+      const field = e.target.dataset.field;
+      updateInvoiceRecord(key, field, e.target.value);
+      // 再描画(バッジ更新)
+      render();
+    });
+  });
+}
+
+// 初期化
+const todayDt = todayStr();
+document.getElementById('issue-date').value = todayDt;
+document.getElementById('invoice-no-prefix').value = todayDt.replace(/-/g,'').slice(0,6); // YYYYMM
+document.getElementById('pay-due').value = '翌月末';
+document.getElementById('issue-date').addEventListener('change', render);
+document.getElementById('invoice-no-prefix').addEventListener('change', render);
+document.getElementById('pay-due').addEventListener('change', render);
+document.getElementById('btn-print').addEventListener('click', () => window.print());
+
+// PDF出力(Electron版): 請求書ごとに別ファイルで保存
+// ファイル名: 請求書_YYYY-MM_元請け名.pdf
+document.getElementById('btn-pdf').addEventListener('click', async () => {
+  const draft = loadDraft();
+  if (!draft || !draft.invoices?.length) { alert('請求書ドラフトがありません'); return; }
+  const isElectron = !!window.bcApi?.isElectron;
+  if (!isElectron) {
+    alert('PDF出力は Electron 版でのみ動作します。\nブラウザでは「👁 プレビュー/印刷」で「PDFとして保存」を選んでください。');
+    return;
+  }
+  const issueDate = document.getElementById('issue-date').value || todayStr();
+  const ymPrefix = issueDate.replace(/-/g, '').slice(0, 6); // YYYYMM
+  const btn = document.getElementById('btn-pdf');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  try {
+    // 請求書ごとに、その1枚だけ表示する状態にして PDF化(他は一時的に非表示)
+    const allInvoices = document.querySelectorAll('.invoice');
+    let savedCount = 0, errCount = 0;
+    for (let i = 0; i < draft.invoices.length; i++) {
+      const inv = draft.invoices[i];
+      btn.textContent = `⏳ PDF出力中 (${i+1}/${draft.invoices.length}: ${inv.motouke})...`;
+      // 他の請求書を一時的に非表示
+      allInvoices.forEach((el, j) => { el.style.display = (j === i) ? '' : 'none'; });
+      // body にCSSクラスをつけて印刷モードと同じ見た目に
+      document.body.classList.add('pdf-export-mode');
+      // 印刷スタイル即適用のため少し待機
+      await new Promise(r => setTimeout(r, 150));
+      try {
+        const pdfRes = await window.bcApi.printToPdf({
+          options: { pageSize: 'A4', printBackground: true, preferCSSPageSize: true }
+        });
+        if (!pdfRes.ok) throw new Error(pdfRes.error || '不明エラー');
+        const motoukeSafe = inv.motouke.replace(/[\\\/:*?"<>|]/g, '_').replace(/\s+/g,'');
+        const filename = `請求書_${ymPrefix}_${motoukeSafe}.pdf`;
+        const saveRes = await window.bcApi.saveFileTo({
+          defaultPath: filename,
+          data: pdfRes.data,
+          filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        });
+        if (saveRes.ok) savedCount++;
+      } catch (e) {
+        console.error('[PDF出力失敗]', inv.motouke, e);
+        errCount++;
+      }
+    }
+    // 表示を全請求書に戻す
+    allInvoices.forEach(el => { el.style.display = ''; });
+    document.body.classList.remove('pdf-export-mode');
+    if (savedCount > 0 && errCount === 0) {
+      alert(`✅ ${savedCount}件のPDF保存完了`);
+    } else if (savedCount > 0 && errCount > 0) {
+      alert(`保存 ${savedCount}件 / 失敗 ${errCount}件`);
+    } else if (errCount > 0) {
+      alert(`PDF保存に失敗しました(${errCount}件)`);
+    } else {
+      alert('保存をキャンセルしました');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+// 「全部発行済にする」: 表示中の請求書すべての提出日を今日にセット
+document.getElementById('btn-mark-issued').addEventListener('click', () => {
+  const draft = loadDraft();
+  if (!draft || !draft.invoices?.length) { alert('請求書ドラフトがありません'); return; }
+  if (!confirm(`表示中の ${draft.invoices.length}件 の請求書を「提出済」にしますか?\n(提出日 = 今日 ${todayStr()})`)) return;
+  const today = todayStr();
+  draft.invoices.forEach(inv => {
+    const key = getInvoiceKey(inv, draft.periodLabel);
+    updateInvoiceRecord(key, 'submittedAt', today);
+  });
+  render();
+  alert(`✅ ${draft.invoices.length}件すべて提出済(${today})にしました`);
+});
+
+// 請求書台帳ビュー
+function renderLedgerView() {
+  const ledger = loadInvoiceLedger();
+  const view = document.getElementById('ledger-view');
+  if (!ledger.length) {
+    view.innerHTML = '<div class="empty-msg"><h2>📭 請求書履歴なし</h2><p>売上集計から請求書作成すると、ここに自動的に蓄積されます。</p></div>';
+    return;
+  }
+  // 最新作成順
+  ledger.sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  const totalAll = ledger.reduce((s,r) => s + (r.total||0), 0);
+  const submittedAll = ledger.filter(r => r.submittedAt).length;
+  const paidAll = ledger.filter(r => r.paidAt).length;
+  const pendingAmt = ledger.filter(r => !r.paidAt).reduce((s,r) => s + (r.total||0), 0);
+  view.innerHTML = `
+    <div class="toolbar no-print" style="background:#f0fdf4; border-color:#86efac;">
+      <span style="font-weight:600;">📚 請求書台帳</span>
+      <span class="pill" style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:10px; font-size:11px;">合計 ${ledger.length}件 / ¥${fmtNum(totalAll)}</span>
+      <span class="pill" style="background:#bbf7d0; color:#14532d; padding:2px 8px; border-radius:10px; font-size:11px;">提出済 ${submittedAll}件</span>
+      <span class="pill" style="background:#86efac; color:#14532d; padding:2px 8px; border-radius:10px; font-size:11px;">入金済 ${paidAll}件</span>
+      <span class="pill" style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; font-size:11px;">未入金 ¥${fmtNum(pendingAmt)}</span>
+    </div>
+    <div style="background:#fff; border:1px solid var(--line); border-radius:8px; overflow:hidden;">
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#fafafa;">
+          <th style="padding:8px; text-align:left;">請求番号</th>
+          <th style="padding:8px; text-align:left;">請求先(元請け)</th>
+          <th style="padding:8px; text-align:left;">対象期間</th>
+          <th style="padding:8px; text-align:right;">合計(税込)</th>
+          <th style="padding:8px; text-align:left;">提出日</th>
+          <th style="padding:8px; text-align:left;">入金日</th>
+          <th style="padding:8px; text-align:left;">ステータス</th>
+          <th style="padding:8px; text-align:left;">メモ</th>
+          <th style="padding:8px;"></th>
+        </tr></thead>
+        <tbody>
+          ${ledger.map((r, i) => {
+            let badge = '<span style="background:#e5e7eb; color:#374151; padding:2px 8px; border-radius:10px; font-size:10px;">下書き</span>';
+            if (r.paidAt) badge = '<span style="background:#bbf7d0; color:#14532d; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">✅ 入金済</span>';
+            else if (r.submittedAt) badge = '<span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">📤 提出済</span>';
+            // 請求先と元請けを併記。invoicee != 元請け なら「請求先(元請け)」形式
+            const invoicee = r.invoicee || r.motouke || '';
+            const motoukes = r.motoukes || (r.motouke ? [r.motouke] : []);
+            const isViaInvoicee = motoukes.length > 0 && !motoukes.includes(invoicee);
+            const motoukeDisplay = isViaInvoicee
+              ? `<b>${escapeHtml(invoicee)}</b><br><small style="color:#7c2d12;">(${motoukes.map(escapeHtml).join('・')})</small>`
+              : `<b>${escapeHtml(invoicee)}</b>`;
+            return `<tr style="border-top:1px solid var(--line);">
+              <td style="padding:6px 8px;"><b>${escapeHtml(r.invoiceNo||'-')}</b></td>
+              <td style="padding:6px 8px;">${motoukeDisplay}</td>
+              <td style="padding:6px 8px;"><small>${escapeHtml(r.periodLabel||'')}</small></td>
+              <td style="padding:6px 8px; text-align:right; font-variant-numeric:tabular-nums;">¥${fmtNum(r.total||0)}</td>
+              <td style="padding:6px 8px;"><input type="date" data-ledger-edit data-rkey="${escapeHtml(r._key)}" data-field="submittedAt" value="${r.submittedAt||''}" style="font-size:11px; padding:2px 4px;"></td>
+              <td style="padding:6px 8px;"><input type="date" data-ledger-edit data-rkey="${escapeHtml(r._key)}" data-field="paidAt" value="${r.paidAt||''}" style="font-size:11px; padding:2px 4px;"></td>
+              <td style="padding:6px 8px;">${badge}</td>
+              <td style="padding:6px 8px;"><input type="text" data-ledger-edit data-rkey="${escapeHtml(r._key)}" data-field="memo" value="${escapeHtml(r.memo||'')}" placeholder="メモ" style="font-size:11px; padding:2px 4px; min-width:120px;"></td>
+              <td style="padding:6px 8px;"><button data-ledger-del="${escapeHtml(r._key)}" style="font-size:11px; color:#dc2626;">削除</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  // ハンドラ
+  view.querySelectorAll('input[data-ledger-edit]').forEach(el => {
+    el.addEventListener('change', e => {
+      const key = e.target.dataset.rkey;
+      const field = e.target.dataset.field;
+      updateInvoiceRecord(key, field, e.target.value);
+      renderLedgerView(); // バッジ更新
+    });
+  });
+  view.querySelectorAll('button[data-ledger-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('この請求書履歴を削除しますか?(紐付く見積のステータスは維持されます)')) return;
+      const key = btn.dataset.ledgerDel;
+      const arr = loadInvoiceLedger().filter(r => r._key !== key);
+      saveInvoiceLedger(arr);
+      renderLedgerView();
+    });
+  });
+}
+
+document.getElementById('btn-toggle-ledger').addEventListener('click', () => {
+  const list = document.getElementById('invoice-list');
+  const view = document.getElementById('ledger-view');
+  if (view.style.display === 'none') {
+    list.style.display = 'none';
+    view.style.display = '';
+    renderLedgerView();
+    document.getElementById('btn-toggle-ledger').textContent = '📝 ドラフト編集に戻る';
+  } else {
+    list.style.display = '';
+    view.style.display = 'none';
+    document.getElementById('btn-toggle-ledger').textContent = '📚 請求書台帳';
+    render();
+  }
+});
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!confirm('請求書ドラフトをクリアしますか?')) return;
+  localStorage.removeItem('mitsumori_invoice_draft_v1');
+  render();
+});
+render();
+
+// F5 / Ctrl+R
+window.addEventListener('keydown', (e) => {
+  const k = (e.key || '').toLowerCase();
+  if (k === 'f5' || (e.ctrlKey && k === 'r' && !e.shiftKey)) { e.preventDefault(); location.reload(); }
+  else if (e.ctrlKey && e.shiftKey && k === 'r') { e.preventDefault(); location.reload(); }
+});
+</script>
+</body>
+</html>
