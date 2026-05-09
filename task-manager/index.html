@@ -462,7 +462,7 @@
 <!-- ========== IMPORT SHEET ========== -->
 <div class="sheet-backdrop" id="sheet-import">
   <div class="sheet" onclick="event.stopPropagation()">
-    <h3>スプシから物件情報を取込</h3>
+    <h3>Drive台帳から物件情報を取込</h3>
 
     <!-- GAS Web App 同期(見積アプリ連携) -->
     <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:10px 12px;margin-bottom:14px">
@@ -741,7 +741,7 @@ function propertyCardHTML(p){
       <div class="row">
         <div class="name">
           ${esc(p.name)} <span style="color:#64748b;font-weight:500;font-size:13px">${roomStr}</span>
-          <div class="sub">${esc(p.client||'')}${p.layout?' ・ '+esc(p.layout):''}</div>
+          <div class="sub">${esc(p.client||'')}${p.kojiName?' ・ <b style="color:#1e40af">'+esc(p.kojiName)+'</b>':''}${p.layout?' ・ '+esc(p.layout):''}</div>
         </div>
         <span class="pill ${st}">${STATUSES[st]}</span>
       </div>
@@ -794,6 +794,7 @@ function renderDetail(){
   document.getElementById('d-sub').textContent   = [p.client,p.layout,p.address].filter(Boolean).join(' ・ ');
 
   const kv = [];
+  if(p.kojiName)      kv.push(['工事名', p.kojiName]);
   if(p.mgmt)          kv.push(['管理No', p.mgmt]);
   if(p.orderDate)     kv.push(['発注日', fmtDate(p.orderDate)]);
   if(p.moveout)       kv.push(['退去月', p.moveout]);
@@ -1789,7 +1790,11 @@ function syncTasks(prop, serverTasks, contractors){
       const cat = normalizeCategory(st.category);
       const contractor = (st.contractor||'').trim();
       const room = (st.room||'').trim();
-      const name = (st.workName||'').trim();
+      // 旧APIは workName / quantity / spec、新APIは name / qty / specs を返す
+      // 両対応にしておく
+      const name = (st.workName || st.name || '').trim();
+      const spec = (st.specs || st.spec || '').trim();
+      const qty = Number(st.quantity != null ? st.quantity : st.qty) || 0;
       const schedule = fmtSchedule(st.periodStart, st.periodEnd);
       const key = `${cat}|${contractor}|${room}|${name}`;
 
@@ -1804,8 +1809,8 @@ function syncTasks(prop, serverTasks, contractors){
         name: name,
         room: room,
         surface: kept?.surface || '',
-        spec: kept?.spec || '',
-        qty: Number(st.quantity) || 0,
+        spec: spec || kept?.spec || '',
+        qty: qty,
         unit: st.unit || '',
         amount: Number(st.amount) || 0,
         schedule: schedule || (kept?.schedule || ''),

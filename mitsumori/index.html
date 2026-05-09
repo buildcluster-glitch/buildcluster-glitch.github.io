@@ -1102,9 +1102,10 @@
       <span id="pattern-switcher" style="display:none; align-items:center; gap:4px; margin-right:6px;">
         <span style="font-size:11px; color:var(--muted);">修正パターン:</span>
         <select id="pattern-select" style="font-size:12px; min-width:130px;"></select>
+        <button id="btn-compare-patterns" title="この物件の他パターンと比較(単価・数量・金額の差分)" style="background:#dbeafe; border-color:#3b82f6; color:#1e40af; padding:4px 8px; font-size:12px;">🔍 比較</button>
         <button id="btn-delete-revision" title="現在のパターンをゴミ箱に移動(同物件の他パターンに自動切替・30日後自動削除)" style="background:#fee2e2; border-color:#dc2626; color:#7f1d1d; padding:4px 8px; font-size:12px;">🗑 削除</button>
       </span>
-      <button id="btn-create-revision" title="この物件の修正パターンを作成(最大3つまで)" style="background:#fef3c7; border-color:#f59e0b;">📋 修正パターン作成</button>
+      <button id="btn-create-revision" title="この物件の修正パターンを作成(最大5つまで)" style="background:#fef3c7; border-color:#f59e0b;">📋 修正パターン作成</button>
       <button id="btn-apply-motouke-order" title="元請からの発注書を取り込み、追加・削除・価格変更を「元請確定版」として反映" style="background:linear-gradient(135deg,#fde68a 0%,#f59e0b 100%); border:none; color:#78350f; font-weight:600; padding:6px 12px;">📥 元請発注を反映</button>
       <select id="new-est-pattern" title="新規見積に入れる初期行のパターンを選択" style="display:none;"></select>
       <button id="btn-new-estimate">＋ 新規見積</button>
@@ -1217,7 +1218,10 @@
           <button id="btn-print-doc" title="ブラウザの印刷ダイアログを開く(プリンタ印刷+印刷プレビュー)">👁 プレビュー</button>
           <button id="btn-pdf-doc" title="ファイル名「物件名 号室 工事名称 日付.pdf」で直接保存(印刷ダイアログを介さない)">📥 PDFで保存</button>
           <button id="btn-ai-import" title="Geminiで見積を取込/生成(PDF・画像・テキストから抽出 / 過去データから新規生成 — モーダルでモード切替)" style="background:linear-gradient(135deg,#a78bfa 0%,#7c3aed 100%); color:#fff; border:none; padding:6px 12px; box-shadow:0 1px 3px rgba(124,58,237,0.4); font-weight:600;"><span style="margin-right:4px; filter:drop-shadow(0 0 2px rgba(255,255,255,0.5));">⚡</span>AI取込/生成</button>
-          <button id="btn-save-to-ledger" title="現在の見積 + 同 patternGroupId の兄弟パターン全部を Drive台帳に保存" class="primary" style="background:#0ea5e9; border-color:#0369a1;">☁ 台帳へ保存(全パターン)</button>
+          <button id="btn-save-to-ledger" title="現在の見積 + 同物件の他パターン全部を Drive台帳に保存" class="primary" style="background:#0ea5e9; border-color:#0369a1; display:flex; flex-direction:column; align-items:center; line-height:1.1; gap:1px; padding:5px 12px;">
+            <span>☁ 台帳へ保存(全パターン)</span>
+            <small id="btn-save-to-ledger-stamp" style="font-size:9px; opacity:0.85; font-weight:normal; white-space:nowrap;">未保存</small>
+          </button>
           <button id="btn-export-zip" title="JSON+印刷用HTMLをまとめてZIP化" class="primary">📦 案件ZIP</button>
           <button id="btn-export-all-zip" title="全書類PDF + JSON を1つのZIPでダウンロード(物件フォルダ用)" class="primary" style="background:#16a34a; border-color:#15803d;">📦 全書類ZIP保存</button>
           <button class="danger" id="btn-clear-est">明細クリア</button>
@@ -2076,13 +2080,18 @@
         <button id="btn-import-all">JSON読込(マージ)</button>
         <input type="file" id="file-input-est" accept=".json" style="display:none">
       </div>
-      <!-- Drive台帳バー -->
-      <div class="row" style="margin-top:8px; padding:6px 10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; font-size:12px; align-items:center; flex-wrap:wrap;">
-        <button id="btn-ledger-drive-fetch-all" title="Drive台帳の過去全月の見積を一括取込(時間がかかります・別PCに切替時の初期セットアップに)" class="primary" style="background:#16a34a; border-color:#15803d; font-size:11px;">📥 過去全件同期(Drive→アプリ)</button>
-        <button id="btn-ledger-drive-reload" title="Drive上の月一覧を再取得" style="font-size:11px;">🔄 月一覧再取得</button>
-        <button id="btn-ledger-drive-push-current" title="現在の見積 + 同 patternGroupId の兄弟パターン全部を Drive台帳 に保存" style="font-size:11px; background:#16a34a; color:#fff; border-color:#15803d; font-weight:600;">📤 更新(全パターン)</button>
-        <button id="btn-ledger-drive-migrate" title="ローカル全見積を Drive 台帳に一括移行(時間かかります)" style="font-size:11px;">📤 ローカル全件をDrive移行</button>
+      <!-- Drive台帳バー(編集時自動push有効。手動操作はトラブル時のみ ⋮詳細 から) -->
+      <div class="row" style="margin-top:8px; padding:6px 10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; font-size:12px; align-items:center; flex-wrap:wrap; position:relative;">
+        <button id="btn-ledger-drive-fetch-all" title="Drive台帳の過去全月の見積を一括取込(別PC切替時の初期セットアップ用)" class="primary" style="background:#16a34a; border-color:#15803d; font-size:11px;">📥 全件同期(Drive→アプリ)</button>
         <span id="drive-ledger-months" style="margin-left:10px; flex:1; min-width:0;"></span>
+        <span style="font-size:11px; color:#1e3a8a; padding:2px 8px; background:#dbeafe; border:1px solid #93c5fd; border-radius:10px;" title="編集後 約2.5秒で自動的にDrive台帳へ反映されます">☁ 自動同期</span>
+        <button id="btn-ledger-drive-more" title="その他の操作(普段は不要)" style="font-size:14px; padding:2px 8px; line-height:1; background:#fff; border:1px solid #cbd5e1;">⋮</button>
+        <!-- ⋮ 詳細メニュー: 普段は隠してある -->
+        <div id="ledger-drive-more-menu" style="display:none; position:absolute; right:8px; top:calc(100% + 4px); z-index:100; background:#fff; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:6px; min-width:240px;">
+          <button id="btn-ledger-drive-reload" title="Drive上の月一覧を再取得" style="display:block; width:100%; text-align:left; font-size:12px; padding:6px 10px; background:transparent; border:none;">🔄 月一覧再取得</button>
+          <button id="btn-ledger-drive-push-current" title="現在の見積+同物件の他パターン全部をDriveへ強制push" style="display:block; width:100%; text-align:left; font-size:12px; padding:6px 10px; background:transparent; border:none;">📤 強制push(全パターン)</button>
+          <button id="btn-ledger-drive-migrate" title="ローカル全見積をDriveへ一括移行(初期移行用・通常は不要)" style="display:block; width:100%; text-align:left; font-size:12px; padding:6px 10px; background:transparent; border:none; color:#92400e;">📤 ローカル全件をDrive移行</button>
+        </div>
       </div>
     </div>
     <div class="panel" style="padding:0;">
@@ -2822,6 +2831,69 @@ JSB 退去 / 30万前後で収めたい" style="width:100%; min-height:120px; fo
       </div>
     </div>
     <div id="ai-import-status" style="margin-top:8px; font-size:12px; color:#7c3aed; min-height:20px;"></div>
+  </div>
+</div>
+
+<!-- パターン比較モーダル -->
+<div id="compare-pattern-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9998; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; padding:20px; width:1100px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:18px; color:#1e40af;">🔍 パターン比較</h2>
+      <button id="cmp-close" style="font-size:18px; padding:4px 10px;">×</button>
+    </div>
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:10px; padding:8px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; font-size:12px; flex-wrap:wrap;">
+      <label>左パターン</label>
+      <select id="cmp-left" style="font-size:12px; min-width:140px;"></select>
+      <span style="font-size:14px;">vs</span>
+      <label>右パターン</label>
+      <select id="cmp-right" style="font-size:12px; min-width:140px;"></select>
+      <span style="margin-left:auto; color:var(--muted); font-size:11px;">行マッチ: 工事名称 + 室名 + 仕様</span>
+    </div>
+    <div style="overflow:auto; max-height:60vh; border:1px solid #e2e8f0; border-radius:6px;">
+      <table id="cmp-table" style="width:100%; font-size:11px; border-collapse:collapse;">
+        <thead style="background:#f1f5f9; position:sticky; top:0; z-index:1;">
+          <tr>
+            <th style="padding:5px 6px; text-align:center; width:32px;"><input type="checkbox" id="cmp-check-all" title="全選択 / 全解除" style="width:auto;"></th>
+            <th style="padding:5px 6px; text-align:left; width:110px;">カテゴリ</th>
+            <th style="padding:5px 6px; text-align:left; min-width:160px;">工事名称</th>
+            <th style="padding:5px 6px; text-align:left; width:60px;">室名</th>
+            <th style="padding:5px 6px; text-align:left;">仕様</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:55px;">L 数量</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:55px;">R 数量</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:75px;">L 単価</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:75px;">R 単価</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:85px;">L 金額</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:85px;">R 金額</th>
+            <th class="num" style="padding:5px 6px; text-align:right; width:90px;">差(R-L)</th>
+            <th style="padding:5px 6px; text-align:center; width:60px;">状態</th>
+          </tr>
+        </thead>
+        <tbody id="cmp-tbody"></tbody>
+        <tfoot style="background:#fafafa; position:sticky; bottom:0;">
+          <tr style="font-weight:600;">
+            <td colspan="10" style="padding:6px 8px; text-align:right;">小計(税別):</td>
+            <td class="num" id="cmp-total-l" style="padding:6px 8px; text-align:right;">0</td>
+            <td class="num" id="cmp-total-r" style="padding:6px 8px; text-align:right;">0</td>
+            <td class="num" id="cmp-total-diff" style="padding:6px 8px; text-align:right;">0</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div style="margin-top:10px; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:11px; color:#475569;">
+      <span style="display:inline-block; width:14px; height:14px; vertical-align:middle; background:#fff; border:1px solid #cbd5e1;"></span> 同じ
+      <span style="margin-left:14px; display:inline-block; width:14px; height:14px; vertical-align:middle; background:#fef3c7; border:1px solid #f59e0b;"></span> 変更あり(単価/数量/金額のいずれか)
+      <span style="margin-left:14px; display:inline-block; width:14px; height:14px; vertical-align:middle; background:#dcfce7; border:1px solid #16a34a;"></span> 右のみ(追加)
+      <span style="margin-left:14px; display:inline-block; width:14px; height:14px; vertical-align:middle; background:#fee2e2; border:1px solid #dc2626;"></span> 左のみ(削除)
+    </div>
+    <div style="margin-top:14px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:center;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span id="cmp-selected-count" style="font-size:11px; color:#475569;">未選択</span>
+        <button id="cmp-copy-r-to-l" title="チェック行の右パターンの内容で 左パターンを上書き(マッチしないものは追加)" style="background:#dbeafe; border-color:#3b82f6; color:#1e40af; font-weight:600; padding:6px 12px;">→ 左に反映(R→L)</button>
+        <button id="cmp-copy-l-to-r" title="チェック行の左パターンの内容で 右パターンを上書き(マッチしないものは追加)" style="background:#dbeafe; border-color:#3b82f6; color:#1e40af; font-weight:600; padding:6px 12px;">← 右に反映(L→R)</button>
+      </div>
+      <button id="cmp-close-2" class="primary">閉じる</button>
+    </div>
   </div>
 </div>
 
@@ -4107,6 +4179,9 @@ function saveEstimate() {
   state.estimate.updatedAt = new Date().toISOString();
   state.estimates[state.estimate.id] = state.estimate;
   saveEstimates();
+  // 編集後 → Drive 台帳に自動 push(1.5s debounceで連続編集はまとめる)
+  // GAS未設定 or テンプレ編集中は autoPushEstimateToLedger 内で no-op
+  if (typeof autoPushEstimateToLedger === 'function') autoPushEstimateToLedger();
 }
 function defaultSettings() {
   return {
@@ -11211,38 +11286,91 @@ function toggleConfirmed() {
   }
 }
 
+// 「☁ 台帳へ保存」ボタンに、現在見積の Drive 最終保存時刻を表示
+//   - GAS未設定: 「(未設定)」
+//   - 一度も保存してない: 「未保存」
+//   - 過去に保存済: 「保存済 ○分前」「保存済 ○:○○」「保存済 昨日 ○:○○」
+function _formatRelativeJp(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '';
+  const now = Date.now();
+  const diffSec = Math.floor((now - t) / 1000);
+  if (diffSec < 10) return 'たった今';
+  if (diffSec < 60) return `${diffSec}秒前`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}分前`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}時間前`;
+  // 1日以上 → 日付+時刻
+  const d = new Date(iso);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+  if (d.getFullYear() === oneDayAgo.getFullYear() && d.getMonth() === oneDayAgo.getMonth() && d.getDate() === oneDayAgo.getDate()) {
+    return `昨日 ${hh}:${mm}`;
+  }
+  return `${m}/${day} ${hh}:${mm}`;
+}
+function refreshSaveToLedgerStamp() {
+  const stamp = document.getElementById('btn-save-to-ledger-stamp');
+  if (!stamp) return;
+  const cur = state.estimate;
+  const hasGas = (state.settings?.gasSyncUrl||'').trim() && (state.settings?.gasSyncToken||'').trim();
+  if (!hasGas) { stamp.textContent = '(GAS未設定)'; return; }
+  if (!cur) { stamp.textContent = ''; return; }
+  const savedAt = cur._driveSavedAt;
+  if (!savedAt) { stamp.textContent = '未保存'; return; }
+  stamp.textContent = `保存済 ${_formatRelativeJp(savedAt)}`;
+}
+// 60秒ごとに自動更新(「5分前」が「10分前」に変わる用)
+setInterval(refreshSaveToLedgerStamp, 60 * 1000);
+
 // 重要な状態変更時に Drive 台帳へ silent push する共通ヘルパー
 //   GAS 未設定なら何もしない、エラーは silent
+//   多人数使用配慮(10人想定):
+//     - 現在編集中のパターンは必ず push
+//     - 同じ物件の他パターンは「Drive未保存のもの」だけ push(他PC編集を上書きしないため)
+//     - 同物件の他パターンも全部更新したい時は 台帳タブの「📤 更新(全パターン)」ボタンを使う
 function autoPushEstimateToLedger() {
   if (!(state.settings?.gasSyncUrl||'').trim() || !(state.settings?.gasSyncToken||'').trim()) return;
   if (typeof pushCurrentEstimateToLedger !== 'function') return;
+  // テンプレ編集中は Drive 台帳に行かないので push しない
+  if (state.estimate?.meta?.isTemplate) return;
   // 同じ見積に対する連打/連続編集を debounce(短時間に何度も push しない)
   if (autoPushEstimateToLedger._timer) clearTimeout(autoPushEstimateToLedger._timer);
   autoPushEstimateToLedger._timer = setTimeout(async () => {
     autoPushEstimateToLedger._timer = null;
     try {
-      // 1. 現在の見積を push
+      // 1. 現在編集中のパターンを push
       await pushCurrentEstimateToLedger(true);
-      // 2. 同 patternGroupId の兄弟パターンも全部 push(他PCに完全同期)
+      // 2. 同 patternGroupId の他パターンのうち「Drive未保存のもの」だけ push
+      //    既に Drive にあるものは触らない(他PCの編集を上書きしないため)
       const cur = state.estimate;
       const gid = cur?.meta?.patternGroupId;
       if (gid) {
-        const siblings = Object.values(state.estimates || {})
-          .filter(e => e?.id !== cur.id && e?.meta?.patternGroupId === gid && !e.deleted);
-        for (const sib of siblings) {
+        const unsavedPatterns = Object.values(state.estimates || {})
+          .filter(e => e?.id !== cur.id
+                    && e?.meta?.patternGroupId === gid
+                    && !e.deleted
+                    && !e._driveFileId); // ★Drive未保存だけ
+        for (const p of unsavedPatterns) {
           try {
-            const r = await gasSaveLedger(sib, sib._driveFileId || '');
-            sib._driveFileId = r.fileId;
-            sib._driveMonth = r.month;
-            sib._driveSavedAt = new Date().toISOString();
-          } catch (e) { console.warn('[兄弟 push 失敗]', sib.id, e); }
+            const r = await gasSaveLedger(p, '');
+            p._driveFileId = r.fileId;
+            p._driveMonth = r.month;
+            p._driveSavedAt = new Date().toISOString();
+          } catch (e) { console.warn('[他パターン push 失敗]', p.id, e); }
         }
-        if (siblings.length) saveEstimates();
+        if (unsavedPatterns.length) saveEstimates();
       }
+      if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
     } catch (e) {
       console.warn('[auto push to ledger 失敗]', e);
     }
-  }, 1500);
+  }, 2500); // 10人使用想定でやや長め(2.5s)に。連続編集をよりまとめてGAS呼出減らす
 }
 
 function renderCurrentHeader() {
@@ -11288,11 +11416,7 @@ function renderPatternSwitcher() {
   }
   const siblings = Object.values(state.estimates)
     .filter(e => e.meta?.patternGroupId === groupId)
-    .sort((a,b) => {
-      // オリジナル → ② → ③ → 元請確定版 の順
-      const order = (l) => l === 'オリジナル' ? 0 : (l === 'パターン②' ? 1 : (l === 'パターン③' ? 2 : (l === '元請確定版' ? 3 : 9)));
-      return order(a.meta?.patternLabel || '') - order(b.meta?.patternLabel || '');
-    });
+    .sort((a,b) => patternOrder(a.meta?.patternLabel || '') - patternOrder(b.meta?.patternLabel || ''));
   if (siblings.length <= 1) {
     wrap.style.display = 'none';
     return;
@@ -11409,7 +11533,16 @@ function duplicateEstimate(srcId) {
   switchTab('estimate');
 }
 
-// 修正パターン作成: 同物件の見積を兄弟として複製、自動でパターン②/③のラベル付与
+// パターンラベルの並び順(オリジナル → ② → ③ → ④ → ⑤ → 元請確定版 → その他)
+const PATTERN_LABEL_ORDER = ['オリジナル', 'パターン②', 'パターン③', 'パターン④', 'パターン⑤', '元請確定版'];
+const PATTERN_REVISION_LABELS = ['パターン②', 'パターン③', 'パターン④', 'パターン⑤']; // 修正パターン用ラベル(オリジナル除く)
+const PATTERN_MAX = 1 + PATTERN_REVISION_LABELS.length; // = 5(オリジナル + パターン②〜⑤)
+function patternOrder(label) {
+  const i = PATTERN_LABEL_ORDER.indexOf(label || '');
+  return i >= 0 ? i : 99;
+}
+
+// 修正パターン作成: 同物件の見積を兄弟として複製、自動でパターン②/③/④/⑤のラベル付与
 function createRevisionPattern() {
   const cur = state.estimate;
   if (!cur) return;
@@ -11426,16 +11559,14 @@ function createRevisionPattern() {
     saveEstimate();
     siblings = [cur];
   }
-  if (siblings.length >= 3) {
-    alert('修正パターンは最大3つまでです。\n不要なパターンを削除してから再度作成してください。');
+  if (siblings.length >= PATTERN_MAX) {
+    alert(`修正パターンは最大${PATTERN_MAX}つまでです。\n不要なパターンを削除してから再度作成してください。`);
     return;
   }
-  // 次のパターン番号を決定
+  // 次のパターン番号を決定(②→③→④→⑤の順で空きを探す)
   const usedLabels = new Set(siblings.map(s => s.meta?.patternLabel || ''));
-  let nextLabel = '';
-  if (!usedLabels.has('パターン②')) nextLabel = 'パターン②';
-  else if (!usedLabels.has('パターン③')) nextLabel = 'パターン③';
-  else { alert('利用可能なパターン番号がありません'); return; }
+  const nextLabel = PATTERN_REVISION_LABELS.find(lbl => !usedLabels.has(lbl)) || '';
+  if (!nextLabel) { alert('利用可能なパターン番号がありません'); return; }
   // 複製
   const clone = JSON.parse(JSON.stringify(cur));
   clone.id = newEstimateId();
@@ -11443,6 +11574,10 @@ function createRevisionPattern() {
   clone.updatedAt = new Date().toISOString();
   clone.meta.patternGroupId = groupId;
   clone.meta.patternLabel = nextLabel;
+  // ★Drive 連携情報は引き継がない(継承するとオリジナルと同じDriveファイルを上書きしてしまう)
+  delete clone._driveFileId;
+  delete clone._driveMonth;
+  delete clone._driveSavedAt;
   state.estimates[clone.id] = clone;
   state.estimate = clone;
   saveEstimate();
@@ -11476,13 +11611,12 @@ function deleteCurrentRevisionPattern() {
   if (!confirm(`修正パターン「${label}」をゴミ箱に移動しますか?${warn}\n\n30日後に自動削除されます(それまでは台帳タブのゴミ箱から復元可)。`)) return;
   cur.deleted = true;
   cur.deletedAt = new Date().toISOString();
-  // 残りの兄弟から切替先を決定: オリジナル優先 → パターン② → パターン③ → 元請確定版 → その他更新日順
-  const order = (l) => l === 'オリジナル' ? 0 : (l === 'パターン②' ? 1 : (l === 'パターン③' ? 2 : (l === '元請確定版' ? 3 : 9)));
+  // 残りから切替先を決定: オリジナル優先 → ② → ③ → ④ → ⑤ → 元請確定版 → その他更新日順
   const remaining = siblings
     .filter(s => s.id !== cur.id)
     .sort((a, b) => {
-      const oa = order(a.meta?.patternLabel || '');
-      const ob = order(b.meta?.patternLabel || '');
+      const oa = patternOrder(a.meta?.patternLabel || '');
+      const ob = patternOrder(b.meta?.patternLabel || '');
       if (oa !== ob) return oa - ob;
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
@@ -11492,6 +11626,294 @@ function deleteCurrentRevisionPattern() {
   showToast(`「${label}」をゴミ箱に移動しました`);
 }
 window.deleteCurrentRevisionPattern = deleteCurrentRevisionPattern;
+
+// === パターン比較モーダル ===
+//   現在の見積の patternGroupId に属する他のパターンと、単価/数量/金額の差分を表示
+//   行のマッチは「工事名称 + 室名 + 仕様」キーで寄せる
+function _cmpKey(l) {
+  return [(l.item||'').trim(), (l.room||'').trim(), (l.specs||'').trim()].join('|');
+}
+function _cmpLineAmount(l) {
+  if (l.amountOverride != null && l.amountOverride !== '') return Number(l.amountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.unitPrice)||0);
+}
+function openComparePatternModal() {
+  const cur = state.estimate;
+  if (!cur) { showToast('見積が選択されていません', true); return; }
+  const gid = cur.meta?.patternGroupId;
+  if (!gid) { showToast('この見積には他パターンが無いので比較できません', true); return; }
+  const siblings = Object.values(state.estimates || {})
+    .filter(e => !e?.deleted && e?.meta?.patternGroupId === gid);
+  if (siblings.length < 2) { showToast('比較するには2つ以上のパターンが必要です', true); return; }
+  // パターンを順序ソート(オリジナル → ② → ③ → ④ → ⑤ → 元請確定版)
+  siblings.sort((a,b) => patternOrder(a.meta?.patternLabel||'') - patternOrder(b.meta?.patternLabel||''));
+  // セレクト初期化
+  const fillSelect = (sel, defaultId) => {
+    sel.innerHTML = siblings.map(s => `<option value="${s.id}">${escapeHtml(s.meta?.patternLabel||'(無名)')}</option>`).join('');
+    if (defaultId) sel.value = defaultId;
+  };
+  const selL = document.getElementById('cmp-left');
+  const selR = document.getElementById('cmp-right');
+  // デフォルト: 左=最初のパターン、右=現在のパターン(無ければ2番目)
+  fillSelect(selL, siblings[0].id);
+  fillSelect(selR, cur.id !== siblings[0].id ? cur.id : siblings[1].id);
+  selL.onchange = renderComparePatterns;
+  selR.onchange = renderComparePatterns;
+  document.getElementById('compare-pattern-modal').style.display = 'flex';
+  renderComparePatterns();
+}
+function closeComparePatternModal() {
+  document.getElementById('compare-pattern-modal').style.display = 'none';
+}
+// 比較モーダル状態(現在の比較行と選択キー)— コピー実行時に参照
+const _cmpState = { lId: '', rId: '', rows: [], selectedKeys: new Set() };
+
+function renderComparePatterns() {
+  const lId = document.getElementById('cmp-left').value;
+  const rId = document.getElementById('cmp-right').value;
+  const L = state.estimates[lId];
+  const R = state.estimates[rId];
+  if (!L || !R) return;
+  _cmpState.lId = lId;
+  _cmpState.rId = rId;
+  _cmpState.selectedKeys = new Set(); // パターン切替で選択リセット
+  const lLines = (L.lines||[]).filter(x => x.item); // 空行は除外
+  const rLines = (R.lines||[]).filter(x => x.item);
+  // 左を基準にmap、右もmapにする
+  const lMap = new Map();
+  lLines.forEach((line, idx) => {
+    const k = _cmpKey(line);
+    if (!lMap.has(k)) lMap.set(k, []);
+    lMap.get(k).push({ line, idx });
+  });
+  const rMap = new Map();
+  rLines.forEach((line, idx) => {
+    const k = _cmpKey(line);
+    if (!rMap.has(k)) rMap.set(k, []);
+    rMap.get(k).push({ line, idx });
+  });
+  // 順序: 左の順 → 右にしか無いものを末尾追加
+  const rows = [];
+  const consumedR = new Set();
+  lLines.forEach((lLine, idx) => {
+    const k = _cmpKey(lLine);
+    const rBucket = rMap.get(k);
+    let rLine = null;
+    if (rBucket && rBucket.length) {
+      const taken = rBucket.shift();
+      rLine = taken.line;
+      consumedR.add(`${k}|${taken.idx}`);
+    }
+    rows.push({ key: k, l: lLine, r: rLine });
+  });
+  rLines.forEach((rLine, idx) => {
+    const k = _cmpKey(rLine);
+    if (consumedR.has(`${k}|${idx}`)) return;
+    rows.push({ key: k, l: null, r: rLine });
+  });
+  // 各行にユニークIDを付与(同一キー複数行に対応)
+  rows.forEach((row, i) => { row.uid = `${row.key}#${i}`; });
+  _cmpState.rows = rows;
+  // 描画
+  const tbody = document.getElementById('cmp-tbody');
+  let totalL = 0, totalR = 0;
+  const html = rows.map((row, ri) => {
+    const lAmt = row.l ? _cmpLineAmount(row.l) : null;
+    const rAmt = row.r ? _cmpLineAmount(row.r) : null;
+    if (lAmt != null) totalL += lAmt;
+    if (rAmt != null) totalR += rAmt;
+    let bg = '#fff';
+    let status = '';
+    if (!row.l && row.r) { bg = '#dcfce7'; status = '＋追加'; }
+    else if (row.l && !row.r) { bg = '#fee2e2'; status = '−削除'; }
+    else if (row.l && row.r) {
+      const sameQty = (Number(row.l.qty)||0) === (Number(row.r.qty)||0);
+      const sameUp = (Number(row.l.unitPrice)||0) === (Number(row.r.unitPrice)||0);
+      const sameAmt = (lAmt||0) === (rAmt||0);
+      if (sameQty && sameUp && sameAmt) { bg = '#fff'; status = '同じ'; }
+      else { bg = '#fef3c7'; status = '変更'; }
+    }
+    const qtyL = row.l ? fmtNum(row.l.qty || 0) : '─';
+    const qtyR = row.r ? fmtNum(row.r.qty || 0) : '─';
+    const upL = row.l ? '¥' + fmtNum(row.l.unitPrice || 0) : '─';
+    const upR = row.r ? '¥' + fmtNum(row.r.unitPrice || 0) : '─';
+    const amtL = lAmt != null ? '¥' + fmtNum(lAmt) : '─';
+    const amtR = rAmt != null ? '¥' + fmtNum(rAmt) : '─';
+    const diffAmt = (rAmt||0) - (lAmt||0);
+    const diffLabel = diffAmt === 0 ? '─' : (diffAmt > 0 ? '+¥' + fmtNum(diffAmt) : '−¥' + fmtNum(-diffAmt));
+    const diffColor = diffAmt > 0 ? '#15803d' : (diffAmt < 0 ? '#b91c1c' : '#666');
+    // 単価・数量それぞれの差で太字強調
+    const upBold = row.l && row.r && (Number(row.l.unitPrice)||0) !== (Number(row.r.unitPrice)||0) ? 'font-weight:600;' : '';
+    const qtyBold = row.l && row.r && (Number(row.l.qty)||0) !== (Number(row.r.qty)||0) ? 'font-weight:600;' : '';
+    const item = (row.l?.item || row.r?.item || '');
+    const room = (row.l?.room || row.r?.room || '');
+    const specs = (row.l?.specs || row.r?.specs || '');
+    const cat = (row.l?.category || row.r?.category || '');
+    const checked = _cmpState.selectedKeys.has(row.uid) ? 'checked' : '';
+    return `<tr style="background:${bg};" data-cmp-row-uid="${escapeHtml(row.uid)}">
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:center;"><input type="checkbox" class="cmp-row-check" data-uid="${escapeHtml(row.uid)}" ${checked} style="width:auto;"></td>
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9; font-size:10px; color:#475569;">${escapeHtml(cat)}</td>
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9;">${escapeHtml(item)}</td>
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9;">${escapeHtml(room)}</td>
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(specs)}">${escapeHtml(specs)}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right; ${qtyBold}">${qtyL}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right; ${qtyBold}">${qtyR}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right; ${upBold}">${upL}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right; ${upBold}">${upR}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right;">${amtL}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right;">${amtR}</td>
+      <td class="num" style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:right; color:${diffColor};">${diffLabel}</td>
+      <td style="padding:4px 6px; border-bottom:1px solid #f1f5f9; text-align:center; font-size:10px;">${status}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="13" style="text-align:center; padding:24px; color:#9ca3af;">行がありません</td></tr>`;
+  tbody.innerHTML = html;
+  document.getElementById('cmp-total-l').textContent = '¥' + fmtNum(totalL);
+  document.getElementById('cmp-total-r').textContent = '¥' + fmtNum(totalR);
+  const totalDiff = totalR - totalL;
+  const tdEl = document.getElementById('cmp-total-diff');
+  tdEl.textContent = totalDiff === 0 ? '─' : (totalDiff > 0 ? '+¥' + fmtNum(totalDiff) : '−¥' + fmtNum(-totalDiff));
+  tdEl.style.color = totalDiff > 0 ? '#15803d' : (totalDiff < 0 ? '#b91c1c' : '#666');
+  // チェックボックスのハンドラを再bind(innerHTMLで全消去されたため)
+  _cmpBindCheckHandlers();
+  _cmpUpdateSelCount();
+}
+window.openComparePatternModal = openComparePatternModal;
+window.closeComparePatternModal = closeComparePatternModal;
+
+// 選択状態カウント表示更新
+function _cmpUpdateSelCount() {
+  const el = document.getElementById('cmp-selected-count');
+  if (!el) return;
+  const n = _cmpState.selectedKeys.size;
+  el.textContent = n === 0 ? '未選択' : `${n}行選択中`;
+  el.style.color = n === 0 ? '#475569' : '#1e40af';
+  el.style.fontWeight = n === 0 ? 'normal' : '600';
+}
+
+// チェックボックス変更ハンドラ(個別行 + 全選択)を bind
+function _cmpBindCheckHandlers() {
+  // 個別行
+  document.querySelectorAll('.cmp-row-check').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const uid = e.target.dataset.uid;
+      if (e.target.checked) _cmpState.selectedKeys.add(uid);
+      else _cmpState.selectedKeys.delete(uid);
+      _cmpUpdateSelCount();
+      // 全選択チェックの状態も同期
+      const all = document.getElementById('cmp-check-all');
+      if (all) {
+        const total = _cmpState.rows.length;
+        all.checked = (_cmpState.selectedKeys.size === total && total > 0);
+        all.indeterminate = _cmpState.selectedKeys.size > 0 && _cmpState.selectedKeys.size < total;
+      }
+    });
+  });
+  // 全選択
+  const all = document.getElementById('cmp-check-all');
+  if (all) {
+    all.onchange = (e) => {
+      if (e.target.checked) _cmpState.rows.forEach(r => _cmpState.selectedKeys.add(r.uid));
+      else _cmpState.selectedKeys.clear();
+      document.querySelectorAll('.cmp-row-check').forEach(cb => { cb.checked = e.target.checked; });
+      _cmpUpdateSelCount();
+    };
+  }
+}
+
+// 比較モーダルのコピー処理: チェック行を direction の方向にコピー
+//   direction='r-to-l': 右パターンの内容で左パターンを上書き(マッチしない行は追加)
+//   direction='l-to-r': 左パターンの内容で右パターンを上書き(マッチしない行は追加)
+async function _cmpDoCopy(direction) {
+  const lId = _cmpState.lId;
+  const rId = _cmpState.rId;
+  if (lId === rId) { showToast('同じパターン同士はコピーできません', true); return; }
+  const L = state.estimates[lId];
+  const R = state.estimates[rId];
+  if (!L || !R) { showToast('パターン情報が取得できません', true); return; }
+  const selRows = _cmpState.rows.filter(r => _cmpState.selectedKeys.has(r.uid));
+  if (!selRows.length) { showToast('行を選択してください(チェックボックスで)', true); return; }
+  const isRtoL = direction === 'r-to-l';
+  const srcSide = isRtoL ? 'r' : 'l';
+  const tgtSide = isRtoL ? 'l' : 'r';
+  const srcEst = isRtoL ? R : L;
+  const tgtEst = isRtoL ? L : R;
+  const srcLabel = srcEst.meta?.patternLabel || '(無名)';
+  const tgtLabel = tgtEst.meta?.patternLabel || '(無名)';
+  // 件数集計: 上書き(両方ある) / 追加(srcのみ) / スキップ(tgtのみで src無し)
+  let willOverwrite = 0, willAdd = 0, willSkip = 0;
+  selRows.forEach(row => {
+    const srcLine = row[srcSide];
+    const tgtLine = row[tgtSide];
+    if (!srcLine) willSkip++;
+    else if (tgtLine) willOverwrite++;
+    else willAdd++;
+  });
+  const ok = await asyncConfirm(
+    `${srcLabel} → ${tgtLabel} へコピー`,
+    `選択行を ${srcLabel} の内容で反映します:\n` +
+    `  上書き: ${willOverwrite} 行\n` +
+    `  追加  : ${willAdd} 行\n` +
+    (willSkip > 0 ? `  スキップ: ${willSkip} 行(コピー元に無い行)\n` : '') +
+    `\n${tgtLabel} に変更を適用しますか?`,
+    '反映する', 'キャンセル'
+  );
+  if (!ok) return;
+  // 適用
+  if (!Array.isArray(tgtEst.lines)) tgtEst.lines = [];
+  let applied = 0;
+  selRows.forEach(row => {
+    const srcLine = row[srcSide];
+    if (!srcLine) return; // src無しはスキップ
+    const tgtLine = row[tgtSide];
+    if (tgtLine) {
+      // 上書き: tgtEst.lines 内の同じ行を見つけて、srcLineの中身で上書き
+      // ただし `id` 系・Drive系メタは保持(配列順序も保持)
+      const idx = tgtEst.lines.indexOf(tgtLine);
+      if (idx >= 0) {
+        // srcLine をディープコピーして tgtEst.lines[idx] に
+        const newLine = JSON.parse(JSON.stringify(srcLine));
+        tgtEst.lines[idx] = newLine;
+        applied++;
+      }
+    } else {
+      // 追加: tgtEst.lines に push
+      const newLine = JSON.parse(JSON.stringify(srcLine));
+      tgtEst.lines.push(newLine);
+      applied++;
+    }
+  });
+  // 保存(updatedAt更新+autoPush発火)
+  // 注意: state.estimate がコピー先のときだけ saveEstimate でフックが効く。
+  //       それ以外の見積を直接いじるので、手動で updatedAt 更新+saveEstimates+autoPush。
+  tgtEst.updatedAt = new Date().toISOString();
+  state.estimates[tgtEst.id] = tgtEst;
+  saveEstimates();
+  // 編集中の見積がコピー先なら明細を再描画
+  if (state.estimate && state.estimate.id === tgtEst.id) {
+    if (typeof renderEstimate === 'function') renderEstimate();
+    if (typeof renderTotals === 'function') renderTotals();
+  }
+  // Drive台帳に反映(編集元と編集先が違う見積でも push する)
+  if (typeof autoPushEstimateToLedger === 'function') {
+    // tgtEst を一時的に state.estimate にして autoPush するのは副作用が大きいので
+    // 直接 gasSaveLedger を呼ぶ
+    if ((state.settings?.gasSyncUrl||'').trim() && (state.settings?.gasSyncToken||'').trim()) {
+      gasSaveLedger(tgtEst, tgtEst._driveFileId || '').then(r => {
+        tgtEst._driveFileId = r.fileId;
+        tgtEst._driveMonth = r.month;
+        tgtEst._driveSavedAt = new Date().toISOString();
+        saveEstimates();
+        if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
+      }).catch(e => console.warn('[cmp copy push 失敗]', e));
+    }
+  }
+  if (typeof renderLedger === 'function') renderLedger();
+  showToast(`✅ ${applied}行を ${srcLabel} → ${tgtLabel} に反映しました`);
+  // チェック解除して再描画(差分が消えてるはず)
+  _cmpState.selectedKeys.clear();
+  renderComparePatterns();
+}
+window._cmpDoCopy = _cmpDoCopy;
 
 function loadEstimateById(id) {
   if (!state.estimates[id]) return;
@@ -11506,6 +11928,7 @@ function loadEstimateById(id) {
   if (_madori) syncMadoriToHouseCleaning(_madori);
   syncMetaInputs();
   renderEstimate(); renderCurrentHeader();
+  if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
   switchTab('estimate');
 }
 
@@ -11567,6 +11990,43 @@ function autoPurgeOldDeleted() {
 }
 // 起動時に1回呼ぶ
 autoPurgeOldDeleted();
+
+// 同じ _driveFileId を複数のパターンで共有してしまっている既存データの救済
+//   原因: 旧版 createRevisionPattern が _driveFileId を引き継いでいたバグ
+//   症状: パターン②をpushすると同じファイルを上書き → オリジナルとパターン②が交互に消える
+//   対処: 同じ _driveFileId を持つ複数パターンを検出 → patternLabel='オリジナル' 以外の _driveFileId をクリア
+//        次回push時に新ファイルが作られる
+function autoFixSharedDriveFileId() {
+  const byFid = {};
+  Object.values(state.estimates || {}).forEach(est => {
+    if (!est || est.deleted || !est._driveFileId) return;
+    if (!byFid[est._driveFileId]) byFid[est._driveFileId] = [];
+    byFid[est._driveFileId].push(est);
+  });
+  let fixed = 0;
+  Object.entries(byFid).forEach(([fid, list]) => {
+    if (list.length <= 1) return;
+    // オリジナルを優先的に残す。無ければ updatedAt が一番古いものを残す(=もとから紐付いてた)
+    list.sort((a, b) => {
+      const ao = (a.meta?.patternLabel === 'オリジナル') ? 0 : 1;
+      const bo = (b.meta?.patternLabel === 'オリジナル') ? 0 : 1;
+      if (ao !== bo) return ao - bo;
+      return (a.updatedAt || '').localeCompare(b.updatedAt || '');
+    });
+    // 先頭(=保持)以外は _driveFileId クリア
+    for (let i = 1; i < list.length; i++) {
+      delete list[i]._driveFileId;
+      delete list[i]._driveMonth;
+      delete list[i]._driveSavedAt;
+      fixed++;
+    }
+  });
+  if (fixed > 0) {
+    saveEstimates();
+    console.log(`[autoFixSharedDriveFileId] ${fixed}件の重複 _driveFileId を解除(次回保存時に新ファイル作成)`);
+  }
+}
+autoFixSharedDriveFileId();
 
 // パターンプルダウンの初期化(設定の defaultPattern を選択状態に)
 function initNewEstPatternSelect() {
@@ -11829,6 +12289,14 @@ document.getElementById('btn-new-estimate').addEventListener('click', () => {
 document.getElementById('btn-dup-estimate').addEventListener('click', () => duplicateEstimate());
 document.getElementById('btn-create-revision').addEventListener('click', () => createRevisionPattern());
 document.getElementById('btn-delete-revision')?.addEventListener('click', () => deleteCurrentRevisionPattern());
+document.getElementById('btn-compare-patterns')?.addEventListener('click', () => openComparePatternModal());
+document.getElementById('cmp-close')?.addEventListener('click', () => closeComparePatternModal());
+document.getElementById('cmp-close-2')?.addEventListener('click', () => closeComparePatternModal());
+document.getElementById('compare-pattern-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'compare-pattern-modal') closeComparePatternModal();
+});
+document.getElementById('cmp-copy-r-to-l')?.addEventListener('click', () => _cmpDoCopy('r-to-l'));
+document.getElementById('cmp-copy-l-to-r')?.addEventListener('click', () => _cmpDoCopy('l-to-r'));
 document.getElementById('btn-toggle-confirmed')?.addEventListener('click', toggleConfirmed);
 document.getElementById('btn-apply-motouke-order')?.addEventListener('click', () => openMotoukeOrderModal());
 document.getElementById('pattern-select').addEventListener('change', (e) => {
@@ -12018,9 +12486,8 @@ function renderLedger() {
       const _siblings = est._patternSiblings;
       let patternChips = '';
       if (_siblings && _siblings.length > 1) {
-        // ラベル順: オリジナル → パターン② → パターン③ → 元請確定版
-        const _ord = (lbl) => lbl === 'オリジナル' ? 0 : (lbl === 'パターン②' ? 1 : (lbl === 'パターン③' ? 2 : (lbl === '元請確定版' ? 3 : 9)));
-        const sorted = _siblings.slice().sort((a,b) => _ord(a.meta?.patternLabel||'') - _ord(b.meta?.patternLabel||''));
+        // ラベル順: オリジナル → ② → ③ → ④ → ⑤ → 元請確定版
+        const sorted = _siblings.slice().sort((a,b) => patternOrder(a.meta?.patternLabel||'') - patternOrder(b.meta?.patternLabel||''));
         patternChips = `<div style="margin-top:2px; display:inline-flex; gap:3px; flex-wrap:wrap;">` + sorted.map(s => {
           const lbl = s.meta?.patternLabel || 'オリジナル';
           const isCur = (state.estimate && state.estimate.id === s.id) || s.id === est.id;
@@ -20756,6 +21223,7 @@ async function reloadLedgerMonths(silent) {
 }
 
 // 特定月の見積を全件取込 → state.estimates にマージ
+// ローカル保護: ローカル updatedAt > Drive updatedAt の見積はスキップ(他PCの古い同期で局所編集が消えるのを防ぐ)
 async function loadLedgerMonth(month, silent) {
   if (!month) return 0;
   if (!silent) gasSyncStatus(`⏳ ${month} の台帳取得中...`);
@@ -20763,6 +21231,7 @@ async function loadLedgerMonth(month, silent) {
     const list = await gasListLedgerInMonth(month);
     if (!list.length) { if (!silent) gasSyncStatus(`${month}: 0件`); return 0; }
     let loaded = 0;
+    let skippedNewer = 0; // ローカルが新しくてスキップした件数
     // 並列取得(GASのレートリミット注意・ある程度chunkに)
     const CHUNK = 8;
     for (let i = 0; i < list.length; i += CHUNK) {
@@ -20774,6 +21243,20 @@ async function loadLedgerMonth(month, silent) {
       contents.forEach(x => {
         if (!x || !x.content) return;
         const est = x.content;
+        // 同期事故防止: ローカルの編集がDriveより新しければ上書きしない
+        // (例: PC1で編集中にPC1で誤って同期 → ローカル編集ロストを防ぐ)
+        const localEst = state.estimates[est.id];
+        if (localEst && localEst.updatedAt && est.updatedAt) {
+          const localT = new Date(localEst.updatedAt).getTime();
+          const driveT = new Date(est.updatedAt).getTime();
+          if (Number.isFinite(localT) && Number.isFinite(driveT) && localT > driveT) {
+            // ローカル方が新しい → fileIdだけ補完して中身は触らない(次回push時に必要)
+            if (!localEst._driveFileId) localEst._driveFileId = x.meta.fileId;
+            if (!localEst._driveMonth) localEst._driveMonth = month;
+            skippedNewer++;
+            return;
+          }
+        }
         est._driveFileId = x.meta.fileId;
         est._driveMonth = month;
         // Drive側のメタにmodifiedTimeあれば反映、無ければ updatedAt をfallback
@@ -20785,7 +21268,10 @@ async function loadLedgerMonth(month, silent) {
     }
     saveEstimates();
     if (typeof renderLedger === 'function') renderLedger();
-    if (!silent) gasSyncStatus(`✅ ${month}: ${loaded}件 読込完了`);
+    if (!silent) {
+      const skipMsg = skippedNewer > 0 ? ` / ${skippedNewer}件はローカル新版を保護` : '';
+      gasSyncStatus(`✅ ${month}: ${loaded}件 読込完了${skipMsg}`);
+    }
     return loaded;
   } catch (e) {
     console.error('[Drive 台帳]', e);
@@ -20808,6 +21294,7 @@ async function pushCurrentEstimateToLedger(silent) {
     state.estimate._driveMonth = r.month;
     state.estimate._driveSavedAt = new Date().toISOString();
     saveEstimates();
+    if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
     if (!silent) gasSyncStatus(`✅ Drive台帳保存: ${r.month}/${r.id}`);
     return r;
   } catch (e) {
@@ -21055,6 +21542,26 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(`✅ ローカル重複 ${dups.length}件 削除完了`);
   });
   // === 台帳 Drive ボタン ===
+  // ⋮ 詳細メニュートグル(クリックで開閉、外クリックで閉じる)
+  const btnLedgerMore = document.getElementById('btn-ledger-drive-more');
+  const ledgerMoreMenu = document.getElementById('ledger-drive-more-menu');
+  if (btnLedgerMore && ledgerMoreMenu) {
+    btnLedgerMore.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ledgerMoreMenu.style.display = (ledgerMoreMenu.style.display === 'none' ? 'block' : 'none');
+    });
+    document.addEventListener('click', (e) => {
+      if (ledgerMoreMenu.style.display === 'block'
+          && !ledgerMoreMenu.contains(e.target)
+          && e.target !== btnLedgerMore) {
+        ledgerMoreMenu.style.display = 'none';
+      }
+    });
+    // 詳細メニュー内のボタンクリック時はメニューを閉じる(操作開始の合図)
+    ledgerMoreMenu.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => { ledgerMoreMenu.style.display = 'none'; });
+    });
+  }
   const btnLedgerReload = document.getElementById('btn-ledger-drive-reload');
   if (btnLedgerReload) btnLedgerReload.addEventListener('click', () => reloadLedgerMonths(false));
   const btnLedgerPushCur = document.getElementById('btn-ledger-drive-push-current');
@@ -21069,18 +21576,23 @@ document.addEventListener('DOMContentLoaded', () => {
       btnLedgerPushCur.textContent = '⏳ 更新中...';
       const cur = state.estimate;
       const curLabel = cur.meta?.patternLabel || '現在のパターン';
-      // 1. 現在の見積を push
-      gasSyncStatus(`⏳ ${curLabel} を保存中...`);
-      await pushCurrentEstimateToLedger(true);
-      // 2. 同 patternGroupId の他パターン全部 push
+      // 全体パターン数(現在+他パターン)を先に確定 → 進捗を 1/N 形式で表示
       const gid = cur?.meta?.patternGroupId;
+      const otherSiblings = gid
+        ? Object.values(state.estimates || {})
+            .filter(e => e?.id !== cur.id && e?.meta?.patternGroupId === gid && !e.deleted)
+        : [];
+      const totalPatterns = 1 + otherSiblings.length;
+      // 1. 現在の見積を push (1/N)
+      gasSyncStatus(`⏳ ${curLabel} を保存中... (1/${totalPatterns})`);
+      await pushCurrentEstimateToLedger(true);
+      // 2. 同 patternGroupId の他パターン全部 push (2/N, 3/N, ...)
       let sibCount = 0;
-      if (gid) {
-        const siblings = Object.values(state.estimates || {})
-          .filter(e => e?.id !== cur.id && e?.meta?.patternGroupId === gid && !e.deleted);
-        for (const sib of siblings) {
-          const sibLabel = sib.meta?.patternLabel || `パターン${sibCount+2}`;
-          gasSyncStatus(`⏳ ${sibLabel} を保存中... (${sibCount+1}/${siblings.length})`);
+      if (otherSiblings.length) {
+        for (let idx = 0; idx < otherSiblings.length; idx++) {
+          const sib = otherSiblings[idx];
+          const sibLabel = sib.meta?.patternLabel || `パターン${idx+2}`;
+          gasSyncStatus(`⏳ ${sibLabel} を保存中... (${idx+2}/${totalPatterns})`);
           try {
             const r = await gasSaveLedger(sib, sib._driveFileId || '');
             sib._driveFileId = r.fileId;
@@ -21214,18 +21726,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // else: そのままテンプレを台帳にも保存
       }
-      // 1. 現在の見積を push
-      const r = await pushCurrentEstimateToLedger(true);
-      // 2. 同 patternGroupId の他パターン全部 push
+      // 全体パターン数を先に確定 → 進捗を 1/N 形式で表示
       const cur = state.estimate;
       const gid = cur?.meta?.patternGroupId;
+      const otherSiblings = gid
+        ? Object.values(state.estimates || {})
+            .filter(e => e?.id !== cur.id && e?.meta?.patternGroupId === gid && !e.deleted)
+        : [];
+      const totalPatterns = 1 + otherSiblings.length;
+      // 1. 現在の見積を push (1/N)
+      btnSaveToLedger.textContent = `⏳ 保存中... (1/${totalPatterns})`;
+      const r = await pushCurrentEstimateToLedger(true);
+      // 2. 同 patternGroupId の他パターン全部 push (2/N, 3/N, ...)
       let sibCount = 0;
-      if (gid) {
-        const siblings = Object.values(state.estimates || {})
-          .filter(e => e?.id !== cur.id && e?.meta?.patternGroupId === gid && !e.deleted);
-        for (const sib of siblings) {
-          const sibLabel = sib.meta?.patternLabel || `パターン${sibCount+2}`;
-          btnSaveToLedger.textContent = `⏳ ${sibLabel}保存中... (${sibCount+1}/${siblings.length})`;
+      if (otherSiblings.length) {
+        for (let idx = 0; idx < otherSiblings.length; idx++) {
+          const sib = otherSiblings[idx];
+          const sibLabel = sib.meta?.patternLabel || `パターン${idx+2}`;
+          btnSaveToLedger.textContent = `⏳ ${sibLabel}保存中... (${idx+2}/${totalPatterns})`;
           try {
             const sr = await gasSaveLedger(sib, sib._driveFileId || '');
             sib._driveFileId = sr.fileId;
@@ -22348,6 +22866,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById('app-loading-status');
     if (el) el.textContent = msg;
   };
+  // 「☁ 台帳へ保存」ボタンの保存時刻スタンプを初期表示
+  if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
   // 起動時の自動取込: ローカルキャッシュで即操作可能、GAS取込はバックグラウンドで並行実行
   if (state.settings.gasSyncOnStartup && (state.settings.gasSyncUrl||'').trim()) {
     _setAppLoadingStatus('準備完了 — マスタ取込はバックグラウンドで継続');
