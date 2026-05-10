@@ -2229,8 +2229,10 @@
           <option value="__not_juchu__">⏳ 未受注(受注以外)</option>
           <option value="下書き">📝 下書き</option>
           <option value="対応中">🛠 対応中</option>
-          <option value="提出済">📤 提出済</option>
+          <option value="アポ済">📅 アポ済</option>
+          <option value="提出済">📤 見積提出済</option>
           <option value="受注">🎯 受注</option>
+          <option value="施工指示あり">🔨 施工指示あり</option>
           <option value="失注">❌ 失注</option>
           <option value="完了">✅ 完了</option>
           <option value="キャンセル">✖ キャンセル</option>
@@ -3083,6 +3085,10 @@ JSB 退去 / 30万前後で収めたい" style="width:100%; min-height:120px; fo
           <option value="">(未設定)</option>
         </select>
 
+        <label>元請け担当者</label>
+        <input type="text" id="ri-atena-tantou" list="dl-ri-atena-tantou" placeholder="例: 水上 直樹 (元請け選択で候補が出ます)" style="grid-column: 2 / -1;" autocomplete="off">
+        <datalist id="dl-ri-atena-tantou"></datalist>
+
         <label>住所</label>
         <input type="text" id="ri-address" style="grid-column: 2 / -1;">
 
@@ -3092,28 +3098,16 @@ JSB 退去 / 30万前後で収めたい" style="width:100%; min-height:120px; fo
         <input type="text" id="ri-contractor-tel">
 
         <label>依頼日</label>
-        <input type="text" id="ri-request-date" placeholder="YYYY-MM-DD or 4/4">
-        <label>緊急度</label>
-        <select id="ri-urgency">
-          <option value="">-</option>
-          <option value="高">高</option>
-          <option value="中">中</option>
-          <option value="低">低</option>
-        </select>
+        <input type="text" id="ri-request-date" placeholder="YYYY-MM-DD or 4/4" style="grid-column: 2 / -1;">
 
         <label style="align-self:start;">依頼内容</label>
         <textarea id="ri-request-detail" rows="3" style="grid-column: 2 / -1; font-size:12px;"></textarea>
 
         <label>立会担当者</label>
-        <select id="ri-tachiai" style="grid-column: 2 / -1;">
-          <option value="">(未設定)</option>
-          <option value="山田 裕貴">山田 裕貴</option>
-          <option value="大村 将史">大村 将史</option>
-          <option value="南部 大我">南部 大我</option>
-          <option value="木村 優作">木村 優作</option>
-          <option value="鈴木 悠平">鈴木 悠平</option>
-          <option value="最上 登生">最上 登生</option>
-        </select>
+        <div style="grid-column: 2 / -1; display:flex; gap:6px;">
+          <input type="text" id="ri-tachiai" list="dl-staff" placeholder="プルダウン選択 or 手打ち" style="flex:1;">
+          <button type="button" id="ri-tachiai-random" title="山田 裕貴 を除外してランダムで割当" style="background:#e9d5ff; border:1px solid #a855f7; color:#6b21a8; font-weight:600; white-space:nowrap; padding:4px 10px;">🎲 ランダム</button>
+        </div>
       </div>
       <div style="margin-top:14px; display:flex; justify-content:space-between;">
         <button id="ri-back">← 戻る(再抽出)</button>
@@ -8896,16 +8890,22 @@ function renderTotals() {
 }
 
 // ステータス関連(下書き=作成中)
-const ESTIMATE_STATUSES = ['下書き', '対応中', '提出済', '受注', '失注', '完了', 'キャンセル'];
+const ESTIMATE_STATUSES = ['下書き', '対応中', 'アポ済', '提出済', '受注', '施工指示あり', '完了', '失注', 'キャンセル'];
 const STATUS_STYLES = {
-  '下書き':     { bg:'#e5e7eb', color:'#374151', icon:'📝' },
-  '対応中':     { bg:'#fef3c7', color:'#92400e', icon:'🛠' },
-  '提出済':     { bg:'#dbeafe', color:'#1e40af', icon:'📤' },
-  '受注':       { bg:'#bbf7d0', color:'#14532d', icon:'🎯' },
-  '失注':       { bg:'#fecaca', color:'#7f1d1d', icon:'❌' },
-  '完了':       { bg:'#d1fae5', color:'#065f46', icon:'✅' },
-  'キャンセル': { bg:'#fee2e2', color:'#991b1b', icon:'✖' },
+  '下書き':       { bg:'#e5e7eb', color:'#374151', icon:'📝' },
+  '対応中':       { bg:'#fef3c7', color:'#92400e', icon:'🛠' },
+  'アポ済':       { bg:'#fde68a', color:'#78350f', icon:'📅' },
+  '提出済':       { bg:'#dbeafe', color:'#1e40af', icon:'📤', label:'見積提出済' },
+  '受注':         { bg:'#bbf7d0', color:'#14532d', icon:'🎯' },
+  '施工指示あり': { bg:'#c7d2fe', color:'#3730a3', icon:'🔨' },
+  '失注':         { bg:'#fecaca', color:'#7f1d1d', icon:'❌' },
+  '完了':         { bg:'#d1fae5', color:'#065f46', icon:'✅' },
+  'キャンセル':   { bg:'#fee2e2', color:'#991b1b', icon:'✖' },
 };
+// ステータス表示名(値とは別の表示ラベル — 「提出済」は「見積提出済」と表示)
+function statusDisplayLabel(status) {
+  return STATUS_STYLES[status]?.label || status;
+}
 // 「減工事あり」ステータスは廃止 → 既存データを 提出済/下書き に書き戻すだけ
 function autoUpdateEstimateStatus() {
   const meta = state.estimate?.meta;
@@ -8925,7 +8925,8 @@ function renderStatusBadge() {
   const allStatuses = ESTIMATE_STATUSES.includes(st) ? ESTIMATE_STATUSES : [st, ...ESTIMATE_STATUSES];
   sel.innerHTML = allStatuses.map(s => {
     const style = STATUS_STYLES[s] || STATUS_STYLES['下書き'];
-    return `<option value="${escapeHtml(s)}">${style.icon} ${escapeHtml(s)}</option>`;
+    const lbl = style.label || s;
+    return `<option value="${escapeHtml(s)}">${style.icon} ${escapeHtml(lbl)}</option>`;
   }).join('');
   sel.value = st;
   // バッジ風背景色
@@ -13380,10 +13381,11 @@ function renderLedger() {
       const statusText = est.meta?.status || '下書き';
       const st = STATUS_STYLES[statusText] || STATUS_STYLES['下書き'];
       // 編集可能なステータスバッジ: select をバッジ風スタイルで描画 → 変更で保存
-      const statusOptions = ['下書き','対応中','提出済','受注','失注','完了','キャンセル'].map(s => {
+      const statusOptions = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','完了','失注','キャンセル'].map(s => {
         const ss = STATUS_STYLES[s] || STATUS_STYLES['下書き'];
         const sel = s === statusText ? ' selected' : '';
-        return `<option value="${escapeHtml(s)}"${sel}>${ss.icon} ${escapeHtml(s)}</option>`;
+        const lbl = ss.label || s;
+        return `<option value="${escapeHtml(s)}"${sel}>${ss.icon} ${escapeHtml(lbl)}</option>`;
       }).join('');
       const statusBadge = `<select class="ledger-status-edit" data-est-id="${escapeHtml(est.id)}" style="appearance:none; -webkit-appearance:none; padding:2px 18px 2px 8px; border-radius:10px; font-size:11px; font-weight:600; background-color:${st.bg}; color:${st.color}; border:1px solid transparent; cursor:pointer; background-image:linear-gradient(45deg,transparent 50%,${st.color} 50%),linear-gradient(135deg,${st.color} 50%,transparent 50%); background-position:calc(100% - 9px) 50%, calc(100% - 5px) 50%; background-size:4px 4px,4px 4px; background-repeat:no-repeat;" title="クリックでステータス変更">${statusOptions}</select>`;
       const reducedLines = (est.lines||[]).filter(l => l.reduced);
@@ -20996,14 +20998,13 @@ const REPAIR_EXTRACT_PROMPT = `あなたは建設業の修繕依頼書 解析ア
   "contractorName": "入居者氏名(様 等の敬称は除外)",
   "contractorTel": "入居者電話番号",
   "motouke": "元請け会社名(山一地所/みどり不動産/光和工業/JSB/ワールドレジデンシャル/丸山不動産 等)",
+  "atenaTantou": "元請けの担当者名(発信者・差出人 等。例: 水上 直樹)",
   "requestDate": "依頼日(YYYY-MM-DD or M/D 形式)",
-  "requestDetail": "依頼内容を要約(故障状況・希望対応日 等)",
-  "urgency": "緊急度(高/中/低)"
+  "requestDetail": "依頼内容を要約(故障状況・希望対応日 等)"
 }
 
 【ルール】
 - 不明・未記載の項目は空文字 ""
-- 緊急度は文書内に明示が無ければ空欄
 - 依頼内容は簡潔に(50文字程度を目安)`;
 
 async function extractRepairRequest(parts) {
@@ -21046,12 +21047,56 @@ function openRepairRequestModal() {
   if (dl) {
     dl.innerHTML = (state.bukken || []).map(b => `<option value="${escapeHtml(b.name||'')}">`).join('');
   }
-  // 既定立会担当者(現在の設定があれば)
-  const tachiaiSel = document.getElementById('ri-tachiai');
-  if (tachiaiSel) {
-    const cur = state.settings?.userName || '';
-    if (cur && Array.from(tachiaiSel.options).some(o => o.value === cur)) tachiaiSel.value = cur;
+  // 元請け担当者の入力欄は空にして、datalist は元請け未選択 = 全担当者
+  const atenaTantouInp = document.getElementById('ri-atena-tantou');
+  if (atenaTantouInp) atenaTantouInp.value = '';
+  _riRebuildAtenaTantouDatalist();
+  // 立会担当者は自動入力しない(空欄スタート → 🎲ランダム or 手打ち or datalist選択)
+  const tachiaiInp = document.getElementById('ri-tachiai');
+  if (tachiaiInp) tachiaiInp.value = '';
+}
+
+// 修繕依頼モーダル内の元請け担当者 datalist を 現在選択中の元請け に応じて更新
+function _riRebuildAtenaTantouDatalist() {
+  const dl = document.getElementById('dl-ri-atena-tantou');
+  if (!dl) return;
+  const motoukeSel = document.getElementById('ri-motouke');
+  const moto = motoukeSel?.value || '';
+  // motoukeContacts から該当元請けの担当者リスト取得(getMotoukeContacts ヘルパー使用)
+  let opts = [];
+  if (typeof getMotoukeContacts === 'function' && moto) {
+    opts = getMotoukeContacts(moto);
   }
+  // 元請け未選択 or マッチ無し → 全担当者
+  if (!opts.length) {
+    const all = state.settings?.motoukeContacts || {};
+    opts = [];
+    Object.values(all).forEach(arr => { if (Array.isArray(arr)) opts.push(...arr); });
+    opts = [...new Set(opts)];
+  }
+  dl.innerHTML = opts.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
+// 立会担当者ランダム割当: 山田 裕貴(社長)を除外して残りからランダム1名
+function _riPickRandomTachiai() {
+  // 候補プール: dl-staff から取得 + 空ならフォールバック
+  const dl = document.getElementById('dl-staff');
+  const fromDl = dl ? Array.from(dl.options).map(o => o.value).filter(Boolean) : [];
+  const fallback = ['山田 裕貴','大村 将史','南部 大我','木村 優作','鈴木 悠平','最上 登生'];
+  const pool = fromDl.length ? fromDl : fallback;
+  // 山田 裕貴(社長)を除外 — ランダム割当の対象から外す
+  let candidates = pool.filter(n => n !== '山田 裕貴');
+  if (!candidates.length) candidates = pool; // 万一全員除外されちゃったら 全員復活
+  // 現在値と同じ人が連続で当たらないよう除外(候補2名以上のとき)
+  const inp = document.getElementById('ri-tachiai');
+  const cur = (inp?.value || '').trim();
+  if (cur && candidates.length > 1) {
+    const without = candidates.filter(n => n !== cur);
+    if (without.length) candidates = without;
+  }
+  const picked = candidates[Math.floor(Math.random() * candidates.length)];
+  // picked が undefined だと input が空になるので、空なら何もしない(現在値維持)
+  if (inp && picked) inp.value = picked;
 }
 function closeRepairRequestModal() {
   document.getElementById('repair-import-modal').style.display = 'none';
@@ -21094,7 +21139,6 @@ async function riAnalyze() {
     document.getElementById('ri-contractor-tel').value = data.contractorTel || '';
     document.getElementById('ri-request-date').value = data.requestDate || '';
     document.getElementById('ri-request-detail').value = data.requestDetail || '';
-    document.getElementById('ri-urgency').value = data.urgency || '';
     // 元請け select に値があれば選択(無ければ空のまま)
     const motoukeSel = document.getElementById('ri-motouke');
     if (motoukeSel && data.motouke) {
@@ -21103,6 +21147,9 @@ async function riAnalyze() {
       const matched = opts.find(v => v && (v === data.motouke || v.includes(data.motouke) || data.motouke.includes(v)));
       if (matched) motoukeSel.value = matched;
     }
+    // 元請け担当者(AI抽出) → 入力欄反映 + datalist 再構築(元請けが反映済みの状態で)
+    _riRebuildAtenaTantouDatalist();
+    document.getElementById('ri-atena-tantou').value = data.atenaTantou || '';
     // 物件マスタとの照合(物件名完全一致 → 住所/元請け 自動補完)
     riCheckBukkenMatch();
     // Step2 へ
@@ -21159,14 +21206,13 @@ function riRegister() {
       workflowStatus: '対応中',                           // 旧フィールド互換(工事進捗)
       salesStage: '対応中',                               // 修繕補助タグ
       atena: motouke ? '株式会社' + motouke.replace(/^株式会社|^\(株\)/, '').trim() : '',
-      atenaTantou: '',
+      atenaTantou: document.getElementById('ri-atena-tantou')?.value.trim() || '',
       atenaAutoFilled: true,
       remarks: '',
       creatorMemo: '',
       // 修繕依頼系のメタフィールド
       requestDate: document.getElementById('ri-request-date').value.trim(),
       requestDetail: document.getElementById('ri-request-detail').value.trim(),
-      urgency: document.getElementById('ri-urgency').value.trim(),
       taikyo: Object.assign(emptyTaikyo(), {
         motouke,
         apartmentName: bukken,
@@ -21658,6 +21704,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('ri-step2').style.display = 'none';
   });
   document.getElementById('ri-register')?.addEventListener('click', () => riRegister());
+  document.getElementById('ri-tachiai-random')?.addEventListener('click', () => _riPickRandomTachiai());
+  // 元請け select 変更 → 担当者 datalist 再構築
+  document.getElementById('ri-motouke')?.addEventListener('change', () => _riRebuildAtenaTantouDatalist());
   // 物件名入力で物件マスタ照合(リアルタイム)
   document.getElementById('ri-bukken')?.addEventListener('change', () => riCheckBukkenMatch());
   document.getElementById('ri-bukken')?.addEventListener('blur', () => riCheckBukkenMatch());

@@ -201,6 +201,42 @@
   .group-header .gh-tag.c3{background:#f59e0b}
   .group-header .gh-tag.c4{background:#64748b}
   .group-header .gh-count{color:var(--ink);font-weight:600}
+
+  /* ---------- repair card (修繕・アフター用) ---------- */
+  .rep-card{background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(15,23,42,.05);cursor:pointer}
+  .rep-card:active{transform:scale(.99)}
+  .rep-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .rep-no{font-size:11px;color:var(--mute);font-weight:700;min-width:22px}
+  .rep-tag{padding:2px 8px;border-radius:999px;font-size:11px;color:#fff;font-weight:700}
+  .rep-tag.c1{background:#0ea5e9}
+  .rep-tag.c2{background:#16a34a}
+  .rep-tag.c3{background:#f59e0b}
+  .rep-tag.c4{background:#64748b}
+  .rep-name{font-weight:700;font-size:15px;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rep-room{font-size:12px;color:var(--mute);font-weight:600}
+  .rep-amount{font-size:13px;font-weight:700;color:var(--ink);margin-left:auto}
+  .rep-status-stack{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .rep-st{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;
+    font-size:11px;font-weight:600;width:fit-content}
+  .rep-st.s-st-draft {background:#f1f5f9;color:var(--mute)}
+  .rep-st.s-st-active{background:#fef3c7;color:#b45309}
+  .rep-st.s-st-apo   {background:#dbeafe;color:#1e40af}
+  .rep-st.s-st-submit{background:#cffafe;color:#0e7490}
+  .rep-st.s-st-won   {background:#dcfce7;color:#15803d}
+  .rep-st.s-st-order {background:#ede9fe;color:#6b21a8}
+  .rep-st.s-st-done  {background:#bbf7d0;color:#14532d}
+  .rep-st.s-st-lost  {background:#fee2e2;color:#b91c1c}
+  .rep-st.s-st-cancel{background:#e5e7eb;color:#475569;text-decoration:line-through}
+  .rep-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;color:var(--ink)}
+  .rep-grid .lbl{color:var(--mute);font-size:11px;white-space:nowrap}
+  .rep-grid .val{overflow-wrap:anywhere}
+  .rep-grid .val.empty{color:#cbd5e1}
+  .rep-desc{margin-top:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;
+    font-size:12px;color:var(--ink);line-height:1.5;border-left:3px solid var(--accent)}
+  .rep-progress{margin-top:6px;font-size:11px;color:var(--mute);font-style:italic}
+
   .contractor-head{background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;
     padding:8px 10px;margin:6px 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .contractor-head .ch-name{font-weight:700;color:var(--cat-out);font-size:13px;flex:1;min-width:0}
@@ -266,9 +302,8 @@
       <button class="icon-btn" id="btn-refresh" title="GAS同期">↻</button>
     </header>
     <!-- 工事種別 切替タブ(明確な3択) -->
-    <div class="koji-tabs" id="koji-tabs">
-      <button class="koji-tab on" data-k="all">📋 すべて<small>原状回復+修繕・アフター</small></button>
-      <button class="koji-tab" data-k="restoration">🏠 原状回復<small>空室工事</small></button>
+    <div class="koji-tabs" id="koji-tabs" style="grid-template-columns:repeat(2,1fr)">
+      <button class="koji-tab on" data-k="restoration">🏠 原状回復<small>空室工事</small></button>
       <button class="koji-tab" data-k="repair">🔧 修繕・アフター<small>入居中対応・リフォーム工事等</small></button>
     </div>
     <div class="toolbar">
@@ -285,6 +320,9 @@
         <button class="chip" data-c="山一地所">山一地所</button>
         <button class="chip" data-c="みどり不動産">みどり不動産</button>
         <button class="chip" data-c="自社工事">自社工事</button>
+      </div>
+      <div class="chips" id="mine-chips" style="display:none">
+        <button class="chip" id="chip-mine-only" data-mine="0">👤 自分担当のみ</button>
       </div>
     </div>
     <div class="list" id="property-list"></div>
@@ -474,6 +512,60 @@
   </div>
 </div>
 
+<!-- ========== REPAIR PROPERTY EDIT SHEET (修繕・アフター用) ========== -->
+<div class="sheet-backdrop" id="sheet-repair">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <h3 id="rs-title">修繕案件追加</h3>
+    <div class="field"><label>クライアント(元請け)</label>
+      <div class="cat-picker" id="rs-clientcat" style="grid-template-columns:repeat(4,1fr)">
+        <button data-s="山一地所">山一</button>
+        <button data-s="みどり不動産">みどり</button>
+        <button data-s="自社工事">自社</button>
+        <button data-s="その他">その他</button>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>物件名 *</label><input id="rs-name"></div>
+      <div class="field"><label>号室</label><input id="rs-room"></div>
+    </div>
+    <div class="field"><label>住所</label><input id="rs-address" placeholder="仙台市青葉区..."></div>
+    <div class="field-row">
+      <div class="field"><label>依頼日</label><input id="rs-reqdate" type="date"></div>
+      <div class="field"><label>対応予定日</label><input id="rs-plandate" type="date"></div>
+    </div>
+    <div class="field"><label>完了日</label><input id="rs-completedate" type="date"></div>
+    <div class="field-row">
+      <div class="field"><label>お客様</label><input id="rs-customer"></div>
+      <div class="field"><label>TEL</label><input id="rs-tel" type="tel"></div>
+    </div>
+    <div class="field"><label>依頼内容</label><textarea id="rs-reqdesc" rows="3" placeholder="例: 浴室前のフローリング剥がれのため修繕依頼"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>営業担当</label><input id="rs-sales"></div>
+      <div class="field"><label>連絡者</label><input id="rs-contact"></div>
+    </div>
+    <div class="field"><label>ステータス</label>
+      <div class="cat-picker" id="rs-status" style="grid-template-columns:repeat(3,1fr)">
+        <button data-s="下書き">下書き</button>
+        <button data-s="対応中">対応中</button>
+        <button data-s="アポ済">アポ済</button>
+        <button data-s="提出済">提出済</button>
+        <button data-s="受注">受注</button>
+        <button data-s="施工指示あり">施工指示あり</button>
+        <button data-s="完了">完了</button>
+        <button data-s="失注">失注</button>
+        <button data-s="キャンセル">キャンセル</button>
+      </div>
+    </div>
+    <div class="field"><label>進捗詳細メモ</label><textarea id="rs-progress" rows="2" placeholder="現状や次のアクション等"></textarea></div>
+    <div class="field"><label>売上(税別)</label><input id="rs-amount" type="number" placeholder="0" inputmode="numeric"></div>
+    <div class="actions">
+      <button class="btn-ghost" id="rs-cancel">キャンセル</button>
+      <button class="btn-danger hide" id="rs-delete">削除</button>
+      <button class="btn-primary" id="rs-save">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ========== IMPORT SHEET ========== -->
 <div class="sheet-backdrop" id="sheet-import">
   <div class="sheet" onclick="event.stopPropagation()">
@@ -599,7 +691,8 @@ let state = load() || seed();
 let currentPropId = null;
 let currentFilter = 'all';
 let currentClientCat = 'all';
-let currentKojiFilter = 'all'; // 'all' / 'restoration' / 'repair'
+let currentKojiFilter = 'restoration'; // 'restoration' / 'repair' (※'all' タブは廃止)
+let currentMineOnly = false; // 修繕タブで「自分担当のみ」
 let currentTaskStatusFilter = null; // 詳細画面内のステータス絞り込み（null=絞込なし）
 let searchQ = '';
 
@@ -770,6 +863,8 @@ function propertyCardHTML(p){
 }
 
 function renderList(){
+  // 修繕・アフタータブは専用UI
+  if(currentKojiFilter==='repair'){ renderRepairList(); return; }
   const el = document.getElementById('property-list');
   const items = state.properties.filter(p=>matchesFilter(p)&&matchesSearch(p)&&matchesClientCat(p)&&matchesKojiFilter(p))
     .sort((a,b)=>{
@@ -796,6 +891,70 @@ function renderList(){
   }).join('');
   el.querySelectorAll('.card').forEach(c=>{
     c.onclick = ()=>openDetail(c.dataset.id);
+  });
+}
+
+/* ===== render: 修繕・アフター 専用カード ===== */
+function matchesMine(p){
+  if(!currentMineOnly) return true;
+  const me = (settings.currentUser||'').trim();
+  if(!me) return true; // 自分が未設定なら全表示
+  const r = p.repair || {};
+  return (r.contactPerson||'').trim() === me;
+}
+function renderRepairList(){
+  const el = document.getElementById('property-list');
+  const items = state.properties.filter(p=>matchesFilter(p)&&matchesSearch(p)&&matchesClientCat(p)&&matchesKojiFilter(p)&&matchesMine(p))
+    .sort((a,b)=>{
+      // 依頼日の新しい順 → 無ければ発注日
+      const da = (a.repair?.requestDate || a.orderDate || '0000');
+      const db = (b.repair?.requestDate || b.orderDate || '0000');
+      return db.localeCompare(da);
+    });
+  if(!items.length){
+    el.innerHTML = '<div class="empty">🔧 修繕案件がありません<br><small style="color:var(--mute)">右下の + から追加</small></div>';
+    return;
+  }
+  const tagClass = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
+  const statusCls = {
+    '下書き':'s-st-draft','対応中':'s-st-active','アポ済':'s-st-apo','提出済':'s-st-submit',
+    '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
+  };
+  el.innerHTML = items.map((p,i)=>{
+    const r = p.repair || {};
+    const cat = p.clientCat || autoDetectClientCat(p);
+    const cls = tagClass[cat] || 'c4';
+    const tagShort = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat}[cat] || cat;
+    const amount = r.amountExTax ? `¥${Number(r.amountExTax).toLocaleString()}` : '¥0';
+    const status = r.status || '対応中';
+    const valOr = (v,emp='—')=> v ? esc(v) : `<span class="val empty">${emp}</span>`;
+    return `
+      <div class="rep-card" data-id="${p.id}">
+        <div class="rep-top">
+          <span class="rep-no">${i+1}</span>
+          <span class="rep-tag ${cls}">${esc(tagShort)}</span>
+          <span class="rep-name">${esc(p.name||'(無題)')}</span>
+          ${p.room?`<span class="rep-room">${esc(p.room)}</span>`:''}
+          <span class="rep-amount">${amount}</span>
+        </div>
+        <div class="rep-status-stack">
+          <span class="rep-st ${statusCls[status]||'s-st-active'}">📍 ${esc(status)}</span>
+        </div>
+        <div class="rep-grid">
+          <span class="lbl">依頼日</span><span class="val">${valOr(r.requestDate)}</span>
+          <span class="lbl">対応予定</span><span class="val">${valOr(r.responseDate)}</span>
+          <span class="lbl">完了日</span><span class="val">${valOr(p.completeDate)}</span>
+          <span class="lbl">住所</span><span class="val">${valOr(p.address)}</span>
+          <span class="lbl">お客様</span><span class="val">${valOr(r.customerName)}${r.customerTel?` <span style="color:var(--accent)">📞 ${esc(r.customerTel)}</span>`:''}</span>
+          <span class="lbl">営業</span><span class="val">${valOr(r.salesRep)}</span>
+          <span class="lbl">連絡者</span><span class="val">${valOr(r.contactPerson)}</span>
+        </div>
+        ${r.requestDesc?`<div class="rep-desc">${esc(r.requestDesc)}</div>`:''}
+        ${r.creatorMemo?`<div class="rep-progress">📝 ${esc(r.creatorMemo)}</div>`:''}
+      </div>`;
+  }).join('');
+  el.querySelectorAll('.rep-card').forEach(c=>{
+    c.onclick = ()=>openRepairSheet(c.dataset.id);
   });
 }
 
@@ -1444,6 +1603,181 @@ function deleteProp(){
   save(); closePropSheet(); showList();
 }
 
+/* ===== 修繕・アフター 編集シート ===== */
+const REPAIR_STATUSES = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','完了','失注','キャンセル'];
+function openRepairSheet(propId){
+  editingPropId = propId || null;
+  const p = propId ? state.properties.find(x=>x.id===propId) : null;
+  const r = (p && p.repair) || {};
+  document.getElementById('rs-title').textContent = propId?'修繕案件編集':'修繕案件追加';
+  val('rs-name', p?.name || '');
+  val('rs-room', p?.room || '');
+  val('rs-address', p?.address || '');
+  val('rs-reqdate', r.requestDate || '');
+  val('rs-plandate', r.responseDate || '');
+  val('rs-completedate', p?.completeDate || '');
+  val('rs-customer', r.customerName || '');
+  val('rs-tel', r.customerTel || '');
+  val('rs-reqdesc', r.requestDesc || '');
+  val('rs-sales', r.salesRep || '');
+  val('rs-contact', r.contactPerson || '');
+  val('rs-progress', r.creatorMemo || '');
+  val('rs-amount', r.amountExTax || '');
+  setPicker('rs-clientcat', (p?.clientCat) || autoDetectClientCat(p||{}) || '山一地所');
+  setPicker('rs-status', r.status || '対応中');
+  document.getElementById('rs-delete').classList.toggle('hide', !propId);
+  document.getElementById('sheet-repair').classList.add('on');
+}
+function closeRepairSheet(){ document.getElementById('sheet-repair').classList.remove('on'); }
+async function saveRepairSheet(){
+  const name = val('rs-name').trim();
+  if(!name){ alert('物件名を入力してください'); return; }
+  const status = getPicker('rs-status') || '対応中';
+  const repair = {
+    status,
+    workflowStatus: (status==='完了') ? '完了' : '対応中',
+    requestDate: val('rs-reqdate'),
+    responseDate: val('rs-plandate'),         // 対応予定日 → meta.responseDate
+    customerName: val('rs-customer').trim(),
+    customerTel: val('rs-tel').trim(),
+    requestDesc: val('rs-reqdesc').trim(),    // → meta.requestDetail
+    salesRep: val('rs-sales').trim(),         // 営業担当 → meta.atenaTantou
+    contactPerson: val('rs-contact').trim(),  // 連絡者 → meta.taikyo.tachiaiPerson
+    creatorMemo: val('rs-progress').trim(),   // 進捗詳細 → meta.creatorMemo
+    amountExTax: +val('rs-amount') || 0,      // タスクマネージャー独自 → tmRepair
+  };
+  const clientCat = getPicker('rs-clientcat') || '山一地所';
+  const data = {
+    name, room: val('rs-room').trim(),
+    address: val('rs-address').trim(),
+    clientCat,
+    completeDate: val('rs-completedate'),
+    isRestoration: false,
+    kojiName: '修繕工事',
+    repair,
+  };
+  let p;
+  if(editingPropId){
+    p = state.properties.find(x=>x.id===editingPropId);
+    Object.assign(p, data);
+  } else {
+    p = {id:uid(), ...data, tasks:[], comments:[]};
+    state.properties.unshift(p);
+  }
+  // Drive台帳に push (見積アプリのGAS save-ledger 経由)
+  if(settings.gasUrl && settings.gasToken){
+    try {
+      const r = await pushRepairToLedger(p);
+      if(r && r.fileId){
+        p._driveFileId = r.fileId;
+        p._driveMonth = r.month || '';
+        p._driveSavedAt = new Date().toISOString();
+        if(r.id) p.estimateId = r.id;
+      }
+    } catch(e){
+      alert('Drive保存失敗: '+e.message+'\n（ローカルには保存されました）');
+    }
+  }
+  save(); closeRepairSheet(); renderList();
+}
+async function deleteRepairProp(){
+  if(!editingPropId) return;
+  if(!confirm('この修繕案件を削除しますか？')) return;
+  const p = state.properties.find(x=>x.id===editingPropId);
+  if(p && p._driveFileId && settings.gasUrl && settings.gasToken){
+    try { await deleteRepairFromLedger(p._driveFileId); }
+    catch(e){ alert('Drive削除失敗: '+e.message+'\n（ローカルからは削除します）'); }
+  }
+  state.properties = state.properties.filter(x=>x.id!==editingPropId);
+  save(); closeRepairSheet(); renderList();
+}
+
+/* ===== 修繕案件 → Drive台帳 push (estimate JSON 形式・PC側仕様準拠) ===== */
+async function pushRepairToLedger(p){
+  const r = p.repair || {};
+  const motoukeMap = {'山一地所':'山一地所','みどり不動産':'みどり不動産','自社工事':'光和工業','その他':p.client||''};
+  const motouke = motoukeMap[p.clientCat] || (p.clientCat||'');
+  const now = new Date().toISOString();
+  const estId = p.estimateId || ('E' + new Date().toISOString().replace(/[^0-9]/g,'').slice(0,14) + Math.random().toString(36).slice(2,5));
+  const est = {
+    id: estId,
+    createdAt: p.createdAt || now,
+    updatedAt: now,
+    meta: {
+      // === PC側既存フィールド (双方向同期対象) ===
+      bukken: p.name || '',
+      roomNo: p.room || '',
+      shozaichi: p.address || '',
+      kojiName: '修繕工事',
+      status: r.status || '対応中',                  // 9種類のステータス
+      workflowStatus: r.workflowStatus || '対応中',
+      isConfirmed: false,
+      isTemplate: false,
+      atena: motouke,
+      atenaTantou: r.salesRep || '',                 // 元請け担当 ← 営業担当列
+      creator: settings.currentUser || '',
+      requestDate: r.requestDate || '',
+      requestDetail: r.requestDesc || '',
+      responseDate: r.responseDate || '',            // 対応予定日
+      creatorMemo: r.creatorMemo || '',              // 進捗詳細メモ
+      taikyo: {
+        motouke: motouke,
+        apartmentName: p.name || '',
+        roomNo: p.room || '',
+        address: p.address || '',
+        contractorType: '個人',
+        contractorName: r.customerName || '',
+        contractorTel: r.customerTel || '',
+        tachiaiPerson: r.contactPerson || '',         // 自社担当(連絡者)
+        tachiaiPersonTel: '',
+      },
+      hatchuOrder: {
+        completeDate: p.completeDate || '',
+      },
+      // === タスクマネージャー独自(PC側は保持・非表示) ===
+      tmRepair: {
+        amountExTax: r.amountExTax || 0,
+      },
+    },
+    lines: [],
+    _localPropId: p.id,
+  };
+  const body = {
+    action: 'save-ledger',
+    token: settings.gasToken,
+    content: JSON.stringify(est),
+    fileId: p._driveFileId || '',
+  };
+  const res = await fetch(settings.gasUrl.replace(/\/+$/,''), {
+    method: 'POST',
+    body: JSON.stringify(body),
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const j = JSON.parse(await res.text());
+  if(!j.ok) throw new Error(j.error || '保存失敗');
+  return { fileId: j.fileId, id: j.id, month: j.month };
+}
+
+async function deleteRepairFromLedger(fileId){
+  const body = {
+    action: 'delete-ledger',
+    token: settings.gasToken,
+    fileId: fileId,
+  };
+  const res = await fetch(settings.gasUrl.replace(/\/+$/,''), {
+    method: 'POST',
+    body: JSON.stringify(body),
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  });
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const j = JSON.parse(await res.text());
+  if(!j.ok) throw new Error(j.error || '削除失敗');
+  return true;
+}
+
 /* ===== comment sheet ===== */
 function openCommentSheet(){
   _editingCommentId = null;
@@ -1716,14 +2050,41 @@ async function gasPing(url){
 }
 
 function applyGasSync(payload){
-  let upd=0, add=0;
+  let upd=0, add=0, skipped=0;
   payload.properties.forEach(p=>{
-    // 物件No優先、なければ 物件名+号室 でマッチ
-    // 名前+号室でマッチング（mgmtNo重複があるためNoは使わない）
-    let existing = state.properties.find(x=>
+    // estimateId 優先 → driveFileId → 物件名+号室 でマッチ
+    let existing = null;
+    if(p.estimateId) existing = state.properties.find(x=>x.estimateId===p.estimateId);
+    if(!existing && p.driveFileId) existing = state.properties.find(x=>x._driveFileId===p.driveFileId);
+    if(!existing) existing = state.properties.find(x=>
       x.name.replace(/\s+/g,'')===p.name.replace(/\s+/g,'') &&
       String(x.room||'').trim() === String(p.room||'').trim()
     );
+    // 競合解決: ローカルの updatedAt がサーバ payload より新しければスキップ(後勝ち)
+    if(existing && existing._lastSyncedAt && p.updatedAt &&
+       new Date(existing._lastSyncedAt) > new Date(p.updatedAt)){
+      skipped++; return;
+    }
+    // 修繕案件の repair フィールド構築 (PC側 progress.html と同期)
+    const ACTIVE_REPAIR = ['対応中','アポ済','提出済','受注','施工指示あり'];
+    const isRepairItem = (p.kojiName && p.kojiName !== '原状回復工事') &&
+                         (ACTIVE_REPAIR.includes(p.status) || p.workflowStatus === '対応中');
+    let repairField = null;
+    if(isRepairItem){
+      repairField = {
+        status:         p.status || '対応中',
+        workflowStatus: p.workflowStatus || '対応中',
+        requestDate:    p.requestDate || '',
+        responseDate:   p.responseDate || '',
+        customerName:   p.customerName || '',
+        customerTel:    p.customerTel || '',
+        requestDesc:    p.requestDetail || '',
+        salesRep:       p.atenaTantou || '',                       // 営業担当 ← atenaTantou
+        contactPerson:  p.salesPerson || '',                        // 連絡者 ← tachiaiPerson(GAS側で salesPerson 名でくる)
+        creatorMemo:    p.creatorMemo || '',
+        amountExTax:    (p.tmRepair && p.tmRepair.amountExTax) || 0,
+      };
+    }
     const data = {
       mgmtNo:       p.no,
       estimateId:   p.estimateId || p.no || existing?.estimateId || '',
@@ -1749,7 +2110,11 @@ function applyGasSync(payload){
       address:      p.address || existing?.address || '',
       layout:       p.floor_plan || existing?.layout || p.layout || '',
       moveout:      p.move_out_month || existing?.moveout || '',
+      // 同期キー: Driveファイルとの紐付け(編集時の上書き先)
+      _driveFileId: p.driveFileId || existing?._driveFileId || '',
+      _lastSyncedAt: p.updatedAt || new Date().toISOString(),
     };
+    if(repairField) data.repair = repairField;
     if(existing){
       Object.assign(existing, data);
       syncTasks(existing, p.tasks || [], p.contractors || []);
@@ -1768,7 +2133,7 @@ function applyGasSync(payload){
   });
   save();
   renderList();
-  return {upd, add};
+  return {upd, add, skipped};
 }
 
 // カテゴリ正規化（GAS側が「外注/自社/減工事」の日本語ラベルで返してくる）
@@ -2080,11 +2445,30 @@ document.getElementById('client-chips').onclick = e=>{
 // 工事種別タブ(原状回復 / 修繕 / すべて)切替
 function updateKojiTitleAndChrome() {
   const title = document.getElementById('list-title');
-  if (!title) return;
-  if (currentKojiFilter === 'restoration') title.textContent = '🏠 原状回復 進捗管理';
-  else if (currentKojiFilter === 'repair') title.textContent = '🔧 修繕・アフター 進捗管理';
-  else title.textContent = '工事進捗管理';
+  if (title) {
+    if (currentKojiFilter === 'restoration') title.textContent = '🏠 原状回復 進捗管理';
+    else if (currentKojiFilter === 'repair') title.textContent = '🔧 修繕・アフター 進捗管理';
+    else title.textContent = '工事進捗管理';
+  }
+  // 「自分担当のみ」チップは修繕タブのみ表示
+  const mineBar = document.getElementById('mine-chips');
+  if (mineBar) mineBar.style.display = (currentKojiFilter === 'repair') ? 'flex' : 'none';
 }
+function setupMineChip(){
+  const btn = document.getElementById('chip-mine-only');
+  if(!btn) return;
+  btn.onclick = ()=>{
+    currentMineOnly = !currentMineOnly;
+    btn.classList.toggle('on', currentMineOnly);
+    btn.dataset.mine = currentMineOnly ? '1' : '0';
+    const me = (settings.currentUser||'').trim();
+    btn.textContent = currentMineOnly
+      ? `👤 ${me||'(名前未設定)'} のみ`
+      : '👤 自分担当のみ';
+    renderList();
+  };
+}
+setupMineChip();
 document.getElementById('koji-tabs').onclick = e=>{
   const b = e.target.closest('.koji-tab'); if(!b) return;
   document.querySelectorAll('#koji-tabs .koji-tab').forEach(x=>x.classList.remove('on'));
@@ -2164,7 +2548,12 @@ document.getElementById('btn-refresh').onclick = async ()=>{
 
 // FAB: list=add property, detail=add task
 const fab = document.getElementById('fab');
-fab.onclick = ()=>{ currentPropId ? openTaskSheet(null,'outsource') : openPropSheet(); };
+fab.onclick = ()=>{
+  if(currentPropId){ openTaskSheet(null,'outsource'); return; }
+  // 修繕・アフタータブ表示中は修繕用シートを開く
+  if(currentKojiFilter==='repair'){ openRepairSheet(); return; }
+  openPropSheet();
+};
 
 // task sheet
 document.getElementById('ts-cancel').onclick = closeTaskSheet;
@@ -2176,6 +2565,11 @@ document.getElementById('ps-cancel').onclick = closePropSheet;
 document.getElementById('ps-save').onclick = savePropSheet;
 document.getElementById('ps-delete').onclick = deleteProp;
 document.getElementById('sheet-prop').onclick = closePropSheet;
+// repair sheet
+document.getElementById('rs-cancel').onclick = closeRepairSheet;
+document.getElementById('rs-save').onclick = saveRepairSheet;
+document.getElementById('rs-delete').onclick = deleteRepairProp;
+document.getElementById('sheet-repair').onclick = closeRepairSheet;
 // comment sheet
 document.getElementById('cs-cancel').onclick = closeCommentSheet;
 document.getElementById('cs-save').onclick = saveComment;
