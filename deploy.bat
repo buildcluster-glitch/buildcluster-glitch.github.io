@@ -124,6 +124,7 @@ goto :end
 echo.
 echo  [NG] �R�~�b�g���s
 echo.
+set DEPLOY_FAIL=1
 goto :end
 
 :fail_push
@@ -133,8 +134,15 @@ echo  - Personal Access Token �����߂�ꂽ�ꍇ:
 echo    https://github.com/settings/tokens �Ő��� -^> repo�����t�^
 echo  - �C���^�[�l�b�g�ڑ����m�F
 echo.
+set DEPLOY_FAIL=1
 goto :end
 
 :end
-echo Press any key to close...
-pause ^> nul
+REM ���������� 3�b�҂��ĕ��� (���s���͌��₷���悤 30�b)
+if defined DEPLOY_FAIL (
+  echo.
+  echo  [NG] �G���[���m�F���Ă� ESC �ŕ��Ă�������
+  pause ^> nul
+) else (
+  timeout /t 3 /nobreak ^> nul
+)
