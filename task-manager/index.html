@@ -238,6 +238,20 @@
 
   .empty{padding:28px 20px;text-align:center;color:var(--mute);font-size:13px}
   .hide{display:none!important}
+  /* 工事種別 切替タブ(画面上部・大きめで明確) */
+  .koji-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:#fff;
+    border-bottom:1px solid var(--line);position:sticky;top:calc(56px + var(--safe-top));z-index:6}
+  .koji-tab{padding:13px 8px 11px;text-align:center;font-size:14px;font-weight:700;color:#94a3b8;
+    border-bottom:3px solid transparent;background:#fff;cursor:pointer;transition:all .15s;line-height:1.2}
+  .koji-tab small{display:block;font-size:10px;font-weight:500;color:#cbd5e1;margin-top:2px}
+  .koji-tab:active{transform:scale(.98)}
+  .koji-tab.on{color:var(--ink)}
+  .koji-tab.on small{color:var(--mute)}
+  .koji-tab[data-k="all"].on{border-bottom-color:#0f172a;background:#f8fafc}
+  .koji-tab[data-k="restoration"].on{color:#1e40af;border-bottom-color:#1e40af;background:#eff6ff}
+  .koji-tab[data-k="restoration"].on small{color:#3b82f6}
+  .koji-tab[data-k="repair"].on{color:#b45309;border-bottom-color:#f59e0b;background:#fef3c7}
+  .koji-tab[data-k="repair"].on small{color:#d97706}
 </style>
 </head>
 <body>
@@ -246,11 +260,17 @@
   <!-- ========== LIST VIEW ========== -->
   <section id="view-list">
     <header class="bar">
-      <div class="title">工事進捗管理(原状回復+修繕)</div>
+      <div class="title" id="list-title">工事進捗管理</div>
       <button class="icon-btn btn-user" title="チェック者切替">👤<span class="btn-user-label">未設定</span></button>
-      <button class="icon-btn" id="btn-import" title="スプシから取込">⬇</button>
+      <button class="icon-btn" id="btn-import" title="Drive台帳から取込">⬇</button>
       <button class="icon-btn" id="btn-refresh" title="GAS同期">↻</button>
     </header>
+    <!-- 工事種別 切替タブ(明確な3択) -->
+    <div class="koji-tabs" id="koji-tabs">
+      <button class="koji-tab on" data-k="all">📋 すべて<small>原状回復+修繕・アフター</small></button>
+      <button class="koji-tab" data-k="restoration">🏠 原状回復<small>空室工事</small></button>
+      <button class="koji-tab" data-k="repair">🔧 修繕・アフター<small>入居中対応・リフォーム工事等</small></button>
+    </div>
     <div class="toolbar">
       <div class="search"><input id="search" placeholder="物件・業者・工事名で検索"></div>
       <div class="chips" id="filter-chips">
@@ -265,11 +285,6 @@
         <button class="chip" data-c="山一地所">山一地所</button>
         <button class="chip" data-c="みどり不動産">みどり不動産</button>
         <button class="chip" data-c="自社工事">自社工事</button>
-      </div>
-      <div class="chips" id="koji-chips">
-        <button class="chip on" data-k="all">全工事種別</button>
-        <button class="chip" data-k="restoration">🏠 原状回復</button>
-        <button class="chip" data-k="repair">🔧 修繕</button>
       </div>
     </div>
     <div class="list" id="property-list"></div>
@@ -2062,11 +2077,23 @@ document.getElementById('client-chips').onclick = e=>{
   document.querySelectorAll('#client-chips .chip').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); currentClientCat = b.dataset.c; renderList();
 };
-document.getElementById('koji-chips').onclick = e=>{
-  const b = e.target.closest('.chip'); if(!b) return;
-  document.querySelectorAll('#koji-chips .chip').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); currentKojiFilter = b.dataset.k; renderList();
+// 工事種別タブ(原状回復 / 修繕 / すべて)切替
+function updateKojiTitleAndChrome() {
+  const title = document.getElementById('list-title');
+  if (!title) return;
+  if (currentKojiFilter === 'restoration') title.textContent = '🏠 原状回復 進捗管理';
+  else if (currentKojiFilter === 'repair') title.textContent = '🔧 修繕・アフター 進捗管理';
+  else title.textContent = '工事進捗管理';
+}
+document.getElementById('koji-tabs').onclick = e=>{
+  const b = e.target.closest('.koji-tab'); if(!b) return;
+  document.querySelectorAll('#koji-tabs .koji-tab').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentKojiFilter = b.dataset.k;
+  updateKojiTitleAndChrome();
+  renderList();
 };
+// 起動時のタイトル更新
+updateKojiTitleAndChrome();
 document.getElementById('btn-back').onclick = showList;
 document.getElementById('btn-edit-prop').onclick = ()=>openPropSheet(currentPropId);
 document.getElementById('btn-add-comment').onclick = openCommentSheet;

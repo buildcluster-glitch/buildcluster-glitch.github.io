@@ -430,6 +430,40 @@
   }
   #taikyo-print-title { display:none; }
 
+  /* 工事種別バッジ(台帳の工事種別セル用) */
+  .koji-badge {
+    display:inline-block; padding:2px 9px; border-radius:10px;
+    font-size:11px; font-weight:600; line-height:1.5;
+    border:1px solid transparent; white-space:nowrap;
+  }
+  .koji-badge-restoration { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+  .koji-badge-repair      { background:#fef3c7; color:#b45309; border-color:#fcd34d; }
+  .koji-badge-reform      { background:#e9d5ff; color:#6b21a8; border-color:#c4b5fd; }
+  .koji-badge-other       { background:#f1f5f9; color:#475569; border-color:#cbd5e1; }
+
+  /* 工事種別タブ(台帳タブ上部・大きめ) */
+  .koji-tabs {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    margin-bottom:10px; overflow:hidden;
+  }
+  .koji-tab {
+    padding:13px 8px 11px; text-align:center; font-size:14px; font-weight:700;
+    color:#94a3b8; border-bottom:3px solid transparent; background:#fff;
+    cursor:pointer; transition:all 0.15s; line-height:1.2; border-right:1px solid var(--line);
+  }
+  .koji-tab:last-child { border-right:none; }
+  .koji-tab small { display:block; font-size:10px; font-weight:500; color:#cbd5e1; margin-top:2px; }
+  .koji-tab:active { transform:scale(0.98); }
+  .koji-tab:hover { background:#f8fafc; }
+  .koji-tab.on { color:#111; background:#f8fafc; }
+  .koji-tab.on small { color:var(--muted); }
+  .koji-tab[data-k="all"].on { border-bottom-color:#0f172a; background:#f8fafc; }
+  .koji-tab[data-k="restoration"].on { color:#1e40af; border-bottom-color:#1e40af; background:#eff6ff; }
+  .koji-tab[data-k="restoration"].on small { color:#3b82f6; }
+  .koji-tab[data-k="repair"].on { color:#b45309; border-bottom-color:#f59e0b; background:#fef3c7; }
+  .koji-tab[data-k="repair"].on small { color:#d97706; }
+
   /* 工程表(A4横) */
   .koutei-doc {
     font-family: 'Yu Gothic','MS PGothic','游ゴシック',sans-serif;
@@ -547,6 +581,146 @@
     body.print-koutei-mode #tab-koutei { display:block !important; }
     body.print-koutei-mode #tab-koutei .no-print-koutei { display:none !important; }
     body.print-koutei-mode #koutei-print-area { display:block !important; }
+  }
+
+  /* 単価マスタ 印刷用出力(取引先・業者向け 工事単価表) */
+  .master-print-doc {
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "游明朝", "MS Mincho", serif;
+    color:#1a1a1a;
+    font-size: 9.5pt;
+    padding: 14mm 14mm 12mm;
+    line-height: 1.55;
+    letter-spacing: 0.02em;
+  }
+  /* ヘッダー(提出先・発行元・下に区切り罫線) */
+  .master-print-doc .mp-header {
+    display:grid; grid-template-columns:1fr auto; gap:12mm; align-items:flex-end;
+    padding-bottom: 4mm; border-bottom: 0.6pt solid #1a1a1a; margin-bottom: 6mm;
+  }
+  .master-print-doc .mp-atena {
+    font-size:15pt; font-weight:500; letter-spacing:0.06em;
+    padding-bottom: 1.5mm; min-width: 90mm; color:#1a1a1a;
+  }
+  /* 発行元: 見積書ヘッダーと同じレイアウト
+     ・日付は右上(行の右端揃え)
+     ・ロゴ → 社名 → 住所 → TEL/FAX → 担当者テーブル
+     ・印鑑は inline-block の右側スペースに重ねず配置 */
+  .master-print-doc .mp-issuer { text-align:right; min-width:65mm; }
+  .master-print-doc .mp-issuer .mp-issuer-date {
+    font-size:9pt; color:#444; letter-spacing:0.06em; margin-bottom:2mm;
+  }
+  .master-print-doc .mp-issuer-block {
+    display:inline-block; text-align:left; position:relative;
+    padding: 2mm 25mm 2mm 2mm; /* 右側に印鑑用の余白確保 */
+    min-width: 64mm;
+    line-height: 1.55;
+  }
+  .master-print-doc .mp-issuer-block .mp-issuer-logo {
+    max-height: 12mm; max-width: 50mm; object-fit: contain;
+    display: block; margin-bottom: 1.5mm;
+  }
+  .master-print-doc .mp-issuer .mp-issuer-name {
+    display:block; font-weight:700; font-size:12pt; letter-spacing:0.06em; margin-bottom:0.6mm;
+  }
+  .master-print-doc .mp-issuer-block .mp-issuer-line {
+    font-size:9pt; color:#333; line-height:1.5;
+  }
+  .master-print-doc .mp-issuer .mp-issuer-seal {
+    position:absolute; right:1mm; top:50%; transform:translateY(-30%);
+    max-height:20mm; max-width:20mm; opacity:0.88; pointer-events:none;
+  }
+  .master-print-doc .mp-issuer-tantou {
+    margin-top: 2mm;
+    font-size: 9pt;
+    border-collapse: collapse;
+  }
+  .master-print-doc .mp-issuer-tantou td {
+    padding: 0.5mm 4mm 0.5mm 0;
+    color: #333;
+  }
+  .master-print-doc .mp-issuer-tantou td:first-child {
+    color: #666; font-size: 8.5pt; min-width: 12mm;
+  }
+  /* タイトル(二重罫線フレーム) */
+  .master-print-doc .mp-title-wrap { text-align:center; margin: 6mm 0 4mm; }
+  .master-print-doc .mp-title {
+    display:inline-block;
+    font-size:22pt; font-weight:700; letter-spacing:14px; padding: 3mm 10mm 3mm 14mm;
+    border-top: 1.4pt solid #1a1a1a; border-bottom: 1.4pt solid #1a1a1a;
+  }
+  .master-print-doc .mp-subtitle {
+    text-align:center; font-size:9.5pt; color:#666; letter-spacing:0.08em;
+    margin: 0 0 8mm;
+  }
+  /* カテゴリブロック(左罫線アクセント・無塗り) */
+  .master-print-doc .mp-cat-block { margin-bottom: 6mm; page-break-inside: avoid; }
+  .master-print-doc .mp-cat-block.page-break { page-break-before: always; }
+  .master-print-doc .mp-cat-head {
+    border-left: 3.5pt solid #1a1a1a;
+    padding: 0.8mm 0 0.8mm 4mm;
+    font-size: 12pt; font-weight: 700; letter-spacing: 0.06em;
+    color: #1a1a1a; background: transparent;
+    margin: 0 0 2mm;
+  }
+  .master-print-doc .mp-cat-head .mp-cat-count {
+    font-weight: 400; font-size: 9pt; color: #888; margin-left: 6mm; letter-spacing: 0.04em;
+  }
+  /* テーブル(上下太罫・中は細罫・ストライプ) */
+  .master-print-doc table.mp-table {
+    width:100%; border-collapse:collapse; font-size:9.5pt; table-layout: fixed;
+    margin-top: 1mm;
+  }
+  .master-print-doc table.mp-table thead th {
+    border-top: 1pt solid #1a1a1a; border-bottom: 0.5pt solid #1a1a1a;
+    padding: 1.6mm 3mm; font-weight:600; font-size:8.8pt; text-align:left;
+    color:#555; letter-spacing:0.05em; background: transparent;
+  }
+  .master-print-doc table.mp-table thead th.mp-num { text-align:right; }
+  .master-print-doc table.mp-table tbody td {
+    border-bottom: 0.3pt solid #d4d4d4; padding: 1.5mm 3mm;
+    text-align:left; vertical-align: top;
+  }
+  .master-print-doc table.mp-table tbody tr:nth-child(even) td {
+    background:#fafafa;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  .master-print-doc table.mp-table tbody tr:last-child td {
+    border-bottom: 0.8pt solid #1a1a1a;
+  }
+  .master-print-doc table.mp-table td.mp-num {
+    text-align:right; font-variant-numeric: tabular-nums; font-weight:600; color:#1a1a1a;
+  }
+  .master-print-doc table.mp-table td.mp-bikou {
+    font-size:8.5pt; color:#555; letter-spacing:0;
+  }
+  /* フッター(左:発行日 / 右:ページ) */
+  .master-print-doc .mp-footer {
+    margin-top: 8mm; padding-top: 3mm; border-top: 0.5pt solid #888;
+    font-size: 8.2pt; color:#888; letter-spacing:0.04em;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  #master-print-area { display:none; }
+  @media print {
+    body.print-master-mode header,
+    body.print-master-mode .tabs,
+    body.print-master-mode .app-switcher,
+    body.print-master-mode #modal-overlay,
+    body.print-master-mode #app-toast,
+    body.print-master-mode #tab-estimate,
+    body.print-master-mode #tab-hatchu,
+    body.print-master-mode #tab-koutei,
+    body.print-master-mode #tab-isp,
+    body.print-master-mode #tab-oshirase,
+    body.print-master-mode #tab-taikyo,
+    body.print-master-mode #tab-bukken,
+    body.print-master-mode #tab-ledger,
+    body.print-master-mode #tab-master,
+    body.print-master-mode #tab-template,
+    body.print-master-mode #tab-settings,
+    body.print-master-mode #master-print-modal { display:none !important; }
+    body.print-master-mode { background:#fff; margin:0; padding:0; }
+    body.print-master-mode #master-print-area { display:block !important; }
+    @page { size: A4 portrait; margin: 0; }
   }
 
   /* 工事お知らせ文書 */
@@ -1110,6 +1284,7 @@
       <select id="new-est-pattern" title="新規見積に入れる初期行のパターンを選択" style="display:none;"></select>
       <button id="btn-new-estimate">＋ 新規見積</button>
       <button id="btn-dup-estimate">📄 複製して新規</button>
+      <button id="btn-import-repair-request" title="修繕依頼書PDFやメール本文をAIで読取って 修繕案件として台帳登録" style="background:linear-gradient(135deg,#fde68a 0%,#f59e0b 100%); border:none; color:#78350f; font-weight:700; padding:6px 12px; box-shadow:0 1px 3px rgba(245,158,11,0.4);">🛠 修繕依頼取込</button>
     </div>
     <div class="panel no-print">
       <div class="row" style="gap:16px;">
@@ -1147,7 +1322,7 @@
         <div style="display:grid; grid-template-columns: auto 1fr auto 1fr auto 1fr; gap:4px 8px; align-items:center; font-size:12px;">
           <label>宛先</label>
           <input type="text" id="meta-atena" placeholder="例: 株式会社山一地所 / 山田 太郎 (敬称は自動付与)">
-          <label>担当者</label><input type="text" id="meta-atena-tantou" placeholder="例: 水上 (「様」は自動付与)">
+          <label>担当者</label><input type="text" id="meta-atena-tantou" placeholder="例: 水上 (「様」は自動付与)" list="dl-motouke-tantou" autocomplete="off">
           <label>発行日</label>
           <div style="display:flex; gap:6px; align-items:center;">
             <input type="text" id="meta-date" style="flex:1;">
@@ -2033,13 +2208,19 @@
 
   <!-- ========== 台帳タブ ========== -->
   <section id="tab-ledger" class="hide">
+    <!-- 工事種別タブ(原状回復 / 修繕 切替) -->
+    <div class="koji-tabs" id="ledger-koji-tabs">
+      <button class="koji-tab on" data-k="all">📋 すべて<small>請求合算ビュー</small></button>
+      <button class="koji-tab" data-k="restoration">🏠 原状回復<small>空室工事</small></button>
+      <button class="koji-tab" data-k="repair">🔧 修繕・アフター<small>入居中対応・リフォーム工事等</small></button>
+    </div>
     <div class="panel">
       <div class="row">
         <input type="text" id="ledger-search" placeholder="現場名/宛先/発注先/明細内 を検索" style="min-width:240px;" class="grow">
         <select id="ledger-motouke-filter" title="元請けで絞り込み">
           <option value="">(全元請け)</option>
         </select>
-        <select id="ledger-koji-filter" title="工事種別で絞り込み">
+        <select id="ledger-koji-filter" title="工事種別で絞り込み(タブで切替できるので通常は使いません)" style="display:none;">
           <option value="">(全工事種別)</option>
         </select>
         <select id="ledger-status-filter" title="ステータスで絞り込み">
@@ -2047,6 +2228,7 @@
           <option value="__juchu__">🎯 受注のみ</option>
           <option value="__not_juchu__">⏳ 未受注(受注以外)</option>
           <option value="下書き">📝 下書き</option>
+          <option value="対応中">🛠 対応中</option>
           <option value="提出済">📤 提出済</option>
           <option value="受注">🎯 受注</option>
           <option value="失注">❌ 失注</option>
@@ -2134,6 +2316,7 @@
         </select>
         <span class="pill" id="master-count">0件</span>
         <button id="btn-add-row" class="primary">＋新規項目</button>
+        <button id="btn-master-print" title="取引先・業者向けに単価表として印刷/PDF" style="background:#fef3c7; border-color:#f59e0b; color:#92400e; font-weight:600;">🖨 印刷用出力</button>
         <button id="btn-gas-fetch-master" title="スプシから単価マスタを取込(ローカル上書き)" style="background:#bae6fd; border-color:#0ea5e9;">🔄 取込</button>
         <button id="btn-gas-push-master" title="現在の単価マスタをスプシに反映(スプシ上書き)" style="background:#0ea5e9; border-color:#0369a1; color:#fff;">📤 反映</button>
         <button id="btn-export-json">JSON書き出し</button>
@@ -2383,6 +2566,20 @@
         </div>
       </div>
       <p style="color:var(--muted); font-size:11px; margin-top:8px;">※ 追加した元請け/外注先は 見積・発注書タブ・マスタタブ等のプルダウンに出現。単価を入れるには 単価マスタタブ の各行で新列に数値を入力してください。<br>※ 追加したカテゴリは見積・単価マスタのカテゴリプルダウン候補に出現。最初の項目を入れる時に使ってください。</p>
+    </div>
+    <div class="panel">
+      <h3>👥 元請け別 担当者マスタ</h3>
+      <p style="color:var(--muted); font-size:12px;">見積の「担当者」入力欄で、宛先(元請け)に応じてここに登録した担当者が候補表示されます。</p>
+      <div class="row" style="margin-bottom:8px;">
+        <label>元請け</label>
+        <select id="contacts-motouke-select" style="min-width:200px;"></select>
+        <span id="contacts-count" class="pill" style="margin-left:6px;"></span>
+      </div>
+      <div id="contacts-list" style="margin:8px 0; max-height:240px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; background:#fafafa; padding:6px;"></div>
+      <div class="row">
+        <input type="text" id="new-contact-input" placeholder="例: 鈴木 浩幸" style="flex:1; font-size:12px;">
+        <button id="btn-add-contact" class="primary">＋ 追加</button>
+      </div>
     </div>
     <div class="panel">
       <h3>発注先(価格列)の表示順・表示/非表示</h3>
@@ -2637,6 +2834,8 @@
   <option value="南部 大我">
   <option value="最上 登生">
 </datalist>
+<!-- 元請け担当者の動的 datalist (rebuildMotoukeTantouDatalist で書き換え) -->
+<datalist id="dl-motouke-tantou"></datalist>
 <datalist id="dl-eigyo"></datalist>
 <datalist id="dl-rooms-suggest">
   <option value="101号室"><option value="102号室"><option value="103号室"><option value="104号室"><option value="105号室">
@@ -2833,6 +3032,182 @@ JSB 退去 / 30万前後で収めたい" style="width:100%; min-height:120px; fo
     <div id="ai-import-status" style="margin-top:8px; font-size:12px; color:#7c3aed; min-height:20px;"></div>
   </div>
 </div>
+
+<!-- 修繕依頼取込モーダル(PDF/メール文 → AI抽出 → 新規見積) -->
+<div id="repair-import-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9998; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; padding:18px; width:780px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:18px; color:#92400e;">🛠 修繕依頼取込</h2>
+      <button id="ri-close" style="font-size:18px; padding:4px 10px;">×</button>
+    </div>
+    <p style="font-size:12px; color:#666; margin:0 0 10px;">修繕依頼書(PDF/画像) or メール本文 から AI で物件・依頼内容を抽出 → 修繕案件として台帳に登録します。</p>
+
+    <!-- Step1: 入力 -->
+    <div id="ri-step1">
+      <div style="display:flex; gap:0; border-bottom:2px solid #fcd34d; margin-bottom:8px;">
+        <button type="button" id="ri-mode-file" class="primary" style="border-radius:4px 4px 0 0; background:#f59e0b; border-color:#d97706; font-size:12px;">📁 PDF/画像</button>
+        <button type="button" id="ri-mode-text" style="border-radius:4px 4px 0 0; font-size:12px;">📝 テキスト貼付</button>
+      </div>
+      <div id="ri-pane-file" style="margin-bottom:10px;">
+        <div id="ri-drop-zone" style="border:2px dashed #fcd34d; background:#fffbeb; border-radius:8px; padding:18px 12px; text-align:center; cursor:pointer; transition:all 0.15s;">
+          <div style="font-size:24px; margin-bottom:4px;">📎</div>
+          <div style="font-size:13px; color:#92400e; font-weight:600;">ファイルをここにドラッグ&ドロップ</div>
+          <div style="font-size:11px; color:#a16207; margin-top:2px;">または クリックして選択 (PDF / PNG / JPG / WebP)</div>
+          <div id="ri-file-name" style="font-size:11px; color:#16a34a; margin-top:6px; font-weight:600;"></div>
+          <input type="file" id="ri-file" accept="application/pdf,image/*,.pdf,.png,.jpg,.jpeg,.webp" style="display:none;">
+        </div>
+        <div style="font-size:11px; color:#666; margin-top:4px;">Gemini に直接送信して情報抽出します。</div>
+      </div>
+      <div id="ri-pane-text" style="display:none; margin-bottom:10px;">
+        <textarea id="ri-text" placeholder="例: 山一地所からのメール本文を貼り付け…&#10;エルス泉302号室 / 入居者◯◯様(090-XXXX-XXXX) / クローゼットが壊れている / 〇月△日対応希望" style="width:100%; min-height:160px; font-size:12px; padding:6px; border:1px solid #cbd5e1; border-radius:4px; resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="ri-analyze" class="primary" style="background:linear-gradient(135deg,#fde68a 0%,#f59e0b 100%); color:#78350f; border:none; padding:8px 14px; font-weight:700;">✨ AI抽出</button>
+        <span id="ri-status" style="font-size:11px; color:#92400e;"></span>
+      </div>
+    </div>
+
+    <!-- Step2: プレビュー&編集 -->
+    <div id="ri-step2" style="display:none;">
+      <div style="font-size:12px; color:#666; margin-bottom:6px;">抽出結果を確認・編集してください。「✅ 台帳に登録&開く」 で新規修繕案件として登録します。</div>
+      <div id="ri-bukken-match-info" style="margin-bottom:6px; padding:6px 10px; background:#dcfce7; border:1px solid #86efac; border-radius:4px; font-size:12px; color:#14532d; display:none;"></div>
+      <div style="display:grid; grid-template-columns: 100px 1fr 100px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:8px;">
+        <label>物件名</label>
+        <input type="text" id="ri-bukken" style="grid-column: 2 / -1;" list="ri-bukken-list">
+        <datalist id="ri-bukken-list"></datalist>
+
+        <label>号室</label>
+        <input type="text" id="ri-roomNo">
+        <label>元請け</label>
+        <select id="ri-motouke">
+          <option value="">(未設定)</option>
+        </select>
+
+        <label>住所</label>
+        <input type="text" id="ri-address" style="grid-column: 2 / -1;">
+
+        <label>入居者氏名</label>
+        <input type="text" id="ri-contractor-name">
+        <label>入居者TEL</label>
+        <input type="text" id="ri-contractor-tel">
+
+        <label>依頼日</label>
+        <input type="text" id="ri-request-date" placeholder="YYYY-MM-DD or 4/4">
+        <label>緊急度</label>
+        <select id="ri-urgency">
+          <option value="">-</option>
+          <option value="高">高</option>
+          <option value="中">中</option>
+          <option value="低">低</option>
+        </select>
+
+        <label style="align-self:start;">依頼内容</label>
+        <textarea id="ri-request-detail" rows="3" style="grid-column: 2 / -1; font-size:12px;"></textarea>
+
+        <label>立会担当者</label>
+        <select id="ri-tachiai" style="grid-column: 2 / -1;">
+          <option value="">(未設定)</option>
+          <option value="山田 裕貴">山田 裕貴</option>
+          <option value="大村 将史">大村 将史</option>
+          <option value="南部 大我">南部 大我</option>
+          <option value="木村 優作">木村 優作</option>
+          <option value="鈴木 悠平">鈴木 悠平</option>
+          <option value="最上 登生">最上 登生</option>
+        </select>
+      </div>
+      <div style="margin-top:14px; display:flex; justify-content:space-between;">
+        <button id="ri-back">← 戻る(再抽出)</button>
+        <div style="display:flex; gap:6px;">
+          <button id="ri-cancel">キャンセル</button>
+          <button id="ri-register" class="primary" style="background:#16a34a; border-color:#15803d;">✅ 台帳に登録&開く</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 単価マスタ 印刷用出力モーダル -->
+<div id="master-print-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9998; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; padding:18px; width:1000px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h2 style="margin:0; font-size:18px; color:#92400e;">🖨 単価マスタ 印刷用出力</h2>
+      <button id="mp-close" style="font-size:18px; padding:4px 10px;">×</button>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:10px; font-size:12px;">
+      <div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block; font-size:11px; color:#475569; margin-bottom:2px;">提出先(任意)</label>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="mp-atena" placeholder="例: 株式会社○○" style="flex:1;">
+            <select id="mp-atena-suffix" title="敬称" style="width:88px;">
+              <option value="御中">御中</option>
+              <option value="様">様</option>
+              <option value="">(なし)</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block; font-size:11px; color:#475569; margin-bottom:2px;">単価列を選択</label>
+          <select id="mp-price-col" style="width:100%; font-size:13px; padding:6px 8px;"></select>
+          <div style="font-size:10px; color:#94a3b8; margin-top:2px;">※ 印刷物には どの単価列を使ったかは出ません(タイトルは「工事単価表」固定)</div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block; font-size:11px; color:#475569; margin-bottom:2px;">発行元(印刷ヘッダーに出る)</label>
+          <select id="mp-issuer-select" style="width:100%; font-size:13px; padding:6px 8px;"></select>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block; font-size:11px; color:#475569; margin-bottom:2px;">担当者(空欄=発行元設定の担当者を使用)</label>
+          <select id="mp-tantou-select" style="width:100%; font-size:13px; padding:6px 8px;">
+            <option value="">(発行元設定の既定値を使う)</option>
+            <option value="山田 裕貴">山田 裕貴</option>
+            <option value="大村 将史">大村 将史</option>
+            <option value="南部 大我">南部 大我</option>
+            <option value="木村 優作">木村 優作</option>
+            <option value="鈴木 悠平">鈴木 悠平</option>
+            <option value="最上 登生">最上 登生</option>
+          </select>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="mp-exclude-empty" checked style="width:auto;">
+            選択列の単価が <b>0円・空欄</b> の項目を除外
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:4px;">
+            <input type="checkbox" id="mp-page-break-cat" style="width:auto;">
+            カテゴリで改ページ(=各カテゴリ別ページ)
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-top:4px;">
+            <input type="checkbox" id="mp-include-issuer" checked style="width:auto;">
+            発行元情報・印鑑をヘッダーに入れる
+          </label>
+        </div>
+        <button id="mp-preview-refresh" type="button" style="background:#dbeafe; border:1px solid #3b82f6; color:#1e40af; font-weight:600; padding:6px 12px; font-size:12px;">🔄 プレビュー更新</button>
+      </div>
+      <div>
+        <label style="display:block; font-size:11px; color:#475569; margin-bottom:4px;">カテゴリ(チェックON&ドラッグで並び替え)</label>
+        <div id="mp-cat-list" style="border:1px solid #cbd5e1; border-radius:6px; padding:6px; max-height:240px; overflow-y:auto; background:#fafafa; font-size:12px;"></div>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button id="mp-cat-all" type="button" style="font-size:11px; flex:1;">全選択</button>
+          <button id="mp-cat-none" type="button" style="font-size:11px; flex:1;">全解除</button>
+        </div>
+      </div>
+    </div>
+    <div style="border:1px solid #cbd5e1; border-radius:6px; max-height:50vh; overflow:auto; background:#f9fafb;">
+      <div id="mp-preview" style="background:#fff; transform-origin:top left;"></div>
+    </div>
+    <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+      <span id="mp-status" style="font-size:11px; color:#475569;"></span>
+      <div style="display:flex; gap:6px;">
+        <button id="mp-cancel">キャンセル</button>
+        <button id="mp-print" class="primary" style="background:#1e40af; border-color:#1e3a8a;">🖨 印刷ダイアログ</button>
+        <button id="mp-save-pdf" class="primary" style="background:#16a34a; border-color:#15803d;">📥 PDFで保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 単価マスタ 印刷出力エリア(印刷モード時のみ表示) -->
+<div id="master-print-area"></div>
 
 <!-- パターン比較モーダル -->
 <div id="compare-pattern-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9998; align-items:center; justify-content:center;">
@@ -4216,6 +4591,16 @@ function defaultSettings() {
     customMotouke: [],
     customHatchu: [],
     customCategories: [],
+    // 元請け別 担当者マスタ(担当者欄入力時の候補表示に使用)
+    //   キー: 元請け名(完全一致 or 部分一致 — 先頭2文字優先)
+    //   値: 担当者名の配列
+    motoukeContacts: {
+      '山一地所': ['鈴木 浩幸','早坂 卓浩','阿部 翔太','佐藤 和也','安齋 卓己','若佐 大介','川口 雅之','本間 広輝','藤木 直人','水上 直樹','アルバレス アダム 貴広','三浦 敦'],
+      'みどり不動産': ['木村','佐々木','小野'],
+      'ワールドレジデンシャル': ['小村','佐竹'],
+      'JSB': ['鈴木','葛西','松川'],
+      'ハウビングショップ田中': ['田中'],
+    },
     visibleCols: [...PRICE_COLS],
     issuerKey: 'buildcluster',
     issuers: {
@@ -4349,6 +4734,10 @@ function loadSettings() {
           });
         }
       });
+    }
+    // 元請け別 担当者マスタ: 既存設定に無ければデフォルトを補完(初回起動時の seed)
+    if (!merged.motoukeContacts || typeof merged.motoukeContacts !== 'object' || Object.keys(merged.motoukeContacts).length === 0) {
+      merged.motoukeContacts = def.motoukeContacts;
     }
     return merged;
   } catch(e) { return def; }
@@ -8507,9 +8896,10 @@ function renderTotals() {
 }
 
 // ステータス関連(下書き=作成中)
-const ESTIMATE_STATUSES = ['下書き', '提出済', '受注', '失注', '完了', 'キャンセル'];
+const ESTIMATE_STATUSES = ['下書き', '対応中', '提出済', '受注', '失注', '完了', 'キャンセル'];
 const STATUS_STYLES = {
   '下書き':     { bg:'#e5e7eb', color:'#374151', icon:'📝' },
+  '対応中':     { bg:'#fef3c7', color:'#92400e', icon:'🛠' },
   '提出済':     { bg:'#dbeafe', color:'#1e40af', icon:'📤' },
   '受注':       { bg:'#bbf7d0', color:'#14532d', icon:'🎯' },
   '失注':       { bg:'#fecaca', color:'#7f1d1d', icon:'❌' },
@@ -8843,6 +9233,109 @@ function renderPrintMeta() {
   }
 }
 
+// === 元請け別 担当者マスタ 編集UI(設定タブ) ===
+function renderMotoukeContactsUI() {
+  const sel = document.getElementById('contacts-motouke-select');
+  if (!sel) return;
+  // 元請け候補: customMotouke + motoukeContacts に登録済の元請け(removed-default含む)
+  const customMoto = (state.settings?.customMotouke || []).slice();
+  const contacts = state.settings?.motoukeContacts || {};
+  const allKeys = [...new Set([...customMoto, ...Object.keys(contacts)])];
+  // 既存選択値を維持
+  const cur = sel.value || allKeys[0] || '';
+  sel.innerHTML = allKeys.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join('');
+  if (allKeys.includes(cur)) sel.value = cur;
+  _renderContactsList();
+}
+function _renderContactsList() {
+  const sel = document.getElementById('contacts-motouke-select');
+  const wrap = document.getElementById('contacts-list');
+  const countEl = document.getElementById('contacts-count');
+  if (!sel || !wrap) return;
+  const moto = sel.value;
+  if (!state.settings.motoukeContacts) state.settings.motoukeContacts = {};
+  const list = state.settings.motoukeContacts[moto] || [];
+  if (countEl) countEl.textContent = `${list.length}名`;
+  if (!list.length) {
+    wrap.innerHTML = '<div style="color:#94a3b8; padding:8px; font-size:12px;">担当者未登録 — 下の入力欄から追加してください</div>';
+    return;
+  }
+  wrap.innerHTML = list.map((name, i) => `
+    <div style="display:flex; align-items:center; gap:6px; padding:4px 6px; background:#fff; border:1px solid #e5e7eb; border-radius:4px; margin-bottom:4px;">
+      <input type="text" class="contact-name-input" data-idx="${i}" value="${escapeHtml(name)}" style="flex:1; font-size:12px; border:none; background:transparent; padding:2px 4px;">
+      <button class="contact-del-btn" data-idx="${i}" title="削除" style="background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; font-size:11px; padding:2px 8px;">🗑</button>
+    </div>`).join('');
+  // 名前編集
+  wrap.querySelectorAll('.contact-name-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const idx = Number(inp.dataset.idx);
+      const newName = inp.value.trim();
+      if (!newName) {
+        // 空欄になったら削除と同じ扱い
+        state.settings.motoukeContacts[moto].splice(idx, 1);
+      } else {
+        state.settings.motoukeContacts[moto][idx] = newName;
+      }
+      saveSettings();
+      _renderContactsList();
+      if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
+      // チーム共有 silent push
+      if (typeof gasPushSettings === 'function') gasPushSettings({silent:true}).catch(()=>{});
+    });
+  });
+  // 削除
+  wrap.querySelectorAll('.contact-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.idx);
+      const removed = state.settings.motoukeContacts[moto][idx];
+      if (!confirm(`「${removed}」を削除しますか?`)) return;
+      state.settings.motoukeContacts[moto].splice(idx, 1);
+      saveSettings();
+      _renderContactsList();
+      if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
+      // チーム共有 silent push
+      if (typeof gasPushSettings === 'function') gasPushSettings({silent:true}).catch(()=>{});
+    });
+  });
+}
+window.renderMotoukeContactsUI = renderMotoukeContactsUI;
+
+// 元請けに紐付く担当者リストを返す(部分一致 + ゆるい正規化)
+//   atena/atenaTantou 入力時のオートコンプリート候補生成用
+function getMotoukeContacts(atenaOrMotouke) {
+  const contacts = state.settings?.motoukeContacts || {};
+  if (!atenaOrMotouke) return [];
+  const norm = String(atenaOrMotouke).replace(/[株式会社\(\)㈱㈲]|有限会社|合同会社/g, '').trim();
+  // 完全一致 → 部分一致(短い方を含む)
+  for (const [k, list] of Object.entries(contacts)) {
+    if (!Array.isArray(list)) continue;
+    if (k === atenaOrMotouke || k === norm) return list;
+    const kn = k.replace(/[株式会社\(\)㈱㈲]|有限会社|合同会社/g, '').trim();
+    if (kn === norm) return list;
+    // 部分一致(先頭一致 or 短い方を含む)
+    if (norm && (norm.startsWith(kn) || kn.startsWith(norm) || norm.includes(kn) || kn.includes(norm))) return list;
+  }
+  return [];
+}
+
+// #dl-motouke-tantou を現在の atena に応じて更新
+function rebuildMotoukeTantouDatalist() {
+  const dl = document.getElementById('dl-motouke-tantou');
+  if (!dl) return;
+  const atena = state.estimate?.meta?.atena || document.getElementById('meta-atena')?.value || '';
+  const list = getMotoukeContacts(atena);
+  // 全元請けの担当者を全部出すフォールバック(atena 空 or マッチ無し時)
+  let opts = list;
+  if (!opts.length) {
+    const all = state.settings?.motoukeContacts || {};
+    opts = [];
+    Object.values(all).forEach(arr => { if (Array.isArray(arr)) opts.push(...arr); });
+    // 重複除去
+    opts = [...new Set(opts)];
+  }
+  dl.innerHTML = opts.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
 function currentIssuer() {
   const s = state.settings || {};
   const issuers = s.issuers || {};
@@ -9012,6 +9505,10 @@ Object.entries(META_FIELD_MAP).forEach(([id, key]) => {
     // ユーザーが atena/atenaTantou を手入力したら自動フラグを解除
     if (key === 'atena' || key === 'atenaTantou') {
       state.estimate.meta.atenaAutoFilled = false;
+    }
+    // 宛先(元請け会社名)が変わったら 担当者datalist を再構築
+    if (key === 'atena') {
+      if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
     }
     saveEstimate(); renderPrintMeta(); renderCurrentHeader();
     // 退去タブが表示中なら入力欄も同期
@@ -10253,6 +10750,299 @@ function masterViewCols() {
   return ['項目番号','カテゴリー','項目','品番','単位','数量', ...priceCols, '材料費','備考'];
 }
 
+// === 単価マスタ 印刷用出力 ===
+//   取引先(新規元請け)・業者(新規発注先)向けに 単価表を作って印刷/PDF
+//   選択した単価列1つだけを抜粋し、カテゴリ別にグループ化して見やすく
+const _mpState = {
+  selectedCol: '',
+  catChecked: new Set(),     // 表示するカテゴリ
+  catOrder: [],              // 表示順序(ドラッグで並び替え)
+  priceOverrides: {},        // { '項目番号|単価列': 上書き値 } — 単価の手動編集
+  cellOverrides: {},         // { '項目番号': { item, spec, qty, unit } } — 項目名/仕様/数量/単位の手動編集
+};
+function _mpAvailableCols() {
+  // 元請け(customMotouke) + 発注先(customHatchu) 両方を選択可能に
+  const moto = (state.settings?.customMotouke || []).slice();
+  const hatchu = (state.settings?.customHatchu || []).slice();
+  return { moto, hatchu };
+}
+function _mpAvailableCategories() {
+  const set = new Set();
+  (state.master || []).forEach(m => { if (m.カテゴリー) set.add(m.カテゴリー); });
+  return Array.from(set);
+}
+function openMasterPrintModal() {
+  // 列セレクト初期化
+  const sel = document.getElementById('mp-price-col');
+  const { moto, hatchu } = _mpAvailableCols();
+  let html = '';
+  if (moto.length) {
+    html += '<optgroup label="元請け(取引先・見積書用)">' +
+      moto.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('') + '</optgroup>';
+  }
+  if (hatchu.length) {
+    html += '<optgroup label="発注先(業者・発注書用)">' +
+      hatchu.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('') + '</optgroup>';
+  }
+  sel.innerHTML = html;
+  // デフォルト=「山一地所」or 先頭
+  if (!_mpState.selectedCol) _mpState.selectedCol = moto.includes('山一地所') ? '山一地所' : (moto[0] || hatchu[0] || '');
+  if (_mpState.selectedCol) sel.value = _mpState.selectedCol;
+  sel.onchange = () => { _mpState.selectedCol = sel.value; mpRenderPreview(); };
+  // 発行元 select 初期化(設定タブの issuers から)
+  const issuerSel = document.getElementById('mp-issuer-select');
+  const issuers = state.settings?.issuers || {};
+  const issuerKeys = Object.keys(issuers);
+  if (issuerSel) {
+    issuerSel.innerHTML = issuerKeys.map(k => {
+      const name = issuers[k]?.name || k;
+      return `<option value="${escapeHtml(k)}">${escapeHtml(name)}</option>`;
+    }).join('') || '<option value="">(発行元未設定)</option>';
+    // デフォルト: 名前にビルドクラスタを含む issuer を優先選択(自社単価表なので)
+    const buildKey = issuerKeys.find(k => /ビルドクラスタ|build/i.test(issuers[k]?.name || k));
+    issuerSel.value = buildKey || (state.settings.issuerKey || issuerKeys[0] || '');
+    issuerSel.onchange = () => mpRenderPreview();
+  }
+  // カテゴリリスト初期化(初回はマスタの全カテゴリ・順番はマスタ出現順)
+  // 「諸経費」「リノッタ」を含むカテゴリは取引先・業者向け単価表に通常出さないので 初期チェックOFF
+  // (リノッタ系はリノッタカラーズ/シック/ライフ等多数あるので部分一致で除外)
+  const HIDDEN_PATTERNS = [/諸経費/, /リノッタ/];
+  const isHiddenByDefault = (c) => HIDDEN_PATTERNS.some(re => re.test(c));
+  // デフォルト並び順: ハウスクリーニング → 内装工事 → その他はマスタ出現順
+  //   取引先向け単価表で 最も使われるカテゴリ を上位に
+  const PREFERRED_ORDER = ['ハウスクリーニング', '内装工事'];
+  const sortByPreference = (arr) => {
+    const head = PREFERRED_ORDER.filter(c => arr.includes(c));
+    const rest = arr.filter(c => !PREFERRED_ORDER.includes(c));
+    return [...head, ...rest];
+  };
+  const cats = _mpAvailableCategories();
+  if (!_mpState.catOrder.length) {
+    _mpState.catOrder = sortByPreference(cats);
+    _mpState.catChecked = new Set(cats.filter(c => !isHiddenByDefault(c)));
+  } else {
+    // 新カテゴリが増えてたら末尾に追加(隠しデフォは初期OFF)
+    cats.forEach(c => {
+      if (!_mpState.catOrder.includes(c)) {
+        _mpState.catOrder.push(c);
+        if (!isHiddenByDefault(c)) _mpState.catChecked.add(c);
+      }
+    });
+    // 削除されたカテゴリは外す
+    _mpState.catOrder = _mpState.catOrder.filter(c => cats.includes(c));
+  }
+  mpRenderCatList();
+  // 提出先入力初期化(空のまま)
+  document.getElementById('master-print-modal').style.display = 'flex';
+  setTimeout(() => mpRenderPreview(), 50);
+}
+function closeMasterPrintModal() {
+  document.getElementById('master-print-modal').style.display = 'none';
+}
+function mpRenderCatList() {
+  const wrap = document.getElementById('mp-cat-list');
+  if (!wrap) return;
+  // ドラッグソート可能なリスト
+  wrap.innerHTML = _mpState.catOrder.map((c, i) => {
+    const checked = _mpState.catChecked.has(c) ? 'checked' : '';
+    const count = (state.master||[]).filter(m => m.カテゴリー === c).length;
+    return `<div class="mp-cat-row" draggable="true" data-cat="${escapeHtml(c)}" data-i="${i}"
+              style="display:flex; align-items:center; gap:6px; padding:4px 6px; border-bottom:1px solid #e5e7eb; cursor:grab; background:#fff; user-select:none;">
+      <span style="color:#94a3b8; font-size:11px;">⋮⋮</span>
+      <input type="checkbox" class="mp-cat-check" ${checked} data-cat="${escapeHtml(c)}" style="width:auto;">
+      <span style="flex:1; font-size:12px;">${escapeHtml(c)}</span>
+      <span style="font-size:10px; color:#94a3b8;">${count}件</span>
+    </div>`;
+  }).join('');
+  // チェックハンドラ
+  wrap.querySelectorAll('.mp-cat-check').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const c = e.target.dataset.cat;
+      if (e.target.checked) _mpState.catChecked.add(c);
+      else _mpState.catChecked.delete(c);
+      mpRenderPreview();
+    });
+  });
+  // ドラッグソート
+  let dragIdx = -1;
+  wrap.querySelectorAll('.mp-cat-row').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragIdx = Number(e.target.dataset.i);
+      e.target.style.opacity = '0.4';
+    });
+    row.addEventListener('dragover', e => { e.preventDefault(); });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      const dropIdx = Number(e.currentTarget.dataset.i);
+      if (dragIdx < 0 || dropIdx === dragIdx) return;
+      const moved = _mpState.catOrder.splice(dragIdx, 1)[0];
+      _mpState.catOrder.splice(dropIdx, 0, moved);
+      mpRenderCatList();
+      mpRenderPreview();
+    });
+    row.addEventListener('dragend', e => { e.target.style.opacity = ''; });
+  });
+}
+function mpBuildPrintHtml() {
+  const col = _mpState.selectedCol;
+  const atena = (document.getElementById('mp-atena')?.value || '').trim();
+  const excludeEmpty = !!document.getElementById('mp-exclude-empty')?.checked;
+  const pageBreakCat = !!document.getElementById('mp-page-break-cat')?.checked;
+  const includeIssuer = !!document.getElementById('mp-include-issuer')?.checked;
+  // 発行元: モーダル内で選んだものを優先、なければ currentIssuer()
+  const issuerKey = document.getElementById('mp-issuer-select')?.value || '';
+  const issuers = state.settings?.issuers || {};
+  const issuer = (issuerKey && issuers[issuerKey]) ? issuers[issuerKey]
+                : (currentIssuer ? currentIssuer() : null);
+  const today = formatToday ? formatToday() : new Date().toISOString().slice(0,10);
+  // 行データ生成
+  let blocks = '';
+  let totalCount = 0;
+  _mpState.catOrder.filter(c => _mpState.catChecked.has(c)).forEach((cat, i) => {
+    let rows = (state.master || []).filter(m => m.カテゴリー === cat);
+    if (excludeEmpty) rows = rows.filter(m => Number(m[col]) > 0);
+    if (!rows.length) return;
+    // 項目番号順 → 無ければマスタ出現順
+    rows.sort((a, b) => (Number(a.項目番号) || 0) - (Number(b.項目番号) || 0));
+    totalCount += rows.length;
+    const colWidths = `<col style="width:auto;"><col style="width:32mm;"><col style="width:13mm;"><col style="width:13mm;"><col style="width:24mm;">`;
+    const headCols = `<th>項目名</th><th>仕様 / 品番</th><th class="mp-num">数量</th><th>単位</th><th class="mp-num">単価(税抜)</th>`;
+    const rowsHtml = rows.map(m => {
+      // 取引先向け表記: 項目名に「提案」が含まれてたら削除して綺麗に
+      // (例: 「ポスト受け口交換提案」→「ポスト受け口交換」)
+      const itemRaw = String(m.項目 || '').trim();
+      const itemDefault = itemRaw.replace(/提案/g, '').trim();
+      const specDefault = String(m.品番 || '').trim();
+      const unitDefault = String(m.単位 || '').trim();
+      const price = Number(m[col]) || 0;
+      const itemNo = String(m.項目番号 || '');
+      // 単価override
+      const overrideKey = `${itemNo}|${col}`;
+      const overridePrice = _mpState.priceOverrides?.[overrideKey];
+      const finalPrice = (overridePrice != null) ? Number(overridePrice) : price;
+      const priceStr = finalPrice > 0 ? '¥' + finalPrice.toLocaleString() : '—';
+      const priceMark = overridePrice != null ? ' style="background:#fef3c7;"' : '';
+      // 各セルのoverride
+      const ovr = _mpState.cellOverrides?.[itemNo] || {};
+      const item = ovr.item != null ? ovr.item : itemDefault;
+      const spec = ovr.spec != null ? ovr.spec : specDefault;
+      const qty  = ovr.qty  != null ? ovr.qty  : '1';
+      const unit = ovr.unit != null ? ovr.unit : unitDefault;
+      const cellMark = (f) => ovr[f] != null ? ' style="background:#fef3c7;"' : '';
+      return `<tr data-item-no="${escapeHtml(itemNo)}">
+        <td class="mp-edit-cell" data-field="item" contenteditable="true" data-original="${escapeHtml(itemDefault)}"${cellMark('item')} title="クリックして編集可">${escapeHtml(item)}</td>
+        <td class="mp-edit-cell" data-field="spec" contenteditable="true" data-original="${escapeHtml(specDefault)}"${cellMark('spec')}>${escapeHtml(spec)}</td>
+        <td class="mp-num mp-edit-cell" data-field="qty" contenteditable="true" data-original="1"${cellMark('qty')}>${escapeHtml(String(qty))}</td>
+        <td class="mp-edit-cell" data-field="unit" contenteditable="true" data-original="${escapeHtml(unitDefault)}"${cellMark('unit')}>${escapeHtml(unit)}</td>
+        <td class="mp-num mp-price-cell" contenteditable="true" data-original="${price}"${priceMark} title="クリックして編集可(黄色=上書き済)">${priceStr}</td>
+      </tr>`;
+    }).join('');
+    const cls = pageBreakCat && i > 0 ? 'mp-cat-block page-break' : 'mp-cat-block';
+    blocks += `<div class="${cls}">
+      <div class="mp-cat-head">${escapeHtml(cat)}<span class="mp-cat-count">${rows.length}項目</span></div>
+      <table class="mp-table">
+        <colgroup>${colWidths}</colgroup>
+        <thead><tr>${headCols}</tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+  });
+  // ヘッダー(敬称は select 値・空なら付けない)
+  const atenaSuffix = document.getElementById('mp-atena-suffix')?.value || '';
+  const atenaFull = atena ? (atenaSuffix ? `${atena} ${atenaSuffix}` : atena) : '';
+  const atenaHtml = atenaFull ? `<div class="mp-atena">${escapeHtml(atenaFull)}</div>` : '<div></div>';
+  let issuerHtml = '';
+  // 発行日 → 「令和N年M月D日」 表記に変換(より格式ある印象)
+  const _formatJpEra = (iso) => {
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return iso;
+    const y = Number(m[1]); const mo = Number(m[2]); const d = Number(m[3]);
+    // 令和 元年 = 2019
+    const eraY = y - 2018;
+    return `令和${eraY}年${mo}月${d}日`;
+  };
+  const dateJp = _formatJpEra(today);
+  if (includeIssuer && issuer) {
+    // legacy フィールド対応(jishaName/jishaAddr 等が古い形式)+ 株式会社が無ければ自動補完
+    let cname = (issuer.name || issuer.jishaName || '株式会社ビルドクラスタ').trim();
+    if (cname && !/(株式会社|有限会社|合同会社|\(株\)|\(有\)|㈱|㈲)/.test(cname)) {
+      cname = '株式会社' + cname;
+    }
+    const caddr = issuer.address || issuer.jishaAddr || '';
+    const ctel = issuer.tel || issuer.jishaTel || '';
+    const cfax = issuer.fax || issuer.jishaFax || '';
+    // 担当者 select で選んだら override(なければ issuer のデフォ)
+    const tantouOverride = (document.getElementById('mp-tantou-select')?.value || '').trim();
+    const tantouName = tantouOverride || issuer.tantou || '';
+    const tantouTel = tantouOverride
+      ? (typeof STAFF_TEL_MAP !== 'undefined' && STAFF_TEL_MAP[tantouOverride] ? STAFF_TEL_MAP[tantouOverride] : '')
+      : (issuer.tantouTel || '');
+    const tantouTable = (tantouName || tantouTel) ? `
+        <table class="mp-issuer-tantou">
+          ${tantouName ? `<tr><td>担当</td><td>${escapeHtml(tantouName)}</td></tr>` : ''}
+          ${tantouTel ? `<tr><td>TEL</td><td>${escapeHtml(tantouTel)}</td></tr>` : ''}
+        </table>` : '';
+    issuerHtml = `<div class="mp-issuer">
+      <div class="mp-issuer-date">${escapeHtml(dateJp)}</div>
+      <div class="mp-issuer-block">
+        ${issuer.logo ? `<img class="mp-issuer-logo" src="${issuer.logo}" alt="">` : ''}
+        <b class="mp-issuer-name">${escapeHtml(cname)}</b>
+        ${caddr ? `<div class="mp-issuer-line">${escapeHtml(caddr)}</div>` : ''}
+        ${(ctel || cfax) ? `<div class="mp-issuer-line">${ctel ? 'TEL:'+escapeHtml(ctel) : ''}${cfax ? '<br>FAX:'+escapeHtml(cfax) : ''}</div>` : ''}
+        ${tantouTable}
+        ${issuer.seal ? `<img class="mp-issuer-seal" src="${issuer.seal}" alt="">` : ''}
+      </div>
+    </div>`;
+  } else {
+    issuerHtml = `<div class="mp-issuer"><div class="mp-issuer-date">${escapeHtml(dateJp)}</div></div>`;
+  }
+  return `<div class="master-print-doc">
+    <div class="mp-header">
+      ${atenaHtml}
+      ${issuerHtml}
+    </div>
+    <div class="mp-title-wrap"><span class="mp-title">工 事 単 価 表</span></div>
+    <div class="mp-subtitle">計 ${totalCount} 項目</div>
+    ${blocks || '<div style="text-align:center; padding:30mm; color:#94a3b8;">表示する項目がありません</div>'}
+    <div class="mp-footer">
+      <span>${escapeHtml(today)} 時点</span>
+      <span>${escapeHtml(issuer?.name || '')}</span>
+    </div>
+  </div>`;
+}
+function mpRenderPreview() {
+  const html = mpBuildPrintHtml();
+  document.getElementById('mp-preview').innerHTML = html;
+  document.getElementById('master-print-area').innerHTML = html;
+  const total = (state.master||[]).filter(m => _mpState.catChecked.has(m.カテゴリー)).length;
+  document.getElementById('mp-status').textContent = `カテゴリ ${_mpState.catChecked.size}個 / 単価列「${_mpState.selectedCol}」`;
+}
+async function mpDoPrint() {
+  document.body.classList.add('print-master-mode');
+  await new Promise(r => setTimeout(r, 50));
+  window.print();
+  setTimeout(() => document.body.classList.remove('print-master-mode'), 600);
+}
+async function mpDoSavePdf() {
+  if (typeof savePdfViaElectron !== 'function' && !window.bcApi?.printToPdf) {
+    showToast('PDF保存はElectron版でのみ動作します', true);
+    return;
+  }
+  document.body.classList.add('print-master-mode');
+  await new Promise(r => setTimeout(r, 80));
+  try {
+    const atena = (document.getElementById('mp-atena')?.value || '').trim();
+    const fname = `単価表_${_mpState.selectedCol}${atena ? '_' + atena : ''}_${formatToday()}`.replace(/[\\\/:*?"<>|]/g, '_');
+    if (typeof savePdfViaElectron === 'function') {
+      await savePdfViaElectron(fname + '.pdf');
+    }
+  } finally {
+    document.body.classList.remove('print-master-mode');
+  }
+}
+window.openMasterPrintModal = openMasterPrintModal;
+window.closeMasterPrintModal = closeMasterPrintModal;
+
 function renderMaster() {
   const cols = masterViewCols();
   // ヘッダ: グループ色分け
@@ -10568,6 +11358,74 @@ document.getElementById('btn-export-json').addEventListener('click', () => {
 });
 
 document.getElementById('btn-import-json').addEventListener('click', () => document.getElementById('file-input').click());
+
+// 単価マスタ 印刷用出力ボタン
+document.getElementById('btn-master-print')?.addEventListener('click', () => openMasterPrintModal());
+document.getElementById('mp-close')?.addEventListener('click', () => closeMasterPrintModal());
+document.getElementById('mp-cancel')?.addEventListener('click', () => closeMasterPrintModal());
+document.getElementById('master-print-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'master-print-modal') closeMasterPrintModal();
+});
+document.getElementById('mp-preview-refresh')?.addEventListener('click', () => mpRenderPreview());
+document.getElementById('mp-atena')?.addEventListener('input', () => mpRenderPreview());
+document.getElementById('mp-atena-suffix')?.addEventListener('change', () => mpRenderPreview());
+document.getElementById('mp-exclude-empty')?.addEventListener('change', () => mpRenderPreview());
+document.getElementById('mp-page-break-cat')?.addEventListener('change', () => mpRenderPreview());
+document.getElementById('mp-include-issuer')?.addEventListener('change', () => mpRenderPreview());
+document.getElementById('mp-cat-all')?.addEventListener('click', () => {
+  _mpState.catOrder.forEach(c => _mpState.catChecked.add(c));
+  mpRenderCatList(); mpRenderPreview();
+});
+document.getElementById('mp-cat-none')?.addEventListener('click', () => {
+  _mpState.catChecked.clear();
+  mpRenderCatList(); mpRenderPreview();
+});
+document.getElementById('mp-tantou-select')?.addEventListener('change', () => mpRenderPreview());
+// プレビュー内のセル手動編集: contenteditable の blur で値を保存
+//   .mp-price-cell  → 単価override (priceOverrides)
+//   .mp-edit-cell   → 項目名/仕様/数量/単位override (cellOverrides)
+document.getElementById('mp-preview')?.addEventListener('blur', (e) => {
+  const tr = e.target.closest('tr');
+  const itemNo = tr?.dataset.itemNo;
+  if (!itemNo) return;
+  // 単価セル
+  const priceCell = e.target.closest('.mp-price-cell');
+  if (priceCell) {
+    const col = _mpState.selectedCol;
+    const key = `${itemNo}|${col}`;
+    const raw = priceCell.textContent.replace(/[¥,\s]/g, '').trim();
+    const num = Number(raw);
+    if (!Number.isFinite(num) || num <= 0 || raw === '—' || raw === '-') {
+      delete _mpState.priceOverrides[key];
+    } else {
+      const original = Number(priceCell.dataset.original) || 0;
+      if (num === original) delete _mpState.priceOverrides[key];
+      else _mpState.priceOverrides[key] = num;
+    }
+    mpRenderPreview();
+    return;
+  }
+  // その他編集セル(項目名/仕様/数量/単位)
+  const editCell = e.target.closest('.mp-edit-cell');
+  if (editCell) {
+    const field = editCell.dataset.field;
+    const newVal = editCell.textContent.trim();
+    const original = (editCell.dataset.original || '').trim();
+    if (!_mpState.cellOverrides[itemNo]) _mpState.cellOverrides[itemNo] = {};
+    if (newVal === original || newVal === '') {
+      // 元に戻った or 空欄 → override 解除
+      delete _mpState.cellOverrides[itemNo][field];
+      if (!Object.keys(_mpState.cellOverrides[itemNo]).length) {
+        delete _mpState.cellOverrides[itemNo];
+      }
+    } else {
+      _mpState.cellOverrides[itemNo][field] = newVal;
+    }
+    mpRenderPreview();
+  }
+}, true);
+document.getElementById('mp-print')?.addEventListener('click', () => mpDoPrint());
+document.getElementById('mp-save-pdf')?.addEventListener('click', () => mpDoSavePdf());
 document.getElementById('file-input').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   const reader = new FileReader();
@@ -10828,6 +11686,7 @@ function paintPatternEditTable() {
 function renderSettings() {
   renderCustomCompanyLists();
   renderPatternEditor();
+  if (typeof renderMotoukeContactsUI === 'function') renderMotoukeContactsUI();
   const list = document.getElementById('price-col-list');
   const visible = new Set(state.settings.visibleCols || PRICE_COLS);
   list.innerHTML = (state.settings.visibleCols || PRICE_COLS).concat(PRICE_COLS.filter(c => !visible.has(c))).map(c => `
@@ -11533,6 +12392,18 @@ function duplicateEstimate(srcId) {
   switchTab('estimate');
 }
 
+// 工事種別 → バッジHTML (色分けバッジ)
+function kojiBadgeHtml(kojiName) {
+  const k = (kojiName||'').trim();
+  if (!k) return `<span class="koji-badge koji-badge-other">未設定</span>`;
+  let cls = 'koji-badge-other';
+  if (k === '原状回復工事') cls = 'koji-badge-restoration';
+  else if (k === '修繕工事') cls = 'koji-badge-repair';
+  else if (k === 'リフォーム工事') cls = 'koji-badge-reform';
+  return `<span class="koji-badge ${cls}">${escapeHtml(k)}</span>`;
+}
+window.kojiBadgeHtml = kojiBadgeHtml;
+
 // パターンラベルの並び順(オリジナル → ② → ③ → ④ → ⑤ → 元請確定版 → その他)
 const PATTERN_LABEL_ORDER = ['オリジナル', 'パターン②', 'パターン③', 'パターン④', 'パターン⑤', '元請確定版'];
 const PATTERN_REVISION_LABELS = ['パターン②', 'パターン③', 'パターン④', 'パターン⑤']; // 修正パターン用ラベル(オリジナル除く)
@@ -11929,6 +12800,7 @@ function loadEstimateById(id) {
   syncMetaInputs();
   renderEstimate(); renderCurrentHeader();
   if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
+  if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
   switchTab('estimate');
 }
 
@@ -12027,6 +12899,50 @@ function autoFixSharedDriveFileId() {
   }
 }
 autoFixSharedDriveFileId();
+
+// 起動時の整合性チェック: 「完了日入ってるのに status が完了になってない」既存データを一括補正
+//   - 失注 / キャンセル は保護(否定状態を維持)
+//   - 修正された見積は Drive にも silent push(GAS設定済時)
+function autoMarkCompletedFromDate() {
+  const fixedEstimates = [];
+  Object.values(state.estimates || {}).forEach(est => {
+    if (!est || est.deleted) return;
+    if (est.meta?.isTemplate) return;
+    const completeDate = (est.meta?.hatchuOrder?.completeDate || '').trim();
+    if (!completeDate) return;
+    const status = est.meta.status || '下書き';
+    if (status === '完了' || status === '失注' || status === 'キャンセル') return;
+    est.meta.status = '完了';
+    if (!est.meta.completedAt) {
+      const isoMatch = completeDate.match(/^\d{4}-\d{2}-\d{2}/);
+      est.meta.completedAt = isoMatch ? completeDate.slice(0,10) : new Date().toISOString().slice(0,10);
+    }
+    est.updatedAt = new Date().toISOString();
+    fixedEstimates.push(est);
+  });
+  if (fixedEstimates.length > 0) {
+    saveEstimates();
+    console.log(`[autoMarkCompleted] ${fixedEstimates.length}件を「完了」に自動更新(完了日入力済)`);
+    // Drive 台帳にも silent push (GAS設定済の場合)
+    if ((state.settings?.gasSyncUrl||'').trim() && (state.settings?.gasSyncToken||'').trim()
+        && typeof gasSaveLedger === 'function') {
+      // 1秒遅延で順次push(起動時の他処理と競合しないため)
+      setTimeout(async () => {
+        for (const est of fixedEstimates) {
+          try {
+            const r = await gasSaveLedger(est, est._driveFileId || '');
+            est._driveFileId = r.fileId;
+            est._driveMonth = r.month;
+            est._driveSavedAt = new Date().toISOString();
+          } catch (e) { console.warn('[autoMarkCompleted push 失敗]', est.id, e); }
+        }
+        saveEstimates();
+        console.log(`[autoMarkCompleted] ${fixedEstimates.length}件を Drive台帳に反映`);
+      }, 1000);
+    }
+  }
+}
+autoMarkCompletedFromDate();
 
 // パターンプルダウンの初期化(設定の defaultPattern を選択状態に)
 function initNewEstPatternSelect() {
@@ -12378,6 +13294,16 @@ function renderLedger() {
   // 絞込
   if (creatorFilter) rows = rows.filter(e => getCreatorName(e) === creatorFilter);
   if (kojiFilter) rows = rows.filter(e => (e.meta?.kojiName||'') === kojiFilter);
+  // 工事種別 → バッジHTMLヘルパー (renderLedger 描画用)
+  // window.kojiBadgeHtml があれば再利用、無ければここで定義
+  // 工事種別タブ(原状回復 / 修繕)絞込: meta.kojiName で判定
+  //   restoration: '原状回復工事' のみ
+  //   repair: '原状回復工事' 以外(修繕・リフォーム・その他・空白も含む)
+  if (currentLedgerKojiTab === 'restoration') {
+    rows = rows.filter(e => (e.meta?.kojiName||'').trim() === '原状回復工事');
+  } else if (currentLedgerKojiTab === 'repair') {
+    rows = rows.filter(e => (e.meta?.kojiName||'').trim() !== '原状回復工事');
+  }
   if (motoukeFilter) rows = rows.filter(e => getMotoukeName(e) === motoukeFilter);
   if (statusFilter) {
     if (statusFilter === '__juchu__') {
@@ -12453,7 +13379,13 @@ function renderLedger() {
       const isCurrent = state.estimate && state.estimate.id === est.id;
       const statusText = est.meta?.status || '下書き';
       const st = STATUS_STYLES[statusText] || STATUS_STYLES['下書き'];
-      const statusBadge = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:${st.bg}; color:${st.color};">${st.icon} ${escapeHtml(statusText)}</span>`;
+      // 編集可能なステータスバッジ: select をバッジ風スタイルで描画 → 変更で保存
+      const statusOptions = ['下書き','対応中','提出済','受注','失注','完了','キャンセル'].map(s => {
+        const ss = STATUS_STYLES[s] || STATUS_STYLES['下書き'];
+        const sel = s === statusText ? ' selected' : '';
+        return `<option value="${escapeHtml(s)}"${sel}>${ss.icon} ${escapeHtml(s)}</option>`;
+      }).join('');
+      const statusBadge = `<select class="ledger-status-edit" data-est-id="${escapeHtml(est.id)}" style="appearance:none; -webkit-appearance:none; padding:2px 18px 2px 8px; border-radius:10px; font-size:11px; font-weight:600; background-color:${st.bg}; color:${st.color}; border:1px solid transparent; cursor:pointer; background-image:linear-gradient(45deg,transparent 50%,${st.color} 50%),linear-gradient(135deg,${st.color} 50%,transparent 50%); background-position:calc(100% - 9px) 50%, calc(100% - 5px) 50%; background-size:4px 4px,4px 4px; background-repeat:no-repeat;" title="クリックでステータス変更">${statusOptions}</select>`;
       const reducedLines = (est.lines||[]).filter(l => l.reduced);
       const reducedAmt = reducedLines.reduce((sum,l)=>sum + lineAmount(l, 'estimate'), 0);
       const actualTotal = s.mitoriTotal - reducedAmt;
@@ -12508,7 +13440,7 @@ function renderLedger() {
         <td class="num">${runningIdx}</td>
         <td>${statusBadge}${est.meta?.submittedAt?`<br><small style="color:var(--muted); font-size:10px;">提出: ${escapeHtml(est.meta.submittedAt)}</small>`:''}</td>
         <td>${confirmedBadge}${driveBadge}<b>${escapeHtml(est.meta?.bukken || '(無題)')}</b>${est.meta?.patternLabel ? ` <small style="color:#92400e;">〔${escapeHtml(est.meta.patternLabel)}〕</small>`:''}${patternChips}<br><small style="color:var(--muted);">${escapeHtml(est.meta?.atena||'')}</small>${est.meta?.folderName?`<br><small style="color:#1e40af;">📁 ${escapeHtml(est.meta.folderName)}</small>`:''}${est.meta?.driveUrl?`<br><a href="${escapeHtml(est.meta.driveUrl)}" target="_blank" rel="noopener" style="font-size:11px;">🔗 Drive で開く</a>`:''}</td>
-        <td><small>${escapeHtml(kojiName)}</small></td>
+        <td>${kojiBadgeHtml(kojiName)}</td>
         <td><small>${escapeHtml(creator)}</small></td>
         <td>${escapeHtml(est.meta?.date || '')}</td>
         <td><small>${s.lineCount}明細 / ${s.suppliers.length ? s.suppliers.map(escapeHtml).join(', ') : '発注先未割当'}</small></td>
@@ -12535,6 +13467,85 @@ window.purgeEstimateById = purgeEstimateById;
 ledgerSearch.addEventListener('input', renderLedger);
 ledgerSort.addEventListener('change', renderLedger);
 document.getElementById('ledger-show-trash')?.addEventListener('change', renderLedger);
+// 台帳の「🛠 対応中」トグルボタン(イベント委譲)
+//   meta.workflowStatus を '対応中' ↔ '待機' で切替 → 進捗タブの表示対象切替
+const _ledgerTbodyClickHandler = (e) => {
+  const btn = e.target.closest('.ledger-workflow-toggle');
+  if (!btn) return;
+  const id = btn.dataset.estId;
+  const est = state.estimates[id];
+  if (!est?.meta) return;
+  const isNow = est.meta.workflowStatus === '対応中';
+  est.meta.workflowStatus = isNow ? '待機' : '対応中';
+  est.updatedAt = new Date().toISOString();
+  saveEstimates();
+  // Drive 台帳に反映(GAS設定済時)
+  if ((state.settings?.gasSyncUrl||'').trim() && (state.settings?.gasSyncToken||'').trim()) {
+    gasSaveLedger(est, est._driveFileId || '').then(r => {
+      est._driveFileId = r.fileId;
+      est._driveMonth = r.month;
+      est._driveSavedAt = new Date().toISOString();
+      saveEstimates();
+    }).catch(err => console.warn('[対応中トグルpush 失敗]', err));
+  }
+  renderLedger();
+  showToast(`「${est.meta.bukken||'(無題)'}」 → ${est.meta.workflowStatus} ${est.meta.workflowStatus === '対応中' ? '(進捗タブに表示)' : ''}`);
+};
+document.getElementById('ledger-tbody')?.addEventListener('click', _ledgerTbodyClickHandler);
+
+// 台帳の状態セルから直接ステータス変更(イベント委譲・各行の <select> から拾う)
+const _ledgerTbody = document.getElementById('ledger-tbody');
+if (_ledgerTbody) _ledgerTbody.addEventListener('change', (e) => {
+  const sel = e.target.closest('.ledger-status-edit');
+  if (!sel) return;
+  const id = sel.dataset.estId;
+  const est = state.estimates[id];
+  if (!est || !est.meta) return;
+  const newStatus = sel.value;
+  const oldStatus = est.meta.status || '下書き';
+  if (newStatus === oldStatus) return;
+  est.meta.status = newStatus;
+  // 提出済になった瞬間に submittedAt 自動セット(無ければ)
+  if (newStatus === '提出済' && !est.meta.submittedAt) {
+    est.meta.submittedAt = new Date().toISOString().slice(0,10);
+  }
+  // 完了になった瞬間に completedAt 自動セット(無ければ)
+  if (newStatus === '完了' && !est.meta.completedAt) {
+    est.meta.completedAt = new Date().toISOString().slice(0,10);
+  }
+  est.updatedAt = new Date().toISOString();
+  state.estimates[id] = est;
+  saveEstimates();
+  // Drive台帳に反映(別見積でも push できるよう gasSaveLedger 直接呼出)
+  if ((state.settings?.gasSyncUrl||'').trim() && (state.settings?.gasSyncToken||'').trim()) {
+    gasSaveLedger(est, est._driveFileId || '').then(r => {
+      est._driveFileId = r.fileId;
+      est._driveMonth = r.month;
+      est._driveSavedAt = new Date().toISOString();
+      saveEstimates();
+      if (typeof refreshSaveToLedgerStamp === 'function' && state.estimate?.id === id) refreshSaveToLedgerStamp();
+    }).catch(err => console.warn('[台帳ステータス変更push 失敗]', err));
+  }
+  // UI 更新: 該当 select の見た目を新ステータスの色に変更 + 行を再描画
+  renderLedger();
+  // 編集中の見積なら見積タブ側のステータスバッジも更新
+  if (state.estimate?.id === id) {
+    if (typeof renderStatusBadge === 'function') renderStatusBadge();
+    if (typeof renderCurrentHeader === 'function') renderCurrentHeader();
+  }
+  showToast(`✅ 「${est.meta.bukken||'(無題)'}」 → ${newStatus}`);
+});
+
+// 工事種別タブ(台帳タブ・原状回復/修繕/すべて) 状態
+let currentLedgerKojiTab = 'all';
+const _lkojiTabs = document.getElementById('ledger-koji-tabs');
+if (_lkojiTabs) _lkojiTabs.addEventListener('click', (e) => {
+  const b = e.target.closest('.koji-tab'); if (!b) return;
+  _lkojiTabs.querySelectorAll('.koji-tab').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  currentLedgerKojiTab = b.dataset.k || 'all';
+  renderLedger();
+});
 const _lcFilter = document.getElementById('ledger-creator-filter');
 if (_lcFilter) _lcFilter.addEventListener('change', renderLedger);
 const _lkFilter = document.getElementById('ledger-koji-filter');
@@ -12548,6 +13559,12 @@ if (_btnClearFilters) _btnClearFilters.addEventListener('click', () => {
   ledgerSearch.value = '';
   ['ledger-creator-filter','ledger-koji-filter','ledger-motouke-filter','ledger-status-filter']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // 工事種別タブも「すべて」へ
+  currentLedgerKojiTab = 'all';
+  if (_lkojiTabs) {
+    _lkojiTabs.querySelectorAll('.koji-tab').forEach(x => x.classList.remove('on'));
+    _lkojiTabs.querySelector('[data-k="all"]')?.classList.add('on');
+  }
   renderLedger();
 });
 
@@ -16650,6 +17667,36 @@ const _btnAddMoto = document.getElementById('btn-add-moto');
 const _btnAddHatchu = document.getElementById('btn-add-hatchu');
 const _btnAddCat = document.getElementById('btn-add-cat');
 if (_btnAddMoto) _btnAddMoto.addEventListener('click', () => addCustomEntry('moto'));
+// 元請け担当者マスタ
+document.getElementById('contacts-motouke-select')?.addEventListener('change', () => _renderContactsList());
+document.getElementById('btn-add-contact')?.addEventListener('click', () => {
+  const inp = document.getElementById('new-contact-input');
+  const sel = document.getElementById('contacts-motouke-select');
+  const name = (inp?.value || '').trim();
+  const moto = sel?.value;
+  if (!name) { showToast('担当者名を入力', true); return; }
+  if (!moto) { showToast('元請けを選択', true); return; }
+  if (!state.settings.motoukeContacts) state.settings.motoukeContacts = {};
+  if (!state.settings.motoukeContacts[moto]) state.settings.motoukeContacts[moto] = [];
+  if (state.settings.motoukeContacts[moto].includes(name)) {
+    showToast(`「${name}」は既に登録済`, true);
+    return;
+  }
+  state.settings.motoukeContacts[moto].push(name);
+  saveSettings();
+  inp.value = '';
+  _renderContactsList();
+  if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
+  // チーム共有 silent push
+  if (typeof gasPushSettings === 'function') gasPushSettings({silent:true}).catch(()=>{});
+  showToast(`✅ ${moto} に「${name}」を追加`);
+});
+document.getElementById('new-contact-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('btn-add-contact').click();
+  }
+});
 
 // パターン編集 ボタンハンドラ
 const _peSel = document.getElementById('pattern-edit-select');
@@ -17836,6 +18883,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const taikyoTelInp = document.querySelector('input[data-taikyo="tachiaiPersonTel"]');
         if (taikyoTelInp) taikyoTelInp.value = t.tachiaiPersonTel || '';
         renderPrintMeta();
+      }
+      // 自動ステータス遷移: 完了日が入力された瞬間 → status='完了'
+      //   未入力 → 入力 へ変化したときだけ遷移(空欄に戻しても status は維持)
+      if (key === 'completeDate') {
+        const v = String(inp.value||'').trim();
+        if (v && state.estimate.meta.status !== '完了') {
+          state.estimate.meta.status = '完了';
+          if (!state.estimate.meta.completedAt) {
+            const isoMatch = v.match(/^\d{4}-\d{2}-\d{2}/);
+            state.estimate.meta.completedAt = isoMatch ? v.slice(0,10) : new Date().toISOString().slice(0,10);
+          }
+          // 見積タブ側のステータスバッジ・ヘッダー再描画
+          if (typeof renderStatusBadge === 'function') renderStatusBadge();
+          if (typeof renderCurrentHeader === 'function') renderCurrentHeader();
+          showToast('🎉 完了日が入りました → ステータスを「完了」に自動更新');
+        }
       }
       saveEstimate();
     });
@@ -19921,6 +20984,217 @@ function readAiResultFromTable() {
 }
 
 // AI取込モーダル UI 制御
+// === 修繕依頼取込(PDF/メール文 → AI抽出 → 新規修繕案件として登録) ===
+const REPAIR_EXTRACT_PROMPT = `あなたは建設業の修繕依頼書 解析アシスタントです。
+添付された PDF/画像 または テキスト から、修繕依頼の情報を構造化 JSON で抽出してください。
+
+【出力形式(必ずこの JSON のみ・他の文字列は付けない)】
+{
+  "bukken": "物件名/マンション名(例: エルス泉)",
+  "roomNo": "号室(数字のみ可・例: 302)",
+  "address": "住所",
+  "contractorName": "入居者氏名(様 等の敬称は除外)",
+  "contractorTel": "入居者電話番号",
+  "motouke": "元請け会社名(山一地所/みどり不動産/光和工業/JSB/ワールドレジデンシャル/丸山不動産 等)",
+  "requestDate": "依頼日(YYYY-MM-DD or M/D 形式)",
+  "requestDetail": "依頼内容を要約(故障状況・希望対応日 等)",
+  "urgency": "緊急度(高/中/低)"
+}
+
+【ルール】
+- 不明・未記載の項目は空文字 ""
+- 緊急度は文書内に明示が無ければ空欄
+- 依頼内容は簡潔に(50文字程度を目安)`;
+
+async function extractRepairRequest(parts) {
+  const allParts = [{ text: REPAIR_EXTRACT_PROMPT }, ...parts];
+  const text = await geminiCall(allParts);
+  // JSON以外の余計な記号を削除
+  const cleaned = String(text||'').replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // 念のため最初の { ... } 部分を取り出す
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error('AI応答のJSON解析失敗: ' + cleaned.slice(0, 200));
+  }
+}
+
+function openRepairRequestModal() {
+  if (!(state.settings.geminiApiKey||'').trim()) {
+    if (!confirm('Gemini APIキーが未設定です。\n設定タブで先に登録してください。\n\n設定タブを開きますか?')) return;
+    switchTab('settings');
+    return;
+  }
+  document.getElementById('repair-import-modal').style.display = 'flex';
+  document.getElementById('ri-step1').style.display = 'block';
+  document.getElementById('ri-step2').style.display = 'none';
+  document.getElementById('ri-status').textContent = '';
+  document.getElementById('ri-text').value = '';
+  document.getElementById('ri-file').value = '';
+  const _fn = document.getElementById('ri-file-name');
+  if (_fn) _fn.textContent = '';
+  // 元請けセレクトに customMotouke を反映
+  const motoukeSel = document.getElementById('ri-motouke');
+  if (motoukeSel) {
+    const moto = (state.settings?.customMotouke || []).slice();
+    motoukeSel.innerHTML = '<option value="">(未設定)</option>' + moto.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  }
+  // 物件マスタ datalist
+  const dl = document.getElementById('ri-bukken-list');
+  if (dl) {
+    dl.innerHTML = (state.bukken || []).map(b => `<option value="${escapeHtml(b.name||'')}">`).join('');
+  }
+  // 既定立会担当者(現在の設定があれば)
+  const tachiaiSel = document.getElementById('ri-tachiai');
+  if (tachiaiSel) {
+    const cur = state.settings?.userName || '';
+    if (cur && Array.from(tachiaiSel.options).some(o => o.value === cur)) tachiaiSel.value = cur;
+  }
+}
+function closeRepairRequestModal() {
+  document.getElementById('repair-import-modal').style.display = 'none';
+}
+function _riSetMode(mode) {
+  document.getElementById('ri-pane-file').style.display = mode === 'file' ? 'block' : 'none';
+  document.getElementById('ri-pane-text').style.display = mode === 'text' ? 'block' : 'none';
+  const fbtn = document.getElementById('ri-mode-file');
+  const tbtn = document.getElementById('ri-mode-text');
+  if (mode === 'file') {
+    fbtn.classList.add('primary'); fbtn.style.background = '#f59e0b'; fbtn.style.borderColor = '#d97706';
+    tbtn.classList.remove('primary'); tbtn.style.background = ''; tbtn.style.borderColor = '';
+  } else {
+    tbtn.classList.add('primary'); tbtn.style.background = '#f59e0b'; tbtn.style.borderColor = '#d97706';
+    fbtn.classList.remove('primary'); fbtn.style.background = ''; fbtn.style.borderColor = '';
+  }
+}
+async function riAnalyze() {
+  const status = document.getElementById('ri-status');
+  status.textContent = '⏳ Gemini で抽出中...';
+  try {
+    const fileMode = document.getElementById('ri-pane-file').style.display !== 'none';
+    let parts;
+    if (fileMode) {
+      const f = document.getElementById('ri-file').files[0];
+      if (!f) { status.textContent = 'ファイルを選択してください'; return; }
+      parts = [await fileToGeminiPart(f)];
+    } else {
+      const t = document.getElementById('ri-text').value.trim();
+      if (!t) { status.textContent = 'テキストを貼り付けてください'; return; }
+      parts = [{ text: '【文書】\n' + t }];
+    }
+    const data = await extractRepairRequest(parts);
+    status.textContent = '✅ 抽出完了';
+    // フォームに反映
+    document.getElementById('ri-bukken').value = data.bukken || '';
+    document.getElementById('ri-roomNo').value = data.roomNo || '';
+    document.getElementById('ri-address').value = data.address || '';
+    document.getElementById('ri-contractor-name').value = data.contractorName || '';
+    document.getElementById('ri-contractor-tel').value = data.contractorTel || '';
+    document.getElementById('ri-request-date').value = data.requestDate || '';
+    document.getElementById('ri-request-detail').value = data.requestDetail || '';
+    document.getElementById('ri-urgency').value = data.urgency || '';
+    // 元請け select に値があれば選択(無ければ空のまま)
+    const motoukeSel = document.getElementById('ri-motouke');
+    if (motoukeSel && data.motouke) {
+      // 部分一致 → 最初に見つかった選択肢
+      const opts = Array.from(motoukeSel.options).map(o => o.value);
+      const matched = opts.find(v => v && (v === data.motouke || v.includes(data.motouke) || data.motouke.includes(v)));
+      if (matched) motoukeSel.value = matched;
+    }
+    // 物件マスタとの照合(物件名完全一致 → 住所/元請け 自動補完)
+    riCheckBukkenMatch();
+    // Step2 へ
+    document.getElementById('ri-step1').style.display = 'none';
+    document.getElementById('ri-step2').style.display = 'block';
+  } catch (e) {
+    console.error('[修繕依頼AI抽出]', e);
+    status.textContent = '✗ ' + e.message;
+  }
+}
+function riCheckBukkenMatch() {
+  const name = document.getElementById('ri-bukken').value.trim();
+  const info = document.getElementById('ri-bukken-match-info');
+  if (!name || !Array.isArray(state.bukken)) { info.style.display = 'none'; return; }
+  // 完全一致 or 部分一致(短い方を含む)
+  const matched = state.bukken.find(b => {
+    const bn = (b.name||'').trim();
+    return bn === name || (bn && (bn.includes(name) || name.includes(bn)));
+  });
+  if (!matched) { info.style.display = 'none'; return; }
+  // 物件マスタ情報を空欄部分のみ補完
+  const addrInp = document.getElementById('ri-address');
+  if (!addrInp.value.trim() && matched.address) addrInp.value = matched.address;
+  const motoukeSel = document.getElementById('ri-motouke');
+  if (motoukeSel && !motoukeSel.value && matched.motouke) {
+    const opts = Array.from(motoukeSel.options).map(o => o.value);
+    const m = opts.find(v => v && (v === matched.motouke || v.includes(matched.motouke) || matched.motouke.includes(v)));
+    if (m) motoukeSel.value = m;
+  }
+  info.textContent = `✅ 物件マスタにヒット: 「${matched.name}」 — 住所/元請けを自動補完しました`;
+  info.style.display = 'block';
+}
+function riRegister() {
+  const bukken = document.getElementById('ri-bukken').value.trim();
+  if (!bukken) { showToast('物件名は必須', true); return; }
+  // 新規見積を作成
+  const id = newEstimateId();
+  const today = formatToday();
+  const motouke = document.getElementById('ri-motouke').value.trim();
+  const tachiai = document.getElementById('ri-tachiai').value.trim();
+  // 立会者TEL
+  const tachiaiTel = (typeof STAFF_TEL_MAP !== 'undefined' && STAFF_TEL_MAP[tachiai]) ? STAFF_TEL_MAP[tachiai] : '';
+  const newEst = {
+    id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    meta: {
+      bukken,
+      roomNo: document.getElementById('ri-roomNo').value.trim(),
+      shozaichi: document.getElementById('ri-address').value.trim(),
+      date: today,
+      kojiName: '修繕工事',                               // 工事種別=修繕
+      status: '対応中',                                   // 修繕依頼受付直後 → 対応中
+      workflowStatus: '対応中',                           // 旧フィールド互換(工事進捗)
+      salesStage: '対応中',                               // 修繕補助タグ
+      atena: motouke ? '株式会社' + motouke.replace(/^株式会社|^\(株\)/, '').trim() : '',
+      atenaTantou: '',
+      atenaAutoFilled: true,
+      remarks: '',
+      creatorMemo: '',
+      // 修繕依頼系のメタフィールド
+      requestDate: document.getElementById('ri-request-date').value.trim(),
+      requestDetail: document.getElementById('ri-request-detail').value.trim(),
+      urgency: document.getElementById('ri-urgency').value.trim(),
+      taikyo: Object.assign(emptyTaikyo(), {
+        motouke,
+        apartmentName: bukken,
+        roomNo: document.getElementById('ri-roomNo').value.trim(),
+        address: document.getElementById('ri-address').value.trim(),
+        contractorType: '個人',
+        contractorName: document.getElementById('ri-contractor-name').value.trim(),
+        contractorTel: document.getElementById('ri-contractor-tel').value.trim(),
+        tachiaiPerson: tachiai,
+        tachiaiPersonTel: tachiaiTel,
+      }),
+      hatchuOrder: emptyHatchuOrder(),
+      isTemplate: false,
+    },
+    lines: [],
+  };
+  state.estimates[id] = newEst;
+  setCurrentId(id);
+  state.estimate = newEst;
+  saveEstimates();
+  // 見積タブを開いて新規エントリを表示
+  closeRepairRequestModal();
+  loadEstimateById(id); // switchTab('estimate') もする
+  showToast(`✅ 修繕案件「${bukken} ${newEst.meta.roomNo||''}」を登録しました`);
+}
+window.openRepairRequestModal = openRepairRequestModal;
+window.closeRepairRequestModal = closeRepairRequestModal;
+
 function openAiImportModal() {
   if (!(state.settings.geminiApiKey||'').trim()) {
     if (!confirm('Gemini APIキーが未設定です。\n設定タブで先に登録してください。\n\n設定タブを開きますか?')) return;
@@ -20323,6 +21597,70 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const listBtn = document.getElementById('btn-gemini-list-models');
   if (listBtn) listBtn.addEventListener('click', geminiListModels);
+  // 修繕依頼取込ボタン配線
+  document.getElementById('btn-import-repair-request')?.addEventListener('click', () => openRepairRequestModal());
+  document.getElementById('ri-close')?.addEventListener('click', () => closeRepairRequestModal());
+  document.getElementById('ri-cancel')?.addEventListener('click', () => closeRepairRequestModal());
+  document.getElementById('repair-import-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'repair-import-modal') closeRepairRequestModal();
+  });
+  document.getElementById('ri-mode-file')?.addEventListener('click', () => _riSetMode('file'));
+  document.getElementById('ri-mode-text')?.addEventListener('click', () => _riSetMode('text'));
+  // ドロップゾーン: クリックで file dialog を開く
+  const _riDropZone = document.getElementById('ri-drop-zone');
+  const _riFileInput = document.getElementById('ri-file');
+  const _riFileName = document.getElementById('ri-file-name');
+  if (_riDropZone && _riFileInput) {
+    _riDropZone.addEventListener('click', (e) => {
+      // input 自体のクリックは無視(無限ループ回避)
+      if (e.target === _riFileInput) return;
+      _riFileInput.click();
+    });
+    _riFileInput.addEventListener('change', () => {
+      const f = _riFileInput.files[0];
+      if (_riFileName) _riFileName.textContent = f ? `📄 ${f.name} (${(f.size/1024).toFixed(0)}KB)` : '';
+    });
+    // D&D
+    const setDragHover = (on) => {
+      _riDropZone.style.background = on ? '#fef3c7' : '#fffbeb';
+      _riDropZone.style.borderColor = on ? '#d97706' : '#fcd34d';
+      _riDropZone.style.transform = on ? 'scale(1.01)' : '';
+    };
+    ['dragenter','dragover'].forEach(evt =>
+      _riDropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); setDragHover(true); })
+    );
+    ['dragleave','dragend'].forEach(evt =>
+      _riDropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); setDragHover(false); })
+    );
+    _riDropZone.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation(); setDragHover(false);
+      const files = e.dataTransfer?.files;
+      if (!files || !files.length) return;
+      // 最初の1ファイルだけ採用 + 拡張子チェック
+      const f = files[0];
+      if (!/\.(pdf|png|jpg|jpeg|webp)$/i.test(f.name) && !/^(application\/pdf|image\/)/.test(f.type)) {
+        showToast('対応形式: PDF / PNG / JPG / WebP', true);
+        return;
+      }
+      // input.files に DataTransfer 経由でセット
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      _riFileInput.files = dt.files;
+      // 表示更新
+      if (_riFileName) _riFileName.textContent = `📄 ${f.name} (${(f.size/1024).toFixed(0)}KB)`;
+      // ファイルモードに切替(テキスト貼付モードだったら戻す)
+      _riSetMode('file');
+    });
+  }
+  document.getElementById('ri-analyze')?.addEventListener('click', () => riAnalyze());
+  document.getElementById('ri-back')?.addEventListener('click', () => {
+    document.getElementById('ri-step1').style.display = 'block';
+    document.getElementById('ri-step2').style.display = 'none';
+  });
+  document.getElementById('ri-register')?.addEventListener('click', () => riRegister());
+  // 物件名入力で物件マスタ照合(リアルタイム)
+  document.getElementById('ri-bukken')?.addEventListener('change', () => riCheckBukkenMatch());
+  document.getElementById('ri-bukken')?.addEventListener('blur', () => riCheckBukkenMatch());
   // モーダル制御
   const btnOpen = document.getElementById('btn-ai-import');
   if (btnOpen) btnOpen.addEventListener('click', openAiImportModal);
@@ -22091,6 +23429,7 @@ const TEAM_SETTING_KEYS = [
   'motoukeKeyDefaults',     // 元請け別 鍵デフォルト値
   'defaultKeyCodes',        // フォールバック鍵デフォルト値
   'customTemplates',        // ユーザー追加 内訳テンプレ
+  'motoukeContacts',        // 元請け別 担当者マスタ(チーム共有)
 ];
 
 // state.settings からチーム共有分だけ抽出
@@ -22868,6 +24207,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   // 「☁ 台帳へ保存」ボタンの保存時刻スタンプを初期表示
   if (typeof refreshSaveToLedgerStamp === 'function') refreshSaveToLedgerStamp();
+  // 元請け担当者 datalist を初期構築
+  if (typeof rebuildMotoukeTantouDatalist === 'function') rebuildMotoukeTantouDatalist();
   // 起動時の自動取込: ローカルキャッシュで即操作可能、GAS取込はバックグラウンドで並行実行
   if (state.settings.gasSyncOnStartup && (state.settings.gasSyncUrl||'').trim()) {
     _setAppLoadingStatus('準備完了 — マスタ取込はバックグラウンドで継続');
