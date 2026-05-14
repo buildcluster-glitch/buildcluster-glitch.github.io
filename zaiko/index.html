@@ -2162,8 +2162,12 @@ function mergeById_(localArr, serverArr, pendingIds){
       serverMap.delete(lid);
     }
   }
-  // append rows only on server
-  serverMap.forEach(v=>localArr.push(v));
+  // append rows only on server (skip pending: deleted行を再追加しない)
+  serverMap.forEach((v, id) => {
+    if(!pendingIds.has(id)){
+      localArr.push(v);
+    }
+  });
 }
 function normalizeItem_(x){
   return {
