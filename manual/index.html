@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>(株)ビルドクラスタ 業務アプリ 説明書</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --ink:#0f172a; --mute:#64748b; --line:#e5e7eb;
+    --accent:#2563eb; --ok:#16a34a; --warn:#f59e0b; --danger:#dc2626;
+    --safe-top:env(safe-area-inset-top,0);
+    --safe-bottom:env(safe-area-inset-bottom,0);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+  .app{max-width:680px;margin:0 auto;background:var(--bg);
+    padding-bottom:calc(40px + var(--safe-bottom))}
+  header{position:sticky;top:0;z-index:10;background:#0f172a;color:#fff;
+    padding:calc(14px + var(--safe-top)) 16px 14px;display:flex;align-items:center;gap:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,.15)}
+  header .back{background:rgba(255,255,255,.1);color:#fff;border:0;
+    padding:8px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+    text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+  header h1{margin:0;font-size:16px;font-weight:700;flex:1;min-width:0}
+
+  nav.toc{padding:14px 16px;background:#fff;border-bottom:1px solid var(--line)}
+  nav.toc h2{margin:0 0 8px;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px}
+  nav.toc ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+  nav.toc a{display:flex;padding:7px 10px;border-radius:8px;text-decoration:none;color:var(--ink);
+    font-size:14px;font-weight:600;align-items:center;gap:10px;border:1px solid transparent}
+  nav.toc a:hover,nav.toc a:active{background:#eff6ff;border-color:#bfdbfe}
+  nav.toc a .ico{font-size:18px;flex-shrink:0}
+  nav.toc a .num{color:var(--mute);font-size:12px;font-weight:700;min-width:18px;text-align:right}
+
+  section{padding:18px 16px;border-bottom:1px solid var(--line);background:var(--bg);scroll-margin-top:60px}
+  section.alt{background:#fff}
+  section h2{margin:0 0 12px;font-size:19px;font-weight:800;display:flex;align-items:center;gap:8px;letter-spacing:-0.01em}
+  section h2 .ico{font-size:22px}
+  section h3{margin:18px 0 8px;font-size:15px;font-weight:700;color:var(--ink);
+    padding-left:10px;border-left:3px solid var(--accent)}
+  section h4{margin:14px 0 6px;font-size:14px;font-weight:700;color:var(--ink)}
+  section p{margin:0 0 10px}
+  section ul,section ol{margin:0 0 12px;padding-left:22px}
+  section li{margin-bottom:4px}
+  section code{background:#eef2f7;color:#0f172a;font-size:.88em;padding:1px 6px;border-radius:4px;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  .step{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;
+    display:flex;gap:12px;align-items:flex-start}
+  .step.num{background:#fff}
+  .step .n{background:var(--accent);color:#fff;font-weight:800;width:28px;height:28px;border-radius:50%;
+    display:grid;place-items:center;font-size:13px;flex-shrink:0;line-height:1}
+  .step .body{flex:1;min-width:0}
+  .step .body b{color:var(--ink)}
+
+  .callout{border-radius:10px;padding:12px 14px;margin:10px 0;font-size:14px;border:1px solid;display:flex;gap:10px}
+  .callout .ico{font-size:18px;flex-shrink:0;line-height:1.4}
+  .callout .body{flex:1;min-width:0}
+  .callout.info{background:#eff6ff;color:#1e40af;border-color:#bfdbfe}
+  .callout.warn{background:#fffbeb;color:#92400e;border-color:#fde68a}
+  .callout.tip{background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+  .callout.danger{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f8fafc;font-weight:700;color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+  tr:last-child td{border-bottom:0}
+
+  .icon-tag{display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;
+    background:#0f172a;color:#fff}
+  .icon-tag.sync{background:#3b82f6}
+  .icon-tag.report{background:#a855f7}
+  .icon-tag.settings{background:#64748b}
+  .icon-tag.fab{background:#2563eb}
+
+  .url-box{background:#fff;border:2px dashed var(--accent);border-radius:10px;padding:12px;font-family:ui-monospace,monospace;
+    font-size:11px;word-break:break-all;color:#1e40af;line-height:1.4;position:relative}
+  .url-box .copy{position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;border:0;padding:4px 8px;
+    border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+  .url-box .copy:active{transform:scale(.95)}
+
+  .diagram{background:#0f172a;color:#fff;border-radius:12px;padding:14px;margin:12px 0;font-family:ui-monospace,monospace;
+    font-size:11px;line-height:1.6;overflow-x:auto;white-space:pre}
+  .diagram .hl{color:#fde68a}
+
+  .role-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+  .role-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+  .role-card .name{font-weight:700;margin-bottom:2px}
+  .role-card .desc{color:var(--mute);font-size:11px;line-height:1.4}
+
+  footer{padding:24px 16px;text-align:center;color:var(--mute);font-size:11px;line-height:1.6}
+  footer b{color:var(--ink)}
+  .back-to-top{display:inline-block;margin-top:10px;padding:8px 14px;background:#0f172a;color:#fff;
+    border-radius:8px;text-decoration:none;font-size:12px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <a class="back" href="../">← トップ</a>
+  <h1>📖 業務アプリ 説明書</h1>
+</header>
+
+<nav class="toc">
+  <h2>目次（タップで移動）</h2>
+  <ol>
+    <li><a href="#start"><span class="ico">🚀</span> <span class="num">1</span> 初めての方へ</a></li>
+    <li><a href="#zaiko-setup"><span class="ico">⚙️</span> <span class="num">2</span> 在庫管理アプリの初期設定</a></li>
+    <li><a href="#zaiko-usage"><span class="ico">📦</span> <span class="num">3</span> 在庫管理アプリの使い方</a></li>
+    <li><a href="#sync"><span class="ico">☁️</span> <span class="num">4</span> クラウド同期の仕組み</a></li>
+    <li><a href="#trouble"><span class="ico">🛠</span> <span class="num">5</span> 困った時（FAQ）</a></li>
+    <li><a href="#quickref"><span class="ico">⚡</span> <span class="num">6</span> クイックリファレンス</a></li>
+  </ol>
+</nav>
+
+<!-- ==================== 1. 初めての方へ ==================== -->
+<section id="start">
+  <h2><span class="ico">🚀</span>1. 初めての方へ</h2>
+
+  <p>(株)ビルドクラスタの業務アプリは <b>スマホとPCどちらからでも</b> 使えます。専用アプリのインストールは不要、ブラウザだけでOK。</p>
+
+  <h3>① 入口URLをブックマーク</h3>
+  <div class="url-box">https://buildcluster-glitch.github.io/<button class="copy" onclick="navigator.clipboard.writeText('https://buildcluster-glitch.github.io/').then(()=>this.textContent='✓')">コピー</button></div>
+  <p>このURLが全アプリへの入口です。タップすると工事タスクマネージャー / 在庫管理 などが選べます。</p>
+
+  <h3>② スマホのホーム画面に追加（推奨）</h3>
+  <div class="step"><div class="n">i</div><div class="body"><b>iPhone (Safari)</b>: 共有ボタン <code>↑</code> → 「ホーム画面に追加」</div></div>
+  <div class="step"><div class="n">A</div><div class="body"><b>Android (Chrome)</b>: 右上 <code>⋮</code> → 「ホーム画面に追加」</div></div>
+
+  <div class="callout tip"><span class="ico">💡</span><div class="body">ホーム画面から起動するとほぼアプリ感覚。タブ閉じても状態が保持されます。</div></div>
+
+  <h3>③ 初回はインターネット必須</h3>
+  <p>サーバーから初期データを取得する必要があるので、初回起動時だけWiFi or 電波の良い場所で。2回目以降はオフラインでも記録はできます（次回オンライン時に自動送信）。</p>
+</section>
+
+<!-- ==================== 2. 在庫管理アプリ 初期設定 ==================== -->
+<section id="zaiko-setup" class="alt">
+  <h2><span class="ico">⚙️</span>2. 在庫管理アプリの初期設定</h2>
+
+  <p>各端末で <b>最初に1回だけ</b> やる作業です。設定が終わると、6人の入力データが共有スプレッドシートと自動連携します。</p>
+
+  <h3>STEP 1. アプリを開く</h3>
+  <p>入口ページ → <span class="icon-tag">📦 在庫管理</span> をタップ</p>
+
+  <h3>STEP 2. ⚙ 設定を開く</h3>
+  <p>画面右上の <span class="icon-tag settings">⚙</span> アイコンをタップ。</p>
+
+  <h3>STEP 3. このデバイスを使う人を選ぶ</h3>
+  <p>一番上の「このデバイスを使う人」セクションで <b>自分の名前</b> をタップ。
+  これで以降の記録に自動で名前が入ります。</p>
+  <div class="callout info"><span class="ico">ℹ️</span><div class="body">他の人の端末で操作する時は、設定で名前を切り替えてください。共用PCの場合は記録時に都度選択も可。</div></div>
+
+  <h3>STEP 4. GAS Web App URL を貼り付け</h3>
+  <p>「クラウド同期」セクションの URL 入力欄に、以下を貼り付け <b>→ 保存 → 接続テスト</b>:</p>
+  <div class="url-box" id="gas-url-box">
+    <span id="gas-url-text">https://script.google.com/macros/s/AKfycbwMmI7cBmTzbL7C2sjZDX_3kWc4G-fQyLrzYJeD8Ya1Sgsv2HywhKzkd0RgZ7IPqk0UFg/exec</span>
+    <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('gas-url-text').textContent).then(()=>this.textContent='✓')">コピー</button>
+  </div>
+  <p>「接続テスト」を押して <b>✓接続OK items:38 / logs:N / orders:N</b> のような表示が出れば成功。</p>
+
+  <div class="callout warn"><span class="ico">⚠️</span><div class="body">URL は前後にスペースや改行が入らないように。コピーしてそのまま貼り付けが確実です。</div></div>
+
+  <h3>STEP 5. サーバーからデータ取込</h3>
+  <p>「初回セットアップ（サーバーから取込）」ボタンを押す → 確認ダイアログで「OK」 → 取り込み完了。</p>
+  <p>一覧画面に37+件の品目が表示されればセットアップ完了！</p>
+
+  <div class="callout tip"><span class="ico">🎉</span><div class="body">これで準備完了。あとは普通に操作するだけで自動的に他の端末にも反映されます。</div></div>
+</section>
+
+<!-- ==================== 3. 使い方 ==================== -->
+<section id="zaiko-usage">
+  <h2><span class="ico">📦</span>3. 在庫管理アプリの使い方</h2>
+
+  <h3>画面構成（4タブ）</h3>
+  <table>
+    <thead><tr><th>タブ</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td><b>一覧</b></td><td>在庫数を見る・検索・カテゴリ&置き場フィルタ・在庫アラート確認</td></tr>
+      <tr><td><b>発注中</b></td><td>注文済みで未納の品目を管理。入荷処理もここから</td></tr>
+      <tr><td><b>棚卸</b></td><td>実数を入れて記録在庫と突き合わせ・差分の理由記録</td></tr>
+      <tr><td><b>ログ</b></td><td>全操作の履歴。誰がいつ何をしたか追える</td></tr>
+    </tbody>
+  </table>
+
+  <h3>消費を記録する（一番よく使う）</h3>
+  <div class="step"><div class="n">1</div><div class="body">右下 <span class="icon-tag fab">＋</span> ボタンをタップ</div></div>
+  <div class="step"><div class="n">2</div><div class="body"><b>− 消費</b> をタップ</div></div>
+  <div class="step"><div class="n">3</div><div class="body">カテゴリチップで絞り込み → 品目をタップ</div></div>
+  <div class="step"><div class="n">4</div><div class="body">数量 / 担当者（自動選択済み） / 使用現場 / 号室 / 備考 を入力</div></div>
+  <div class="step"><div class="n">5</div><div class="body"><b>記録する</b> ボタン → 在庫が減って自動同期</div></div>
+
+  <h3>補充を記録する（届いた時）</h3>
+  <p>消費と同じく FAB <span class="icon-tag fab">＋</span> から <b>＋ 補充</b> を選ぶ。数量を入れて記録するだけ。</p>
+
+  <h3>発注を記録する（注文した時）</h3>
+  <div class="step"><div class="n">1</div><div class="body">FAB <span class="icon-tag fab">＋</span> → <b>📦 発注を記録</b></div></div>
+  <div class="step"><div class="n">2</div><div class="body">品目選択 → 数量・注文先（自動入力）・予定納期（リードタイムから自動計算）</div></div>
+  <div class="step"><div class="n">3</div><div class="body"><b>発注を登録</b> → 発注中タブに表示される</div></div>
+
+  <div class="callout info"><span class="ico">ℹ️</span><div class="body">2〜3日で届く品なら発注登録はスキップしても可。届いた時に「補充」記録だけで完結。</div></div>
+
+  <h3>入荷処理（届いた発注を在庫に反映）</h3>
+  <div class="step"><div class="n">1</div><div class="body"><b>発注中</b> タブを開く</div></div>
+  <div class="step"><div class="n">2</div><div class="body">対象行の <b>📥 入荷</b> ボタン</div></div>
+  <div class="step"><div class="n">3</div><div class="body">入荷数量（部分入荷もOK）・受領者・入荷日 を入力</div></div>
+  <div class="step"><div class="n">4</div><div class="body"><b>入荷処理する</b> → 在庫が増え、発注中から消える（全量入荷時）</div></div>
+
+  <div class="callout tip"><span class="ico">💡</span><div class="body">入荷時、注文日→入荷日の <b>リードタイムを自動学習</b>。次回発注時の予定納期が精度上がる。</div></div>
+
+  <h3>週次棚卸</h3>
+  <div class="step"><div class="n">1</div><div class="body"><b>棚卸</b> タブを開く</div></div>
+  <div class="step"><div class="n">2</div><div class="body">置き場チップで <b>🏠倉庫</b> or <b>🚪外物置</b> を選ぶ（場所別に作業）</div></div>
+  <div class="step"><div class="n">3</div><div class="body">各品目の「実数」欄に数えた値を入力 → 差分が黄色で表示</div></div>
+  <div class="step"><div class="n">4</div><div class="body">差分ありの行に <b>理由</b> を選択（破損 / 使用記録漏れ / 紛失 など）</div></div>
+  <div class="step"><div class="n">5</div><div class="body"><b>記録して在庫修正</b> → 在庫が実数に合わせて修正 + 監査ログ残る</div></div>
+
+  <h3>品目の追加・編集・削除</h3>
+  <ul>
+    <li><b>追加</b>: 一覧タブの検索バー横「<b>＋ 品目</b>」ボタン</li>
+    <li><b>編集</b>: 各カードの右上「<b>✎</b>」アイコン or 詳細画面の「編集」ボタン</li>
+    <li><b>削除</b>: 編集モーダル内の赤い「この品目を削除」ボタン</li>
+  </ul>
+
+  <h3>月次レポート</h3>
+  <p>ヘッダー右上の <span class="icon-tag report">📊</span> ボタンから。月セレクタで前後月に移動できる。</p>
+  <ul>
+    <li>消費記録数・総消費数・推計金額</li>
+    <li>品目別TOP10（バー付き）</li>
+    <li>担当者別 / カテゴリ別 / 物件別の集計</li>
+    <li>発注件数・入荷件数・平均リードタイム</li>
+  </ul>
+
+  <h3>ログの便利機能</h3>
+  <ul>
+    <li><b>品目名タップ</b>でその品目の詳細画面（履歴一覧）にジャンプ</li>
+    <li><b>↩ 取消</b>ボタンで消費/補充を取消（在庫も逆方向に戻る）</li>
+    <li><b>✕ 削除</b>ボタンでログだけ削除（在庫はそのまま）</li>
+    <li>種別フィルタ・メンバーフィルタで絞り込み</li>
+  </ul>
+</section>
+
+<!-- ==================== 4. 同期の仕組み ==================== -->
+<section id="sync" class="alt">
+  <h2><span class="ico">☁️</span>4. クラウド同期の仕組み</h2>
+
+  <h3>データの流れ</h3>
+  <div class="diagram"><span class="hl">📱 スマホA</span>          <span class="hl">📱 スマホB</span>          <span class="hl">💻 PC</span>
+   │                  │                  │
+   │   消費 -2        │   補充 +1        │   棚卸
+   │   adjustStock    │   adjustStock    │   setStock
+   ↓                  ↓                  ↓
+┌──────────────────────────────────┐
+│   ☁ GAS Web App  (LockServiceで順次処理)     │
+│   ↓                                          │
+│   📊 Google スプレッドシート (在庫管理DB)     │
+│      ・items   ・logs   ・orders   ・members  │
+└──────────────────────────────────┘
+   ↑                  ↑                  ↑
+   │ 30秒ごと自動pull │                  │
+   ↓                  ↓                  ↓
+全端末で <span class="hl">常に最新の同じ数値が見える</span></div>
+
+  <h3>同期のタイミング</h3>
+  <table>
+    <thead><tr><th>タイミング</th><th>動作</th></tr></thead>
+    <tbody>
+      <tr><td>アプリ起動時</td><td>サーバーから最新取得</td></tr>
+      <tr><td>タブから戻った時</td><td>即座に最新取得</td></tr>
+      <tr><td>操作（消費・補充等）した時</td><td>1.5秒後に送信 + 取得</td></tr>
+      <tr><td>30秒経過（画面表示中）</td><td>自動で取得</td></tr>
+      <tr><td>☁ アイコンをタップ</td><td>即座に送信 + 取得</td></tr>
+    </tbody>
+  </table>
+
+  <h3>☁ アイコンの状態</h3>
+  <table>
+    <thead><tr><th>表示</th><th>意味</th></tr></thead>
+    <tbody>
+      <tr><td>☁ (白)</td><td>正常・アイドル</td></tr>
+      <tr><td>☁ (回転)</td><td>同期中</td></tr>
+      <tr><td>☁ (緑)</td><td>直近の同期成功（2秒で消える）</td></tr>
+      <tr><td>☁ (赤)</td><td>直近の同期失敗（次の自動同期 or タップで再試行）</td></tr>
+      <tr><td>☁ + 黄色バッジ「N」</td><td>未送信の変更が N 件残ってる</td></tr>
+    </tbody>
+  </table>
+
+  <h3>同時操作への対応</h3>
+  <p>6人が同じ時刻に同じ品目を操作しても <b>データが消えない</b> 仕組みになってます:</p>
+  <ul>
+    <li><b>差分送信</b>: 「stock=3にしろ」ではなく「-2引け」と命令を送る</li>
+    <li><b>atomic処理</b>: サーバー側でロックを取って順番に適用</li>
+    <li><b>冪等性キー</b>: ネットワーク不調で再送されても重複適用しない</li>
+  </ul>
+
+  <h3>オフラインでも記録できる</h3>
+  <p>電波の悪い現場でも消費記録は普通にできます。ローカルに保留され、電波が戻ると <b>自動で送信</b>。
+  ヘッダーの☁に黄色バッジで未送信件数が見えます。</p>
+</section>
+
+<!-- ==================== 5. FAQ ==================== -->
+<section id="trouble">
+  <h2><span class="ico">🛠</span>5. 困った時（FAQ）</h2>
+
+  <h3>Q1. ☁が赤くなってる</h3>
+  <p>同期失敗のサイン。30秒以内に自動で再試行されるので待つだけでOK。急ぐ場合は <b>☁をタップ</b> で即再試行。</p>
+  <p>それでも赤いままなら:</p>
+  <ul>
+    <li>電波・WiFi が通じているか確認</li>
+    <li>⚙設定 → 「接続テスト」を実行 → エラーメッセージ確認</li>
+    <li>URLが正しく入っているか確認（前後の余白に注意）</li>
+  </ul>
+
+  <h3>Q2. 数が合わない</h3>
+  <p>まず ☁ で同期 → それでもズレてたら <b>棚卸タブで実数を入力</b> → 理由「カウントミス」or「使用記録漏れ」を選ぶ。これで在庫が実数に合います。</p>
+
+  <h3>Q3. 間違って消費・補充を記録した</h3>
+  <p><b>ログタブ</b>でその記録を探す → 右の <b>↩ 取消</b> ボタン → 在庫も自動で戻る。</p>
+
+  <h3>Q4. 古いデータが見える</h3>
+  <p>Ctrl+F5（PC）or タブ閉じて開き直し（スマホ）で強制再読み込み。それでもダメなら ⚙設定 → 「初回セットアップ（サーバーから取込）」で上書き。</p>
+
+  <h3>Q5. 別の人の端末で見ても自分の記録が見えない</h3>
+  <p>自分の端末で ☁ をタップして送信完了を確認 → 相手の端末で ☁ をタップ or 30秒待つ。</p>
+
+  <h3>Q6. 自動同期を止めたい</h3>
+  <p>⚙設定 → 「自動同期」のチェックを外す。手動で ☁ タップ時のみ同期。</p>
+
+  <h3>Q7. 担当者を間違えて記録した</h3>
+  <p>現状ログの「担当者だけ」を後から変更する機能はないので、 <b>↩ 取消</b> → 正しい担当者に切り替えて再記録、が確実です。</p>
+
+  <h3>Q8. 新メンバーが入った/辞めた</h3>
+  <p>⚙設定 → メンバーセクションで追加/削除。全端末で同期されます。</p>
+</section>
+
+<!-- ==================== 6. クイックリファレンス ==================== -->
+<section id="quickref" class="alt">
+  <h2><span class="ico">⚡</span>6. クイックリファレンス</h2>
+
+  <h3>シーン別 操作早見表</h3>
+  <table>
+    <thead><tr><th>こんな時</th><th>操作</th></tr></thead>
+    <tbody>
+      <tr><td>現場で品目を使った</td><td>FAB ＋ → 消費 → 品目・数・現場・号室</td></tr>
+      <tr><td>注文した品が届いた（発注登録済み）</td><td>発注中タブ → 入荷ボタン</td></tr>
+      <tr><td>注文した品が届いた（発注登録なし）</td><td>FAB ＋ → 補充 → 品目・数量</td></tr>
+      <tr><td>注文を出した</td><td>FAB ＋ → 📦 発注</td></tr>
+      <tr><td>週に1回の棚卸</td><td>棚卸タブ → 場所ごとに実数入力 → 記録</td></tr>
+      <tr><td>新しい品目を追加</td><td>一覧タブ → ＋品目 ボタン</td></tr>
+      <tr><td>記録間違えた</td><td>ログタブ → ↩ 取消</td></tr>
+      <tr><td>今月の集計を見たい</td><td>📊 アイコン → 月次レポート</td></tr>
+      <tr><td>今、自分の操作が他人に届いてるか確認</td><td>☁ に緑チェック付いたらOK</td></tr>
+    </tbody>
+  </table>
+
+  <h3>登録メンバー（6名）</h3>
+  <div class="role-grid">
+    <div class="role-card"><div class="name">山田 裕貴</div><div class="desc">工事管理担当</div></div>
+    <div class="role-card"><div class="name">木村 優作</div></div>
+    <div class="role-card"><div class="name">大村 将史</div></div>
+    <div class="role-card"><div class="name">南部 大我</div></div>
+    <div class="role-card"><div class="name">鈴木 悠平</div></div>
+    <div class="role-card"><div class="name">最上 登生</div></div>
+  </div>
+
+  <h3>頻出キーワード</h3>
+  <table>
+    <tbody>
+      <tr><td><b>実効在庫</b></td><td>現在庫 + 発注中の合計。発注点判定に使う</td></tr>
+      <tr><td><b>発注中</b></td><td>注文済みでまだ届いていない数量</td></tr>
+      <tr><td><b>リードタイム</b></td><td>発注から納品までの日数（自動学習）</td></tr>
+      <tr><td><b>差分</b></td><td>棚卸時、実数 − 記録在庫</td></tr>
+      <tr><td><b>監査ログ (audit)</b></td><td>品目の追加/編集/削除の履歴</td></tr>
+      <tr><td><b>pending</b></td><td>未同期のローカル変更（☁の黄バッジ）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <b>(株)ビルドクラスタ 業務アプリ</b> · 説明書 v1.0<br>
+  最終更新: 2026-05-07<br>
+  <a class="back-to-top" href="#">↑ ページトップへ</a>
+</footer>
+
+</div>
+</body>
+</html>
