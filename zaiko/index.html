@@ -2151,8 +2151,17 @@ async function syncPull({ replace=false }={}){
 }
 function mergeById_(localArr, serverArr, pendingIds){
   pendingIds = pendingIds || new Set();
+  const serverIds = new Set(serverArr.filter(x=>x && x.id).map(x=>x.id));
   const serverMap = new Map(serverArr.filter(x=>x && x.id).map(x=>[x.id, x]));
-  // replace or add server-side rows (skip pending: those need to be pushed first)
+  // 1. サーバーから消えた行をローカルからも削除（他端末での削除を伝播）
+  //    ただしpending（未送信）の行は保護
+  for(let i = localArr.length - 1; i >= 0; i--){
+    const lid = localArr[i].id;
+    if(lid && !serverIds.has(lid) && !pendingIds.has(lid)){
+      localArr.splice(i, 1);
+    }
+  }
+  // 2. 既存ローカル行をサーバー値で更新（pendingは保護）
   for(let i=0; i<localArr.length; i++){
     const lid = localArr[i].id;
     if(serverMap.has(lid)){
@@ -2162,7 +2171,7 @@ function mergeById_(localArr, serverArr, pendingIds){
       serverMap.delete(lid);
     }
   }
-  // append rows only on server (skip pending: deleted行を再追加しない)
+  // 3. サーバー側のみの行を追加（pending deleteは復活させない）
   serverMap.forEach((v, id) => {
     if(!pendingIds.has(id)){
       localArr.push(v);
