@@ -1756,12 +1756,13 @@ function submitRecord(){
     log.site = $('#rec-site').value.trim();
     log.room = $('#rec-room').value.trim();
     item.stock = Math.max(0, (item.stock||0) - qty);
+    queueOp('adjustStock', { itemId: item.id, delta: -qty, opId: log.id });
   }else{
     item.stock = (item.stock||0) + qty;
+    queueOp('adjustStock', { itemId: item.id, delta: qty, opId: log.id });
   }
   state.logs.push(log);
   queueOp('appendLog', log);
-  queueOp('upsertItem', item);
   save();
   closeSheet('sheet-record');
   renderAll();
@@ -2087,9 +2088,13 @@ function undoLog(logId){
   } else {
     const reverseSign = log.type==='out' ? '+' : '−';
     if(!confirm(`この${action}を取り消します:\n${item.name}\n在庫を ${reverseSign}${qty} 戻します。続行しますか？`)) return;
-    if(log.type==='out') item.stock = (item.stock||0) + qty;
-    else item.stock = Math.max(0, (item.stock||0) - qty);
-    queueOp('upsertItem', item);
+    if(log.type==='out'){
+      item.stock = (item.stock||0) + qty;
+      queueOp('adjustStock', { itemId: item.id, delta: qty, opId: 'undo_'+log.id });
+    } else {
+      item.stock = Math.max(0, (item.stock||0) - qty);
+      queueOp('adjustStock', { itemId: item.id, delta: -qty, opId: 'undo_'+log.id });
+    }
   }
   state.logs = state.logs.filter(l=>l.id!==logId);
   queueOp('deleteLog', { id: logId });
@@ -2123,7 +2128,13 @@ async function syncPull({ replace=false }={}){
     if(!state.members.length) state.members = SEED_MEMBERS.slice();
   } else {
     // pending変更がある行は上書きしない（次回pushで反映される）
-    const pendingItemIds = new Set(state.pending.filter(p=>p.action==='upsertItem'||p.action==='deleteItem').map(p=>p.data?.id).filter(Boolean));
+    const itemActions = ['upsertItem','deleteItem','adjustStock','setStock'];
+    const pendingItemIds = new Set(
+      state.pending
+        .filter(p=>itemActions.includes(p.action))
+        .map(p=>p.data?.id || p.data?.itemId)
+        .filter(Boolean)
+    );
     const pendingOrderIds = new Set(state.pending.filter(p=>p.action==='upsertOrder'||p.action==='deleteOrder').map(p=>p.data?.id).filter(Boolean));
     const pendingLogIds = new Set(state.pending.filter(p=>p.action==='appendLog'||p.action==='deleteLog').map(p=>p.data?.id).filter(Boolean));
     mergeById_(state.items, (data.items||[]).map(normalizeItem_), pendingItemIds);
@@ -2428,8 +2439,9 @@ function submitReceive(){
   if(fullyReceived) learnLeadTime(item.id);
 
   queueOp('upsertOrder', o);
-  queueOp('upsertItem', item);
-  queueOp('appendLog', state.logs[state.logs.length-1]);
+  const inLog = state.logs[state.logs.length-1];
+  queueOp('adjustStock', { itemId: item.id, delta: qty, opId: inLog.id });
+  queueOp('appendLog', inLog);
   save();
   closeSheet('sheet-receive');
   renderAll();
@@ -2651,7 +2663,6 @@ function commitStocktake(){
     if(diff===0) return;  // 差分なしはログを作らない（ノイズ削減）
     item.stock = real;
     diffCount++;
-    queueOp('upsertItem', item);
     const log = {
       id: uid(), type:'chk', itemId, member,
       datetime: now,
@@ -2659,6 +2670,7 @@ function commitStocktake(){
       note: reasons[itemId] || '理由未選択'
     };
     state.logs.push(log);
+    queueOp('setStock', { itemId: item.id, stock: real, opId: log.id });
     queueOp('appendLog', log);
   });
   state.ui.stocktakeInputs = {};
@@ -2983,6 +2995,19 @@ function bindEvents(){
   };
 }
 
+// ---------- polling for near-realtime ----------
+let pollTimer = null;
+const POLL_INTERVAL_MS = 30000;  // 30秒
+function startPolling(){
+  if(pollTimer) return;
+  pollTimer = setInterval(()=>{
+    if(document.visibilityState==='visible' && sync.url && sync.autoSync && !syncInFlight){
+      runOpenSync();
+    }
+  }, POLL_INTERVAL_MS);
+}
+function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+
 // ---------- init ----------
 (function init(){
   if(!load()) seed();
@@ -2995,11 +3020,17 @@ function bindEvents(){
   // 起動時自動同期: pending送信 + サーバー最新取得
   if(sync.url && sync.autoSync){
     setTimeout(runOpenSync, 200);
+    startPolling();
   }
   // タブ復帰時にも同期
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState === 'visible' && sync.url && sync.autoSync){
-      runOpenSync();
+    if(document.visibilityState === 'visible'){
+      if(sync.url && sync.autoSync){
+        runOpenSync();
+        startPolling();
+      }
+    } else {
+      stopPolling();
     }
   });
 })();
