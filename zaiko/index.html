@@ -1518,14 +1518,17 @@ function renderDetail(){
 
   const catCls = CAT_CLASS[i.category]||'other';
   const locCls = LOC_CLASS[i.location]||'warehouse';
+  const supplierLine =
+    esc(i.supplier||'-') +
+    (i.supplierUrl ? ` <a href="${esc(i.supplierUrl)}" target="_blank" rel="noopener" style="margin-left:6px;font-size:12px;text-decoration:none">🛒 開く</a>` : '') +
+    (i.price ? ` <span style="margin-left:10px;color:var(--mute);font-size:12px">価格 <b style="color:var(--ink)">¥${Number(i.price).toLocaleString()}</b>${i.priceDate?` (${fmtD(i.priceDate)}時点)`:''}</span>` : '');
   $('#d-hero').innerHTML = `
     <h2>${esc(i.name)}</h2>
     <div class="sub"><span class="cat-tag ${catCls}">${esc(i.category)}</span> ${i.location?`<span class="loc-tag ${locCls}">${LOC_ICON[i.location]||'🏠'}${esc(i.location)}</span>`:''} &nbsp; ${esc(i.sku)}${i.maker?' · '+esc(i.maker):''}</div>
     <div class="kv">
       <span>所在地</span><span>${LOC_ICON[i.location]||''} ${esc(i.location||'-')}</span>
-      <span>注文先</span><span>${esc(i.supplier||'-')}${i.supplierUrl?` <a href="${esc(i.supplierUrl)}" target="_blank" rel="noopener" style="margin-left:6px;font-size:12px">🛒 開く</a>`:''}</span>
+      <span>注文先</span><span>${supplierLine}</span>
       <span>最低発注数</span><span>${i.minOrderQty!=null?i.minOrderQty+'個':'-'}</span>
-      <span>単価</span><span>${i.price?'¥'+Number(i.price).toLocaleString():'-'}${i.priceDate?' <span style="color:var(--mute)">('+fmtD(i.priceDate)+'時点)</span>':''}</span>
       <span>リードタイム</span><span>${i.leadDays?i.leadDays+'日':'-'}</span>
       <span>備考</span><span>${esc(i.note||'-')}</span>
     </div>`;
