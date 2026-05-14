@@ -575,7 +575,7 @@
       </div>
     </div>
     <div class="field">
-      <label>注文先</label>
+      <label>注文先 <a id="ord-supplier-url" href="#" target="_blank" rel="noopener" class="hidden" style="margin-left:6px;font-size:12px">🛒 サイトを開く</a></label>
       <input id="ord-supplier" list="suppliers-list" placeholder="例: 楽天">
     </div>
     <div class="field">
@@ -710,8 +710,8 @@
         <input type="number" id="it-min" value="0" min="0" inputmode="numeric">
       </div>
       <div class="field">
-        <label>リードタイム(日)</label>
-        <input type="number" id="it-lead" value="" placeholder="7" min="0" inputmode="numeric">
+        <label>最低発注数</label>
+        <input type="number" id="it-min-order" value="" placeholder="5" min="0" inputmode="numeric">
       </div>
     </div>
     <div class="field-row">
@@ -721,13 +721,23 @@
         <datalist id="suppliers-list"></datalist>
       </div>
       <div class="field">
-        <label>仕入れ価格</label>
-        <input type="number" id="it-price" placeholder="8580" min="0" inputmode="numeric">
+        <label>リードタイム(日)</label>
+        <input type="number" id="it-lead" value="" placeholder="7" min="0" inputmode="numeric">
       </div>
     </div>
     <div class="field">
-      <label>価格確認日</label>
-      <input type="date" id="it-pricedate">
+      <label>発注先URL</label>
+      <input type="url" id="it-supplier-url" placeholder="https://item.rakuten.co.jp/...">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>仕入れ価格</label>
+        <input type="number" id="it-price" placeholder="8580" min="0" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>価格確認日</label>
+        <input type="date" id="it-pricedate">
+      </div>
     </div>
     <div class="field">
       <label>備考</label>
@@ -1513,7 +1523,8 @@ function renderDetail(){
     <div class="sub"><span class="cat-tag ${catCls}">${esc(i.category)}</span> ${i.location?`<span class="loc-tag ${locCls}">${LOC_ICON[i.location]||'🏠'}${esc(i.location)}</span>`:''} &nbsp; ${esc(i.sku)}${i.maker?' · '+esc(i.maker):''}</div>
     <div class="kv">
       <span>所在地</span><span>${LOC_ICON[i.location]||''} ${esc(i.location||'-')}</span>
-      <span>注文先</span><span>${esc(i.supplier||'-')}</span>
+      <span>注文先</span><span>${esc(i.supplier||'-')}${i.supplierUrl?` <a href="${esc(i.supplierUrl)}" target="_blank" rel="noopener" style="margin-left:6px;font-size:12px">🛒 開く</a>`:''}</span>
+      <span>最低発注数</span><span>${i.minOrderQty!=null?i.minOrderQty+'個':'-'}</span>
       <span>単価</span><span>${i.price?'¥'+Number(i.price).toLocaleString():'-'}${i.priceDate?' <span style="color:var(--mute)">('+fmtD(i.priceDate)+'時点)</span>':''}</span>
       <span>リードタイム</span><span>${i.leadDays?i.leadDays+'日':'-'}</span>
       <span>備考</span><span>${esc(i.note||'-')}</span>
@@ -1934,6 +1945,8 @@ const CSV_ALIAS = {
   active: ['使用中','active','有効'],
   stock: ['現在庫','在庫','stock','在庫数'],
   location: ['所在地','置き場','置き場所','location'],
+  minOrderQty: ['最低発注数','最小発注数','minOrderQty','MOQ'],
+  supplierUrl: ['発注先URL','注文先URL','仕入先URL','supplierUrl','url'],
 };
 function buildHeaderMap(headers){
   const map = {};
@@ -1981,6 +1994,8 @@ function startCSVImport(file){
         if(hm.category!==undefined) rec.category = get('category') || 'その他';
         if(hm.location!==undefined){ const v=get('location'); if(v) rec.location = LOCATIONS.includes(v) ? v : '倉庫'; }
         if(hm.maker!==undefined) rec.maker = get('maker');
+        if(hm.minOrderQty!==undefined){ const n=Number(get('minOrderQty')); if(!isNaN(n) && get('minOrderQty')!=='') rec.minOrderQty = n; }
+        if(hm.supplierUrl!==undefined) rec.supplierUrl = get('supplierUrl');
         if(hm.minStock!==undefined){ const n=Number(get('minStock')); if(!isNaN(n)) rec.minStock = n; }
         if(hm.supplier!==undefined) rec.supplier = get('supplier');
         if(hm.price!==undefined){ const v=get('price'); rec.price = v==='' ? null : Number(v); }
@@ -2055,8 +2070,10 @@ function commitCSVImport(){
       location: rec.location || '倉庫',
       stock: rec.stock ?? 0,
       minStock: rec.minStock ?? 0,
+      minOrderQty: rec.minOrderQty ?? null,
       leadDays: rec.leadDays ?? null,
       supplier: rec.supplier || '',
+      supplierUrl: rec.supplierUrl || '',
       price: rec.price ?? null,
       priceDate: rec.priceDate || '',
       note: rec.note || '',
@@ -2183,7 +2200,9 @@ function normalizeItem_(x){
     id: x.id, sku: x.sku||'', name: x.name||'', maker: x.maker||'',
     category: x.category||'その他',
     stock: Number(x.stock)||0, minStock: Number(x.minStock)||0,
-    supplier: x.supplier||'', price: x.price==null?null:Number(x.price),
+    minOrderQty: (x.minOrderQty==null||x.minOrderQty==='')?null:Number(x.minOrderQty),
+    supplier: x.supplier||'', supplierUrl: x.supplierUrl||'',
+    price: x.price==null?null:Number(x.price),
     priceDate: (x.priceDate||'').slice(0,10),
     leadDays: x.leadDays==null?null:Number(x.leadDays),
     note: x.note||'', active: x.active!==false && x.active!==0 && x.active!=='FALSE',
@@ -2275,24 +2294,42 @@ function openOrder(itemId, orderId){
   $('#ord-qty').value = existing?.qty || 1;
   $('#ord-note').value = existing?.note || '';
 
+  const updateSupplierUrlLink = (it)=>{
+    const link = $('#ord-supplier-url');
+    if(it?.supplierUrl){
+      link.href = it.supplierUrl;
+      link.classList.remove('hidden');
+    } else {
+      link.classList.add('hidden');
+    }
+  };
   const recomputeDefaults = ()=>{
     const sel = itemPicker.getSelected('ord');
     const it = state.items.find(x=>x.id===sel);
     if(!existing && it){
       $('#ord-supplier').value = it.supplier || '';
       $('#ord-due').value = it.leadDays ? addDays($('#ord-date').value, it.leadDays) : '';
+      // 最低発注数があれば数量に自動セット
+      if(it.minOrderQty && (!$('#ord-qty').value || Number($('#ord-qty').value) < it.minOrderQty)){
+        $('#ord-qty').value = it.minOrderQty;
+      }
     }
+    updateSupplierUrlLink(it);
   };
   if(!existing) recomputeDefaults();
   else {
     $('#ord-supplier').value = existing.supplier || '';
     $('#ord-due').value = existing.expectedDate || '';
+    updateSupplierUrlLink(state.items.find(x=>x.id===existing.itemId));
   }
   // hook: re-compute when item is picked via the custom picker
   const origSelectItem = itemPicker.selectItem.bind(itemPicker);
   itemPicker.selectItem = (prefix, id)=>{
     origSelectItem(prefix, id);
-    if(prefix==='ord' && !existing) recomputeDefaults();
+    if(prefix==='ord'){
+      if(!existing) recomputeDefaults();
+      else updateSupplierUrlLink(state.items.find(x=>x.id===id));
+    }
   };
   $('#ord-date').onchange = ()=>{ if(!existing) recomputeDefaults(); };
 
@@ -2472,8 +2509,10 @@ function openItemEdit(id){
   $('#it-name').value = i?.name||'';
   $('#it-stock').value = i?.stock??0;
   $('#it-min').value = i?.minStock??0;
+  $('#it-min-order').value = i?.minOrderQty??'';
   $('#it-lead').value = i?.leadDays||'';
   $('#it-supplier').value = i?.supplier||'';
+  $('#it-supplier-url').value = i?.supplierUrl||'';
   $('#it-price').value = i?.price||'';
   $('#it-pricedate').value = i?.priceDate||'';
   $('#it-note').value = i?.note||'';
@@ -2507,8 +2546,10 @@ function submitItem(){
     location: loc,
     stock: Math.max(0, Math.floor(Number($('#it-stock').value)||0)),
     minStock: Math.max(0, Math.floor(Number($('#it-min').value)||0)),
+    minOrderQty: $('#it-min-order').value ? Math.max(0, Math.floor(Number($('#it-min-order').value))) : null,
     leadDays: $('#it-lead').value ? Math.max(0, Math.floor(Number($('#it-lead').value))) : null,
     supplier: $('#it-supplier').value.trim(),
+    supplierUrl: $('#it-supplier-url').value.trim(),
     price: $('#it-price').value ? Number($('#it-price').value) : null,
     priceDate: $('#it-pricedate').value || '',
     note: $('#it-note').value.trim(),
