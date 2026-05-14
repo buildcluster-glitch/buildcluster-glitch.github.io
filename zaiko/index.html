@@ -1528,6 +1528,7 @@ function renderDetail(){
     <div class="kv">
       <span>所在地</span><span>${LOC_ICON[i.location]||''} ${esc(i.location||'-')}</span>
       <span>注文先</span><span>${supplierLine}</span>
+      <span>最低在庫数</span><span>${i.minStock>0?i.minStock+'個':'-'}</span>
       <span>最低発注数</span><span>${i.minOrderQty!=null?i.minOrderQty+'個':'-'}</span>
       <span>リードタイム</span><span>${i.leadDays?i.leadDays+'日':'-'}</span>
       <span>備考</span><span>${esc(i.note||'-')}</span>
