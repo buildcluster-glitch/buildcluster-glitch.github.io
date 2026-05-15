@@ -14935,7 +14935,7 @@ function renderLedger() {
       if (_siblings && _siblings.length > 1) {
         // ラベル順: オリジナル → ② → ③ → ④ → ⑤ → 元請確定版
         const sorted = _siblings.slice().sort((a,b) => patternOrder(a.meta?.patternLabel||'') - patternOrder(b.meta?.patternLabel||''));
-        patternChips = `<div style="margin-top:2px; display:inline-flex; gap:3px; flex-wrap:wrap;">` + sorted.map(s => {
+        patternChips = `<div style="margin-top:3px; display:flex; gap:3px; flex-wrap:wrap; white-space:normal;">` + sorted.map(s => {
           const lbl = s.meta?.patternLabel || 'オリジナル';
           const isCur = (state.estimate && state.estimate.id === s.id) || s.id === est.id;
           const isConf = !!s.meta?.isConfirmed;

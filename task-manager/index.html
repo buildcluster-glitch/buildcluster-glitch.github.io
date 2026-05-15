@@ -202,11 +202,13 @@
   .group-header .gh-tag.c4{background:#64748b}
   .group-header .gh-count{color:var(--ink);font-weight:600}
 
-  /* ---------- repair card (修繕・アフター用 / コンパクト1行) ---------- */
+  /* ---------- repair card (修繕・アフター用 / 2行コンパクト) ---------- */
   .rep-card{background:#fff;border:1px solid var(--line);border-radius:10px;
-    padding:8px 10px;margin-bottom:6px;cursor:pointer;
-    display:flex;align-items:center;gap:7px;flex-wrap:nowrap;overflow:hidden}
+    padding:8px 10px;margin-bottom:6px;cursor:pointer;overflow:hidden}
   .rep-card:active{background:#f8fafc}
+  .rep-row1{display:flex;align-items:center;gap:7px;flex-wrap:nowrap;min-width:0}
+  .rep-row2{display:flex;align-items:center;gap:10px;margin-top:4px;
+    font-size:11px;color:var(--mute);flex-wrap:nowrap;min-width:0}
   .rep-no{font-size:10px;color:var(--mute);font-weight:700;min-width:18px;text-align:right;flex-shrink:0}
   .rep-tag{padding:1px 6px;border-radius:4px;font-size:10px;color:#fff;font-weight:700;flex-shrink:0}
   .rep-tag.c1{background:#0ea5e9}
@@ -221,6 +223,9 @@
   .rep-amount{font-size:11px;font-weight:600;color:var(--ink);flex-shrink:0}
   .rep-st{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;
     font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap}
+  .rep-addr{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rep-cust{flex-shrink:0;color:var(--ink);font-weight:500}
+  .rep-tel{color:var(--accent);font-weight:600;flex-shrink:0}
   .rep-st.s-st-draft {background:#f1f5f9;color:var(--mute)}
   .rep-st.s-st-active{background:#fef3c7;color:#b45309}
   .rep-st.s-st-apo   {background:#dbeafe;color:#1e40af}
@@ -916,7 +921,7 @@ function renderRepairList(){
       return db.localeCompare(da);
     });
   if(!items.length){
-    el.innerHTML = '<div class="empty">🔧 修繕案件がありません<br><small style="color:var(--mute)">右下の + から追加</small></div>';
+    el.innerHTML = '<div class="empty">🔧 修繕案件がありません</div>';
     return;
   }
   const tagClass = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
@@ -931,15 +936,27 @@ function renderRepairList(){
     const tagShort = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat}[cat] || cat;
     const amount = r.amountExTax ? `¥${(Number(r.amountExTax)/10000).toFixed(0)}万` : '';
     const status = r.status || '対応中';
-    // 1行表示: [#] [タグ] 物件名 号室 連絡者 [¥金額] [ステータス]
+    // 2行表示
+    // 1行目: [#] [タグ] 物件名 号室 [¥金額] [ステータス]
+    // 2行目: 住所 ・ お客様 📞 TEL
+    const addr = p.address || '';
+    const cust = r.customerName || '';
+    const tel  = r.customerTel || '';
+    const hasRow2 = addr || cust || tel;
     return `
       <div class="rep-card" data-id="${p.id}">
-        <span class="rep-no">${i+1}</span>
-        <span class="rep-tag ${cls}">${esc(tagShort)}</span>
-        <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
-        ${r.contactPerson?`<span class="rep-meta">${esc(r.contactPerson)}</span>`:''}
-        ${amount?`<span class="rep-amount">${amount}</span>`:''}
-        <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(status)}</span>
+        <div class="rep-row1">
+          <span class="rep-no">${i+1}</span>
+          <span class="rep-tag ${cls}">${esc(tagShort)}</span>
+          <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
+          <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(status)}</span>
+        </div>
+        ${hasRow2?`
+        <div class="rep-row2">
+          ${addr?`<span class="rep-addr">📍 ${esc(addr)}</span>`:''}
+          ${cust?`<span class="rep-cust">${esc(cust)}</span>`:''}
+          ${tel?`<span class="rep-tel">📞 ${esc(tel)}</span>`:''}
+        </div>`:''}
       </div>`;
   }).join('');
   el.querySelectorAll('.rep-card').forEach(c=>{
