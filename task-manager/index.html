@@ -600,13 +600,6 @@
         <button data-s="キャンセル">キャンセル</button>
       </div>
     </div>
-    <div class="field"><label>進行</label>
-      <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(3,1fr)">
-        <button data-s="待機">待機</button>
-        <button data-s="対応中">対応中</button>
-        <button data-s="完了">完了</button>
-      </div>
-    </div>
     <div class="field"><label>進捗詳細メモ</label><textarea id="rs-progress" rows="2" placeholder="現状や次のアクション等"></textarea></div>
     <div class="field"><label>売上(税別)</label><input id="rs-amount" type="number" placeholder="0" inputmode="numeric"></div>
     <div class="actions">
@@ -1747,7 +1740,6 @@ function openRepairSheet(propId){
   val('rs-amount', r.amountExTax || '');
   setPicker('rs-clientcat', (p?.clientCat) || autoDetectClientCat(p||{}) || '山一地所');
   setPicker('rs-status', r.status || '対応中');
-  setPicker('rs-workflow', r.workflowStatus || '待機');
   document.getElementById('rs-delete').classList.toggle('hide', !propId);
   document.getElementById('sheet-repair').classList.add('on');
 }
@@ -1756,7 +1748,12 @@ async function saveRepairSheet(){
   const name = val('rs-name').trim();
   if(!name){ alert('物件名を入力してください'); return; }
   const status = getPicker('rs-status') || '対応中';
-  const workflowStatus = getPicker('rs-workflow') || '待機';
+  // 既存の workflowStatus を保持。無ければ status から自動推定
+  const existing = editingPropId ? state.properties.find(x=>x.id===editingPropId) : null;
+  const wfFromStatus = (status==='完了') ? '完了'
+    : (['下書き','失注','キャンセル'].includes(status)) ? '待機'
+    : '対応中';
+  const workflowStatus = existing?.repair?.workflowStatus || wfFromStatus;
   const repair = {
     status,
     workflowStatus,
