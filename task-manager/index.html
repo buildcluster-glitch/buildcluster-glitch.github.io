@@ -554,12 +554,19 @@
         <button data-s="下書き">下書き</button>
         <button data-s="対応中">対応中</button>
         <button data-s="アポ済">アポ済</button>
-        <button data-s="提出済">提出済</button>
+        <button data-s="提出済">見積提出済</button>
         <button data-s="受注">受注</button>
         <button data-s="施工指示あり">施工指示あり</button>
         <button data-s="完了">完了</button>
         <button data-s="失注">失注</button>
         <button data-s="キャンセル">キャンセル</button>
+      </div>
+    </div>
+    <div class="field"><label>進行</label>
+      <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(3,1fr)">
+        <button data-s="待機">待機</button>
+        <button data-s="対応中">対応中</button>
+        <button data-s="完了">完了</button>
       </div>
     </div>
     <div class="field"><label>進捗詳細メモ</label><textarea id="rs-progress" rows="2" placeholder="現状や次のアクション等"></textarea></div>
@@ -929,6 +936,8 @@ function renderRepairList(){
     '下書き':'s-st-draft','対応中':'s-st-active','アポ済':'s-st-apo','提出済':'s-st-submit',
     '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
   };
+  const statusLabels = { '提出済':'見積提出済' }; // PC側表示と統一
+  const wfCls = { '待機':'s-st-draft','対応中':'s-st-active','完了':'s-st-done','提出済':'s-st-submit' };
   el.innerHTML = items.map((p,i)=>{
     const r = p.repair || {};
     const cat = p.clientCat || autoDetectClientCat(p);
@@ -936,6 +945,8 @@ function renderRepairList(){
     const tagShort = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat}[cat] || cat;
     const amount = r.amountExTax ? `¥${(Number(r.amountExTax)/10000).toFixed(0)}万` : '';
     const status = r.status || '対応中';
+    const statusLabel = statusLabels[status] || status;
+    const wf = r.workflowStatus || '';
     // 2行表示
     // 1行目: [#] [タグ] 物件名 号室 [¥金額] [ステータス]
     // 2行目: 住所 ・ お客様 📞 TEL
@@ -949,7 +960,8 @@ function renderRepairList(){
           <span class="rep-no">${i+1}</span>
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
           <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
-          <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(status)}</span>
+          <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
+          ${wf?`<span class="rep-st ${wfCls[wf]||'s-st-draft'}" style="opacity:.85">${esc(wf)}</span>`:''}
         </div>
         ${hasRow2?`
         <div class="rep-row2">
@@ -1635,6 +1647,7 @@ function openRepairSheet(propId){
   val('rs-amount', r.amountExTax || '');
   setPicker('rs-clientcat', (p?.clientCat) || autoDetectClientCat(p||{}) || '山一地所');
   setPicker('rs-status', r.status || '対応中');
+  setPicker('rs-workflow', r.workflowStatus || '待機');
   document.getElementById('rs-delete').classList.toggle('hide', !propId);
   document.getElementById('sheet-repair').classList.add('on');
 }
@@ -1643,9 +1656,10 @@ async function saveRepairSheet(){
   const name = val('rs-name').trim();
   if(!name){ alert('物件名を入力してください'); return; }
   const status = getPicker('rs-status') || '対応中';
+  const workflowStatus = getPicker('rs-workflow') || '待機';
   const repair = {
     status,
-    workflowStatus: (status==='完了') ? '完了' : '対応中',
+    workflowStatus,
     requestDate: val('rs-reqdate'),
     responseDate: val('rs-plandate'),         // 対応予定日 → meta.responseDate
     customerName: val('rs-customer').trim(),
@@ -2083,7 +2097,7 @@ function applyGasSync(payload){
     if(isRepairItem){
       repairField = {
         status:         p.status || '対応中',
-        workflowStatus: p.workflowStatus || '対応中',
+        workflowStatus: p.workflowStatus || '待機',
         requestDate:    p.requestDate || '',
         responseDate:   p.responseDate || '',
         customerName:   p.customerName || '',
