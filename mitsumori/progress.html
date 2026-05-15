@@ -1210,7 +1210,8 @@ function headerHtmlFor(mode) {
     return `<tr>
       <th style="width:40px;">No.</th>
       <th style="width:80px;">管理</th>
-      <th style="width:110px;">ステータス</th>
+      <th style="width:115px;">ステータス</th>
+      <th style="width:100px;">進行</th>
       <th>物件名</th>
       <th style="width:60px;">号室</th>
       <th style="width:90px;">依頼日</th>
@@ -1232,6 +1233,8 @@ function headerHtmlFor(mode) {
   return `<tr>
     <th style="width:30px;">No.</th>
     <th style="width:80px;">管理</th>
+    <th style="width:115px;">ステータス</th>
+    <th style="width:100px;">進行</th>
     <th>物件名</th>
     <th style="width:60px;">号室</th>
     <th style="width:80px;">工事指示</th>
@@ -1249,12 +1252,30 @@ function headerHtmlFor(mode) {
     <th style="width:50px;">手配</th>
     <th style="width:50px;">予定表</th>
     <th style="width:50px;">水道</th>
-    <th style="width:110px;">進行</th>
     <th class="num" style="width:90px;">売上(税別)</th>
     ${supplierHeaderHtml()}
     <th class="num" style="width:80px;">材料費</th>
     <th style="width:90px;">請求/入金</th>
   </tr>`;
+}
+
+// ステータス・進行ステータスを <select> で編集可能にするヘルパー
+const STATUS_OPTIONS = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','失注','完了','キャンセル'];
+function statusSelectHtml(val, w=115) {
+  const cur = val || '下書き';
+  const sb = STATUS_BADGES[cur] || STATUS_BADGES['下書き'];
+  const opts = STATUS_OPTIONS.map(s => {
+    const ss = STATUS_BADGES[s] || STATUS_BADGES['下書き'];
+    const label = (s === '提出済') ? '見積提出済' : s;
+    return `<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${ss.icon} ${escapeHtml(label)}</option>`;
+  }).join('');
+  return `<select class="prg-edit prg-status-sel" data-path="meta" data-f="status" style="font-size:10px; padding:1px 4px; border-radius:3px; font-weight:600; background:#fff; cursor:pointer; max-width:${w}px;" title="クリックでステータス変更">${opts}</select>`;
+}
+function workflowSelectHtml(val, isRepair, w=100) {
+  const options = isRepair ? WORKFLOW_OPTIONS_REPAIR : WORKFLOW_OPTIONS_RESTORATION;
+  const cur = val || '待機';
+  const opts = options.map(s => `<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${escapeHtml(s)}</option>`).join('');
+  return `<select class="prg-edit prg-wf-sel" data-path="meta" data-f="workflowStatus" style="font-size:10px; padding:1px 4px; border-radius:3px; font-weight:600; background:#fff; cursor:pointer; max-width:${w}px;" title="クリックで進行ステータス変更">${opts}</select>`;
 }
 
 // 業者①〜⑥ の 4セル を行毎に生成(空き枠は淡いグレー)
@@ -1282,12 +1303,9 @@ function rowHtmlFor(mode, est, no) {
   const supplierCells = supplierCellsHtml(est);
   const motoukeCell = motoukeTagHtml(getMotoukeName(est));
   const statusKey = m.status || '下書き';
-  const sb = STATUS_BADGES[statusKey] || STATUS_BADGES['下書き'];
-  // 「提出済」だけ「見積提出済」と表示(値は提出済のまま・データ互換維持)
-  const statusLabel = (statusKey === '提出済') ? '見積提出済' : statusKey;
-  const statusBadge = `<span class="badge ${sb.cls}">${sb.icon} ${escapeHtml(statusLabel)}</span>`;
-  const wf = m.workflowStatus || '待機';
-  const wfBadge = `<span class="badge badge-juchugata">${escapeHtml(wf)}</span>`;
+  // ステータス・進行ステータス: select で編集可能(prg-edit ハンドラで autoPushFromProgress に乗る)
+  const statusCell = statusSelectHtml(statusKey);
+  const wfCell = workflowSelectHtml(m.workflowStatus, mode === 'repair');
   const confirmedBadge = m.isConfirmed ? '<span class="badge badge-confirmed">✅確定</span> ' : '';
   const invoiceBadge = (m.invoiceStatus === '済') ? '<span class="badge badge-paid">請済</span>' : '<span class="badge badge-unpaid">請未</span>';
   const paymentBadge = (m.paymentStatus === '済') ? '<span class="badge badge-paid">入済</span>' : '<span class="badge badge-unpaid">入未</span>';
@@ -1298,7 +1316,8 @@ function rowHtmlFor(mode, est, no) {
     return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
       <td class="num">${no}</td>
       <td>${motoukeCell}</td>
-      <td>${statusBadge}<br>${wfBadge}</td>
+      <td>${statusCell}</td>
+      <td>${wfCell}</td>
       <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b></td>
       <td>${escapeHtml(m.roomNo||'')}</td>
       <td>${escapeHtml(m.requestDate||'')}</td>
@@ -1332,6 +1351,8 @@ function rowHtmlFor(mode, est, no) {
   return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
     <td class="num">${no}</td>
     <td>${motoukeCell}</td>
+    <td>${statusCell}</td>
+    <td>${wfCell}</td>
     <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b></td>
     <td>${escapeHtml(m.roomNo||'')}</td>
     <td>${inp('meta','koujiSijiDate', m.koujiSijiDate, '例:5/4', 60)}</td>
@@ -1349,7 +1370,6 @@ function rowHtmlFor(mode, est, no) {
     <td style="text-align:center;">${chk('meta','tehaiDone', m.tehaiDone)}</td>
     <td style="text-align:center;">${chk('meta','scheduleStatus', m.scheduleStatus)}</td>
     <td style="text-align:center;">${chk('meta','suidoStatus', m.suidoStatus)}</td>
-    <td>${statusBadge}<br>${wfBadge}</td>
     <td class="num">¥${fmtNum(estimateTotal(est))}</td>
     ${supplierCells}
     <td class="num">¥${fmtNum(materialTotal(est))}</td>
