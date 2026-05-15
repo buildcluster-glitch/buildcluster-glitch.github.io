@@ -539,7 +539,6 @@
   <div class="st-pop" onclick="event.stopPropagation()">
     <h4 id="st-pop-title">ステータス変更</h4>
     <div class="st-pop-sub" id="st-pop-sub"></div>
-    <div class="st-section-title">📍 ステータス</div>
     <div class="st-grid" id="st-pop-status">
       <button data-s="下書き">下書き</button>
       <button data-s="対応中">対応中</button>
@@ -550,12 +549,6 @@
       <button data-s="完了">完了</button>
       <button data-s="失注">失注</button>
       <button data-s="キャンセル">キャンセル</button>
-    </div>
-    <div class="st-section-title">⏱ 進行</div>
-    <div class="st-grid" id="st-pop-workflow" style="grid-template-columns:repeat(3,1fr)">
-      <button data-s="待機">待機</button>
-      <button data-s="対応中">対応中</button>
-      <button data-s="完了">完了</button>
     </div>
   </div>
 </div>
@@ -1003,7 +996,6 @@ function renderRepairList(){
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
           <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
           <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
-          ${wf?`<span class="rep-st ${wfCls[wf]||'s-st-draft'}" style="opacity:.85">${esc(wf)}</span>`:''}
         </div>
         ${hasRow2?`
         <div class="rep-row2">
@@ -1689,9 +1681,6 @@ function openStatusPop(propId){
   document.querySelectorAll('#st-pop-status button').forEach(b=>{
     b.classList.toggle('on', b.dataset.s === (r.status||'対応中'));
   });
-  document.querySelectorAll('#st-pop-workflow button').forEach(b=>{
-    b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'待機'));
-  });
   document.getElementById('st-pop-bg').classList.add('on');
 }
 function closeStatusPop(){
@@ -1731,12 +1720,6 @@ document.getElementById('st-pop-status').addEventListener('click', e=>{
   if(!b) return;
   e.stopPropagation();
   applyStatusFromPop('status', b.dataset.s);
-});
-document.getElementById('st-pop-workflow').addEventListener('click', e=>{
-  const b = e.target.closest('button[data-s]');
-  if(!b) return;
-  e.stopPropagation();
-  applyStatusFromPop('workflowStatus', b.dataset.s);
 });
 
 /* ===== 修繕・アフター 編集シート ===== */
