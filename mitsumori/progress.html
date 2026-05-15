@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -186,6 +186,7 @@
   .prg-save-toast.saving { background: #2563eb; }
   .prg-save-toast.error { background: #dc2626; }
 </style>
+<script src="/gate.js" defer></script>
 </head>
 <body>
 <!-- 発注担当・見積担当者の候補リスト(自由入力も可・datalist 連動) -->
@@ -704,7 +705,7 @@ const STATUS_BADGES = {
   'キャンセル':   { cls:'badge-shitsuchu', icon:'✖' },
 };
 const WORKFLOW_OPTIONS_RESTORATION = ['待機','工事指示済','着工','完工','鍵交換済','入居済','クローズ'];
-const WORKFLOW_OPTIONS_REPAIR = ['待機','アポ済','対応中','施工指示あり','完了','クローズ'];
+const WORKFLOW_OPTIONS_REPAIR = ['未対応','アポ済','対応中','施工指示あり','見積提出済','長期連絡なし','完了'];
 
 // ============================================================
 // 描画
