@@ -202,24 +202,25 @@
   .group-header .gh-tag.c4{background:#64748b}
   .group-header .gh-count{color:var(--ink);font-weight:600}
 
-  /* ---------- repair card (修繕・アフター用) ---------- */
-  .rep-card{background:#fff;border:1px solid var(--line);border-radius:14px;
-    padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(15,23,42,.05);cursor:pointer}
-  .rep-card:active{transform:scale(.99)}
-  .rep-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-  .rep-no{font-size:11px;color:var(--mute);font-weight:700;min-width:22px}
-  .rep-tag{padding:2px 8px;border-radius:999px;font-size:11px;color:#fff;font-weight:700}
+  /* ---------- repair card (修繕・アフター用 / コンパクト1行) ---------- */
+  .rep-card{background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:8px 10px;margin-bottom:6px;cursor:pointer;
+    display:flex;align-items:center;gap:7px;flex-wrap:nowrap;overflow:hidden}
+  .rep-card:active{background:#f8fafc}
+  .rep-no{font-size:10px;color:var(--mute);font-weight:700;min-width:18px;text-align:right;flex-shrink:0}
+  .rep-tag{padding:1px 6px;border-radius:4px;font-size:10px;color:#fff;font-weight:700;flex-shrink:0}
   .rep-tag.c1{background:#0ea5e9}
   .rep-tag.c2{background:#16a34a}
   .rep-tag.c3{background:#f59e0b}
   .rep-tag.c4{background:#64748b}
-  .rep-name{font-weight:700;font-size:15px;flex:1;min-width:0;
+  .rep-name{font-weight:600;font-size:13px;flex:1;min-width:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .rep-room{font-size:12px;color:var(--mute);font-weight:600}
-  .rep-amount{font-size:13px;font-weight:700;color:var(--ink);margin-left:auto}
-  .rep-status-stack{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
-  .rep-st{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;
-    font-size:11px;font-weight:600;width:fit-content}
+  .rep-room{font-size:11px;color:var(--mute);font-weight:600;flex-shrink:0}
+  .rep-meta{font-size:11px;color:var(--mute);flex-shrink:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
+  .rep-amount{font-size:11px;font-weight:600;color:var(--ink);flex-shrink:0}
+  .rep-st{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;
+    font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap}
   .rep-st.s-st-draft {background:#f1f5f9;color:var(--mute)}
   .rep-st.s-st-active{background:#fef3c7;color:#b45309}
   .rep-st.s-st-apo   {background:#dbeafe;color:#1e40af}
@@ -928,32 +929,17 @@ function renderRepairList(){
     const cat = p.clientCat || autoDetectClientCat(p);
     const cls = tagClass[cat] || 'c4';
     const tagShort = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat}[cat] || cat;
-    const amount = r.amountExTax ? `¥${Number(r.amountExTax).toLocaleString()}` : '¥0';
+    const amount = r.amountExTax ? `¥${(Number(r.amountExTax)/10000).toFixed(0)}万` : '';
     const status = r.status || '対応中';
-    const valOr = (v,emp='—')=> v ? esc(v) : `<span class="val empty">${emp}</span>`;
+    // 1行表示: [#] [タグ] 物件名 号室 連絡者 [¥金額] [ステータス]
     return `
       <div class="rep-card" data-id="${p.id}">
-        <div class="rep-top">
-          <span class="rep-no">${i+1}</span>
-          <span class="rep-tag ${cls}">${esc(tagShort)}</span>
-          <span class="rep-name">${esc(p.name||'(無題)')}</span>
-          ${p.room?`<span class="rep-room">${esc(p.room)}</span>`:''}
-          <span class="rep-amount">${amount}</span>
-        </div>
-        <div class="rep-status-stack">
-          <span class="rep-st ${statusCls[status]||'s-st-active'}">📍 ${esc(status)}</span>
-        </div>
-        <div class="rep-grid">
-          <span class="lbl">依頼日</span><span class="val">${valOr(r.requestDate)}</span>
-          <span class="lbl">対応予定</span><span class="val">${valOr(r.responseDate)}</span>
-          <span class="lbl">完了日</span><span class="val">${valOr(p.completeDate)}</span>
-          <span class="lbl">住所</span><span class="val">${valOr(p.address)}</span>
-          <span class="lbl">お客様</span><span class="val">${valOr(r.customerName)}${r.customerTel?` <span style="color:var(--accent)">📞 ${esc(r.customerTel)}</span>`:''}</span>
-          <span class="lbl">営業</span><span class="val">${valOr(r.salesRep)}</span>
-          <span class="lbl">連絡者</span><span class="val">${valOr(r.contactPerson)}</span>
-        </div>
-        ${r.requestDesc?`<div class="rep-desc">${esc(r.requestDesc)}</div>`:''}
-        ${r.creatorMemo?`<div class="rep-progress">📝 ${esc(r.creatorMemo)}</div>`:''}
+        <span class="rep-no">${i+1}</span>
+        <span class="rep-tag ${cls}">${esc(tagShort)}</span>
+        <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
+        ${r.contactPerson?`<span class="rep-meta">${esc(r.contactPerson)}</span>`:''}
+        ${amount?`<span class="rep-amount">${amount}</span>`:''}
+        <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(status)}</span>
       </div>`;
   }).join('');
   el.querySelectorAll('.rep-card').forEach(c=>{
@@ -1481,6 +1467,8 @@ function showList(){
   document.getElementById('view-list').classList.remove('hide');
   document.getElementById('view-detail').classList.add('hide');
   currentPropId = null;
+  // FABはリスト画面では非表示(物件追加機能は廃止)
+  document.getElementById('fab').classList.add('hide');
   renderList();
   window.scrollTo(0,0);
 }
@@ -1488,6 +1476,8 @@ function openDetail(id){
   currentPropId = id;
   document.getElementById('view-list').classList.add('hide');
   document.getElementById('view-detail').classList.remove('hide');
+  // FABは詳細画面でのみ表示(タスク追加用)
+  document.getElementById('fab').classList.remove('hide');
   renderDetail();
   window.scrollTo(0,0);
 }
@@ -2134,9 +2124,42 @@ function applyGasSync(payload){
       add++;
     }
   });
+  // ===== リコンサイル: payload に含まれない Drive 由来案件をローカルから除去 =====
+  // (PC側でゴミ箱に移動された案件は GAS の filter で payload から弾かれるので、
+  //  ローカルにのみ残ったままになる。それを掃除する)
+  const ACTIVE_REPAIR_RC = ['対応中','アポ済','提出済','受注','施工指示あり'];
+  const receivedFileIds = new Set(
+    (payload.properties||[])
+      .map(p => p.driveFileId)
+      .filter(Boolean)
+  );
+  const receivedEstIds = new Set(
+    (payload.properties||[])
+      .map(p => p.estimateId)
+      .filter(Boolean)
+  );
+  const kojiFilter = payload.kojiFilter || 'all';
+  let removed = 0;
+  state.properties = state.properties.filter(p => {
+    // Drive由来でない(ローカル限定)案件は保持
+    if(!p._driveFileId && !p.estimateId) return true;
+    // payload に含まれていれば保持
+    if(p._driveFileId && receivedFileIds.has(p._driveFileId)) return true;
+    if(p.estimateId && receivedEstIds.has(p.estimateId)) return true;
+    // payload のスコープと一致しない案件は今回の同期対象外なので保持
+    const koji = (p.kojiName||'').trim();
+    const isRestoration = !!p.isRestoration || koji === '原状回復工事';
+    const isRepairActive = !isRestoration && koji !== '' && koji !== '原状回復工事' &&
+      (ACTIVE_REPAIR_RC.includes(p.repair?.status) || p.repair?.workflowStatus === '対応中');
+    if(kojiFilter === 'restoration' && !isRestoration) return true;
+    if(kojiFilter === 'repair' && !isRepairActive) return true;
+    // ここまで来た = 同期スコープ内で payload に居ない = PC側で削除/ゴミ箱化 → 除去
+    removed++;
+    return false;
+  });
   save();
   renderList();
-  return {upd, add, skipped};
+  return {upd, add, skipped, removed};
 }
 
 // カテゴリ正規化（GAS側が「外注/自社/減工事」の日本語ラベルで返してくる）
@@ -2650,6 +2673,24 @@ async function autoSyncOnBoot(){
   }
 }
 autoSyncOnBoot();
+
+// 1分ごとに自動同期 (タブが見えている時だけ実行)
+const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
+let _lastAutoSyncAt = Date.now();
+setInterval(()=>{
+  if(document.visibilityState !== 'visible') return;
+  _lastAutoSyncAt = Date.now();
+  autoSyncOnBoot();
+}, AUTO_SYNC_INTERVAL_MS);
+
+// タブが再アクティブになった時(別アプリから戻った/別タブから戻った時)も同期
+// ただし直近30秒以内に同期済みなら省略(連打防止)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState !== 'visible') return;
+  if(Date.now() - _lastAutoSyncAt < 30 * 1000) return;
+  _lastAutoSyncAt = Date.now();
+  autoSyncOnBoot();
+});
 
 showList();
 </script>
