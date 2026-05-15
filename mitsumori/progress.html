@@ -148,14 +148,66 @@
   /* 集計サマリー */
   .stats-bar { display:flex; gap:14px; font-size:12px; padding:6px 10px; background:#f1f5f9; border-radius:4px; margin-top:8px; }
   .stats-bar b { color:#0f172a; }
+  /* インライン編集セル: 視覚的に「ここをクリックして入力できる」と分かるように */
+  input.prg-edit {
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    border-radius: 3px;
+    padding: 2px 5px !important;
+    color: #0f172a;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  input.prg-edit::placeholder { color: #94a3b8; font-style: italic; font-size: 10px; }
+  input.prg-edit:hover { background: #f0f9ff !important; border-color: #3b82f6 !important; }
+  input.prg-edit:focus {
+    outline: none;
+    background: #fff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.18);
+  }
+  /* 編集後の値があれば緑のドットで「入力済」マーク */
+  input.prg-edit:not(:placeholder-shown):not(:focus) {
+    background: #f0fdf4 !important;
+    border-color: #16a34a !important;
+  }
+  input[type="checkbox"].prg-edit { cursor: pointer; transform: scale(1.2); }
+  /* Drive保存ステータスのトースト */
+  .prg-save-toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #16a34a; color: #fff;
+    padding: 8px 16px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 9999;
+    transition: opacity 0.3s, transform 0.3s;
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+  }
+  .prg-save-toast.show { opacity: 1; transform: translateY(0); }
+  .prg-save-toast.saving { background: #2563eb; }
+  .prg-save-toast.error { background: #dc2626; }
 </style>
 </head>
 <body>
+<!-- 発注担当・見積担当者の候補リスト(自由入力も可・datalist 連動) -->
+<datalist id="dl-order-tantou">
+  <option value="大村 まどか">
+  <option value="山田 裕貴">
+  <option value="大村 将史">
+  <option value="南部 大我">
+  <option value="木村 優作">
+  <option value="鈴木 悠平">
+  <option value="最上 登生">
+</datalist>
 <nav class="app-switcher">
   <a href="index.html">📝 見積作成</a>
   <a href="invoice.html">💰 請求書</a>
   <a href="sales.html">📊 売上集計</a>
   <a href="progress.html" class="active">🔨 工事進捗</a>
+  <span style="flex:1;"></span>
+  <a href="index.html#tachiai">📋 立会チェック</a>
+  <a href="index.html#keiyaku">📝 契約ノート</a>
+  <a href="index.html#manual">📖 マニュアル</a>
+  <a href="index.html#feedback">💬 要望・バグ</a>
   <a href="index.html#settings">⚙ 設定</a>
 </nav>
 <header>
@@ -336,20 +388,40 @@ async function gasSaveLedgerFromProgress(est) {
 }
 
 // 進捗タブ: 詳細編集後に Drive 台帳へ silent auto-push(debounce 1.5s)
+function _showSaveToast(text, type) {
+  let toast = document.getElementById('prg-save-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'prg-save-toast';
+    toast.className = 'prg-save-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.remove('saving','error');
+  if (type === 'saving') toast.classList.add('saving');
+  else if (type === 'error') toast.classList.add('error');
+  toast.classList.add('show');
+  if (toast._t) clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+}
 function autoPushFromProgress(id) {
   if (!id) return;
   if (autoPushFromProgress._timer) clearTimeout(autoPushFromProgress._timer);
+  _showSaveToast('⏳ 1.5秒後にDriveへ保存します...', 'saving');
   autoPushFromProgress._timer = setTimeout(async () => {
     autoPushFromProgress._timer = null;
     const est = allEstimates[id];
     if (!est) return;
+    _showSaveToast('☁ Drive保存中...', 'saving');
     try {
       const r = await gasSaveLedgerFromProgress(est);
       if (r && r.fileId) {
         est._driveFileId = r.fileId;
         est._driveMonth = r.month;
+        est._driveSavedAt = new Date().toISOString();
         saveEstimates(allEstimates);
-        // 軽い通知(data-info を一瞬書換え)
+        _showSaveToast('✅ Drive保存済(他PCに反映されます)', 'success');
+        // data-info も短時間書換え
         const info = document.getElementById('data-info');
         if (info) {
           const orig = info.textContent;
@@ -357,9 +429,12 @@ function autoPushFromProgress(id) {
           info.style.background = '#16a34a';
           setTimeout(() => { info.textContent = orig; info.style.background = '#1e3a8a'; }, 2000);
         }
+      } else {
+        _showSaveToast('⚠ GAS未設定: ローカル保存のみ', 'error');
       }
     } catch (e) {
       console.warn('[progress auto push 失敗]', e);
+      _showSaveToast('❌ Drive保存失敗: ' + (e.message||''), 'error');
     }
   }, 1500);
 }
@@ -1247,7 +1322,8 @@ function rowHtmlFor(mode, est, no) {
   const auto = autoDetectKeyHandling(est);
   // インライン編集セル: data-f= でフィールド名を指定 → tbodyの delegated change で保存
   // path: meta.{f} or meta.hatchuOrder.{f} or meta.taikyo.{f}
-  const inp = (path, f, val, ph='', w=70) => `<input type="text" class="prg-edit" data-path="${path}" data-f="${f}" value="${escapeHtml(val||'')}" placeholder="${ph}" style="width:${w}px; font-size:11px; padding:1px 3px; border:1px solid #e5e7eb; background:transparent;">`;
+  // listId 指定で datalist 連動(候補表示 + 自由入力可)
+  const inp = (path, f, val, ph='', w=70, listId='') => `<input type="text" class="prg-edit" data-path="${path}" data-f="${f}" value="${escapeHtml(val||'')}" placeholder="${ph}"${listId?` list="${listId}"`:''} style="width:${w}px; font-size:11px; padding:1px 3px; border:1px solid #e5e7eb; background:transparent;">`;
   const chk = (path, f, val) => `<input type="checkbox" class="prg-edit" data-path="${path}" data-f="${f}" ${val ? 'checked' : ''}>`;
   const kagiKaishuVal = (m.kagiKaishu||'').trim();
   const kagiNokoshiVal = (m.kagiNokoshi||'').trim();
@@ -1269,7 +1345,7 @@ function rowHtmlFor(mode, est, no) {
     <td style="text-align:center;">${chk('meta','jokinDone', m.jokinDone)}</td>
     <td>${inp('hatchuOrder','jokinDate', ho.jokinDate, '例:5/12', 60)}</td>
     <td>${inp('meta','creator', t.tachiaiPerson||m.creator, '', 70)}</td>
-    <td>${inp('meta','orderTantou', m.orderTantou, '', 70)}</td>
+    <td>${inp('meta','orderTantou', m.orderTantou, '', 70, 'dl-order-tantou')}</td>
     <td style="text-align:center;">${chk('meta','tehaiDone', m.tehaiDone)}</td>
     <td style="text-align:center;">${chk('meta','scheduleStatus', m.scheduleStatus)}</td>
     <td style="text-align:center;">${chk('meta','suidoStatus', m.suidoStatus)}</td>

@@ -307,7 +307,7 @@
       <button class="koji-tab" data-k="repair">🔧 修繕・アフター<small>入居中対応・リフォーム工事等</small></button>
     </div>
     <div class="toolbar">
-      <div class="search"><input id="search" placeholder="物件・業者・工事名で検索"></div>
+      <div class="search"><input id="search" placeholder="物件・業者・工事名で検索" autocomplete="off" inputmode="search" name="property-search"></div>
       <div class="chips" id="filter-chips">
         <button class="chip on" data-f="all">すべて</button>
         <button class="chip" data-f="todo">未対応</button>
@@ -717,9 +717,12 @@ function matchesClientCat(p){
 }
 function matchesKojiFilter(p){
   if(currentKojiFilter==='all') return true;
-  const isRestoration = p.isRestoration || (p.kojiName === '原状回復工事');
+  const koji = String(p.kojiName||'').trim();
+  const isRestoration = p.isRestoration || koji === '原状回復工事';
   if(currentKojiFilter==='restoration') return isRestoration;
-  if(currentKojiFilter==='repair') return !isRestoration;
+  // 修繕タブ: kojiName が明示的に「原状回復工事以外の値」のものだけ表示
+  // (空文字・undefined は除外 = 種別未指定の古い見積を弾く)
+  if(currentKojiFilter==='repair') return !isRestoration && koji !== '' && koji !== '原状回復工事';
   return true;
 }
 

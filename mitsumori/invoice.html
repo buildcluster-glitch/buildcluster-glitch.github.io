@@ -108,6 +108,11 @@
   <a href="invoice.html" class="active">💰 請求書</a>
   <a href="sales.html">📊 売上集計</a>
   <a href="progress.html">🔨 工事進捗</a>
+  <span style="flex:1;"></span>
+  <a href="index.html#tachiai">📋 立会チェック</a>
+  <a href="index.html#keiyaku">📝 契約ノート</a>
+  <a href="index.html#manual">📖 マニュアル</a>
+  <a href="index.html#feedback">💬 要望・バグ</a>
   <a href="index.html#settings">⚙ 設定</a>
 </nav>
 <header>
@@ -155,7 +160,7 @@ function getIssuerInfo() {
     fax: issuer.jishaFax || '',
     tantou: issuer.tantou || '山田 裕貴',
     tantouTel: issuer.tantouTel || '090-6854-0285',
-    bank: s.bankInfo || '七十七銀行 ○○支店 普通 1234567 ㈱ビルドクラスタ',
+    bank: s.bankInfo || '住信SBIネット銀行 法人第一支店(106)\n普通 1438076\n株式会社ビルドクラスタ',
     sealImg: issuer.seal || 'seal_buildcluster.png',
     logoImg: issuer.logo || 'logo_buildcluster.png',
   };
@@ -346,7 +351,7 @@ function buildInvoiceHtml(inv, idx, draft, issueDate, prefix, payDue, issuer) {
     </table>
     <div class="inv-pay">
       <div class="ttl">お振込先</div>
-      <div contenteditable="true" class="edit">${escapeHtml(issuer.bank)}</div>
+      <div contenteditable="true" class="edit" style="white-space:pre-line; line-height:1.6;">${escapeHtml(issuer.bank)}</div>
       ${payDue ? `<div style="margin-top:2mm;">お支払期限: <b>${escapeHtml(payDue)}</b></div>` : ''}
     </div>
     <div class="inv-note" contenteditable="true" class="edit">
