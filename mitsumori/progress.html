@@ -469,7 +469,13 @@ function shortenMotouke(long) {
   return s;
 }
 function getMotoukeName(est) {
-  const raw = (est.meta?.motouke || est.meta?.taikyo?.motouke || '').trim();
+  // meta.motouke → taikyo.motouke → atena(宛名) の順に確認
+  const raw = (
+    est.meta?.motouke ||
+    est.meta?.taikyo?.motouke ||
+    est.meta?.atena ||
+    ''
+  ).trim();
   return raw ? shortenMotouke(raw) : '';
 }
 // 元請け名 → タグ色(固定パレット + 未知名はハッシュ自動色)
@@ -1210,7 +1216,7 @@ function headerHtmlFor(mode) {
   if (mode === 'repair') {
     return `<tr>
       <th style="width:40px;">No.</th>
-      <th style="width:80px;">管理</th>
+      <th style="width:80px;">元請</th>
       <th style="width:115px;">ステータス</th>
       <th style="width:100px;">進行</th>
       <th>物件名</th>
@@ -1233,7 +1239,7 @@ function headerHtmlFor(mode) {
   // 原状回復 + すべて
   return `<tr>
     <th style="width:30px;">No.</th>
-    <th style="width:80px;">管理</th>
+    <th style="width:80px;">元請け</th>
     <th style="width:115px;">ステータス</th>
     <th style="width:100px;">進行</th>
     <th>物件名</th>
