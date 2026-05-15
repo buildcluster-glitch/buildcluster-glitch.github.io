@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -35,6 +35,11 @@
   header.bar .back{color:#fff;padding:4px 4px 4px 0;font-size:22px}
   header.bar .icon-btn{background:rgba(255,255,255,.1);color:#fff;
     width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px}
+  header.bar #sync-icon{display:inline-block;transition:color .2s}
+  header.bar #sync-icon.syncing{animation:sync-spin 1s linear infinite}
+  header.bar #sync-icon.ok{color:#4ade80}
+  header.bar #sync-icon.err{color:#f87171}
+  @keyframes sync-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
   /* ---------- search + filter bar ---------- */
   .toolbar{padding:12px 14px 4px;display:flex;flex-direction:column;gap:10px;background:var(--bg);
@@ -188,7 +193,11 @@
   .status-picker button.on.hold{border-color:var(--st-hold);color:var(--st-hold);background:#fef3c7}
   .cat-picker{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
   .cat-picker button{padding:10px 4px;border:2px solid var(--line);background:#fff;
-    border-radius:10px;font-size:12px;font-weight:600;color:var(--mute)}
+    border-radius:10px;font-size:12px;font-weight:600;color:var(--mute);
+    touch-action:manipulation;user-select:none}
+  .cat-picker button:active{transform:scale(.97);opacity:.85}
+  /* 汎用「選択中」スタイル(特定の data-s 用上書きが無い時のフォールバック) */
+  .cat-picker button.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent)}
   .cat-picker button.on.outsource{border-color:var(--cat-out);color:var(--cat-out);background:#f3e8ff}
   .cat-picker button.on.inhouse{border-color:var(--cat-in);color:var(--cat-in);background:#e0f2fe}
   .cat-picker button.on.reduced{border-color:var(--cat-red);color:var(--cat-red);background:#f1f5f9}
@@ -224,9 +233,15 @@
   .rep-meta{font-size:11px;color:var(--mute);flex-shrink:0;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
   .rep-amount{font-size:11px;font-weight:600;color:var(--ink);flex-shrink:0}
-  .rep-st{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;
-    font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap;cursor:pointer}
-  .rep-st:hover{outline:1px solid var(--accent)}
+  .rep-st{display:inline-flex;align-items:center;padding:5px 10px;border-radius:6px;
+    font-size:11px;font-weight:700;flex-shrink:0;white-space:nowrap;
+    min-height:28px;min-width:60px;justify-content:center;
+    touch-action:manipulation;user-select:none}
+  /* タップ可の進行ピルだけハイライト */
+  .rep-st-wf{cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+  .rep-st-wf:hover{outline:1px solid var(--accent)}
+  .rep-st-wf:active{opacity:.7;transform:scale(.96)}
+  .rep-st-readonly{cursor:default}
 
   /* ステータス変更ポップオーバー */
   .st-pop-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:90;
@@ -314,6 +329,7 @@
   .koji-tab[data-k="repair"].on{color:#b45309;border-bottom-color:#f59e0b;background:#fef3c7}
   .koji-tab[data-k="repair"].on small{color:#d97706}
 </style>
+<script src="/gate.js" defer></script>
 </head>
 <body>
 <div class="app" id="app">
@@ -324,7 +340,7 @@
       <div class="title" id="list-title">工事進捗管理</div>
       <button class="icon-btn btn-user" title="チェック者切替">👤<span class="btn-user-label">未設定</span></button>
       <button class="icon-btn" id="btn-import" title="Drive台帳から取込">⬇</button>
-      <button class="icon-btn" id="btn-refresh" title="GAS同期">↻</button>
+      <button class="icon-btn" id="btn-refresh" title="GAS同期"><span id="sync-icon">☁</span></button>
     </header>
     <!-- 工事種別 切替タブ(明確な3択) -->
     <div class="koji-tabs" id="koji-tabs" style="grid-template-columns:repeat(2,1fr)">
@@ -540,18 +556,16 @@
 <!-- ========== STATUS POPOVER (ステータス即変更) ========== -->
 <div class="st-pop-bg" id="st-pop-bg">
   <div class="st-pop" onclick="event.stopPropagation()">
-    <h4 id="st-pop-title">ステータス変更</h4>
+    <h4 id="st-pop-title">進行ステータス変更</h4>
     <div class="st-pop-sub" id="st-pop-sub"></div>
-    <div class="st-grid" id="st-pop-status">
-      <button data-s="下書き">下書き</button>
-      <button data-s="対応中">対応中</button>
+    <div class="st-grid" id="st-pop-workflow" style="grid-template-columns:repeat(2,1fr)">
+      <button data-s="未対応">未対応</button>
       <button data-s="アポ済">アポ済</button>
-      <button data-s="提出済">見積提出済</button>
-      <button data-s="受注">受注</button>
+      <button data-s="対応中">対応中</button>
       <button data-s="施工指示あり">施工指示あり</button>
-      <button data-s="完了">完了</button>
-      <button data-s="失注">失注</button>
-      <button data-s="キャンセル">キャンセル</button>
+      <button data-s="見積提出済">見積提出済</button>
+      <button data-s="長期連絡なし">長期連絡なし</button>
+      <button data-s="完了" style="grid-column:1/-1">完了</button>
     </div>
   </div>
 </div>
@@ -560,14 +574,7 @@
 <div class="sheet-backdrop" id="sheet-repair">
   <div class="sheet" onclick="event.stopPropagation()">
     <h3 id="rs-title">修繕案件追加</h3>
-    <div class="field"><label>クライアント(元請け)</label>
-      <div class="cat-picker" id="rs-clientcat" style="grid-template-columns:repeat(4,1fr)">
-        <button data-s="山一地所">山一</button>
-        <button data-s="みどり不動産">みどり</button>
-        <button data-s="自社工事">自社</button>
-        <button data-s="その他">その他</button>
-      </div>
-    </div>
+    <div id="rs-clienttag-area" style="margin:0 0 10px 0;font-size:12px;color:var(--mute)"></div>
     <div class="field-row">
       <div class="field"><label>物件名 *</label><input id="rs-name"></div>
       <div class="field"><label>号室</label><input id="rs-room"></div>
@@ -587,24 +594,24 @@
       <div class="field"><label>営業担当</label><input id="rs-sales"></div>
       <div class="field"><label>連絡者</label><input id="rs-contact"></div>
     </div>
-    <div class="field"><label>ステータス</label>
-      <div class="cat-picker" id="rs-status" style="grid-template-columns:repeat(3,1fr)">
-        <button data-s="下書き">下書き</button>
-        <button data-s="対応中">対応中</button>
+    <div class="field">
+      <label>ステータス <span style="color:var(--mute);font-weight:400;font-size:11px">(表示のみ・変更はPC側で)</span></label>
+      <div id="rs-status-display" style="padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-weight:600">—</div>
+    </div>
+    <div class="field"><label>進行</label>
+      <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(3,1fr)">
+        <button data-s="未対応">未対応</button>
         <button data-s="アポ済">アポ済</button>
-        <button data-s="提出済">見積提出済</button>
-        <button data-s="受注">受注</button>
+        <button data-s="対応中">対応中</button>
         <button data-s="施工指示あり">施工指示あり</button>
+        <button data-s="見積提出済">見積提出済</button>
+        <button data-s="長期連絡なし">長期連絡なし</button>
         <button data-s="完了">完了</button>
-        <button data-s="失注">失注</button>
-        <button data-s="キャンセル">キャンセル</button>
       </div>
     </div>
     <div class="field"><label>進捗詳細メモ</label><textarea id="rs-progress" rows="2" placeholder="現状や次のアクション等"></textarea></div>
-    <div class="field"><label>売上(税別)</label><input id="rs-amount" type="number" placeholder="0" inputmode="numeric"></div>
     <div class="actions">
       <button class="btn-ghost" id="rs-cancel">キャンセル</button>
-      <button class="btn-danger hide" id="rs-delete">削除</button>
       <button class="btn-primary" id="rs-save">保存</button>
     </div>
   </div>
@@ -968,7 +975,13 @@ function renderRepairList(){
     '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
   };
   const statusLabels = { '提出済':'見積提出済' }; // PC側表示と統一
-  const wfCls = { '待機':'s-st-draft','対応中':'s-st-active','完了':'s-st-done','提出済':'s-st-submit' };
+  const wfCls = {
+    '未対応':'s-st-draft','アポ済':'s-st-apo','対応中':'s-st-active',
+    '施工指示あり':'s-st-order','見積提出済':'s-st-submit',
+    '長期連絡なし':'s-st-lost','完了':'s-st-done',
+    // 旧値の互換
+    '待機':'s-st-draft','提出済':'s-st-submit'
+  };
   el.innerHTML = items.map((p,i)=>{
     const r = p.repair || {};
     const cat = p.clientCat || autoDetectClientCat(p);
@@ -991,7 +1004,8 @@ function renderRepairList(){
           <span class="rep-no">${i+1}</span>
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
           <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
-          <span class="rep-st ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
+          <span class="rep-st rep-st-readonly ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
+          <span class="rep-st rep-st-wf ${wfCls[wf]||'s-st-draft'}" data-wf="1">${esc(wf||'未対応')}</span>
         </div>
         ${hasRow2?`
         <div class="rep-row2">
@@ -1003,11 +1017,11 @@ function renderRepairList(){
   }).join('');
   el.querySelectorAll('.rep-card').forEach(c=>{
     c.onclick = (e)=>{
-      // ステータスピルをタップした時はポップオーバー、それ以外は編集シート
-      const stEl = e.target.closest('.rep-st');
-      if(stEl){
+      // 進行ピルをタップした時はポップオーバー(workflowStatus変更)
+      const wfEl = e.target.closest('.rep-st-wf');
+      if(wfEl){
         e.stopPropagation();
-        openStatusPop(c.dataset.id);
+        openWorkflowPop(c.dataset.id);
         return;
       }
       openRepairSheet(c.dataset.id);
@@ -1664,21 +1678,23 @@ function deleteProp(){
   save(); closePropSheet(); showList();
 }
 
-/* ===== ステータス即変更ポップオーバー (修繕用) ===== */
+/* ===== 進行ステータス即変更ポップオーバー (修繕用) ===== */
 let _stPopTargetId = null;
-function openStatusPop(propId){
+function openWorkflowPop(propId){
   _stPopTargetId = propId;
   const p = state.properties.find(x=>x.id===propId);
   if(!p) return;
   const r = p.repair || {};
   document.getElementById('st-pop-title').textContent = (p.name||'(無題)') + (p.room?` ${p.room}`:'');
-  document.getElementById('st-pop-sub').textContent = 'タップで即変更・自動保存';
+  document.getElementById('st-pop-sub').textContent = '進行をタップで即変更・自動保存';
   // 現状の選択をハイライト
-  document.querySelectorAll('#st-pop-status button').forEach(b=>{
-    b.classList.toggle('on', b.dataset.s === (r.status||'対応中'));
+  document.querySelectorAll('#st-pop-workflow button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'待機'));
   });
   document.getElementById('st-pop-bg').classList.add('on');
 }
+// 旧名互換(他から呼ばれてる場合のため)
+function openStatusPop(propId){ openWorkflowPop(propId); }
 function closeStatusPop(){
   document.getElementById('st-pop-bg').classList.remove('on');
   _stPopTargetId = null;
@@ -1690,8 +1706,7 @@ async function applyStatusFromPop(field, value){
   if(!p.repair) p.repair = {};
   p.repair[field] = value;
   // ハイライト更新
-  const grid = field === 'status' ? '#st-pop-status' : '#st-pop-workflow';
-  document.querySelectorAll(`${grid} button`).forEach(b=>{
+  document.querySelectorAll(`#st-pop-workflow button`).forEach(b=>{
     b.classList.toggle('on', b.dataset.s === value);
   });
   save();
@@ -1711,11 +1726,11 @@ async function applyStatusFromPop(field, value){
 }
 // ポップオーバー外をタップで閉じる
 document.getElementById('st-pop-bg').onclick = closeStatusPop;
-document.getElementById('st-pop-status').addEventListener('click', e=>{
+document.getElementById('st-pop-workflow').addEventListener('click', e=>{
   const b = e.target.closest('button[data-s]');
   if(!b) return;
   e.stopPropagation();
-  applyStatusFromPop('status', b.dataset.s);
+  applyStatusFromPop('workflowStatus', b.dataset.s);
 });
 
 /* ===== 修繕・アフター 編集シート ===== */
@@ -1737,23 +1752,36 @@ function openRepairSheet(propId){
   val('rs-sales', r.salesRep || '');
   val('rs-contact', r.contactPerson || '');
   val('rs-progress', r.creatorMemo || '');
-  val('rs-amount', r.amountExTax || '');
-  setPicker('rs-clientcat', (p?.clientCat) || autoDetectClientCat(p||{}) || '山一地所');
-  setPicker('rs-status', r.status || '対応中');
-  document.getElementById('rs-delete').classList.toggle('hide', !propId);
+  // ステータスは表示のみ(編集はPC側 or カード上の進行ピル経由のみ)
+  const statusLabelMap = { '提出済':'見積提出済' };
+  const stCls = {
+    '下書き':'s-st-draft','対応中':'s-st-active','アポ済':'s-st-apo','提出済':'s-st-submit',
+    '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
+  };
+  const currentSt = r.status || '対応中';
+  const stLabel = statusLabelMap[currentSt] || currentSt;
+  document.getElementById('rs-status-display').innerHTML =
+    `<span class="rep-st ${stCls[currentSt]||'s-st-active'}" style="cursor:default">${esc(stLabel)}</span>`;
+  setPicker('rs-workflow', r.workflowStatus || '未対応');
+  // 元請けタグ表示 (読み取り専用)
+  const cat = (p?.clientCat) || autoDetectClientCat(p||{}) || 'その他';
+  const tagClsMap = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
+  const tagShortMap = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat};
+  const cls = tagClsMap[cat] || 'c4';
+  const tagShort = tagShortMap[cat] || cat;
+  document.getElementById('rs-clienttag-area').innerHTML =
+    `<span class="rep-tag ${cls}" style="font-size:11px">${esc(tagShort)}</span> 元請け`;
   document.getElementById('sheet-repair').classList.add('on');
 }
 function closeRepairSheet(){ document.getElementById('sheet-repair').classList.remove('on'); }
 async function saveRepairSheet(){
   const name = val('rs-name').trim();
   if(!name){ alert('物件名を入力してください'); return; }
-  const status = getPicker('rs-status') || '対応中';
-  // 既存の workflowStatus を保持。無ければ status から自動推定
   const existing = editingPropId ? state.properties.find(x=>x.id===editingPropId) : null;
-  const wfFromStatus = (status==='完了') ? '完了'
-    : (['下書き','失注','キャンセル'].includes(status)) ? '待機'
-    : '対応中';
-  const workflowStatus = existing?.repair?.workflowStatus || wfFromStatus;
+  // ステータスは編集不可。既存値を保持(無ければ「対応中」)
+  const status = existing?.repair?.status || '対応中';
+  // 進行は picker から取得
+  const workflowStatus = getPicker('rs-workflow') || '待機';
   const repair = {
     status,
     workflowStatus,
@@ -1765,9 +1793,10 @@ async function saveRepairSheet(){
     salesRep: val('rs-sales').trim(),         // 営業担当 → meta.atenaTantou
     contactPerson: val('rs-contact').trim(),  // 連絡者 → meta.taikyo.tachiaiPerson
     creatorMemo: val('rs-progress').trim(),   // 進捗詳細 → meta.creatorMemo
-    amountExTax: +val('rs-amount') || 0,      // タスクマネージャー独自 → tmRepair
+    amountExTax: existing?.repair?.amountExTax || 0,  // 編集UIから消したので既存値を保持
   };
-  const clientCat = getPicker('rs-clientcat') || '山一地所';
+  // 元請けカテゴリは編集不可。既存値 or 自動判定を維持
+  const clientCat = (existing?.clientCat) || autoDetectClientCat(existing||{}) || '山一地所';
   const data = {
     name, room: val('rs-room').trim(),
     address: val('rs-address').trim(),
@@ -2194,7 +2223,7 @@ function applyGasSync(payload){
     if(isRepairItem){
       repairField = {
         status:         p.status || '対応中',
-        workflowStatus: p.workflowStatus || '待機',
+        workflowStatus: p.workflowStatus || '未対応',
         requestDate:    p.requestDate || '',
         responseDate:   p.responseDate || '',
         customerName:   p.customerName || '',
@@ -2675,27 +2704,37 @@ document.getElementById('im-reset').onclick = ()=>{
   alert('クリア完了。↻ボタンでGAS同期してください。');
 };
 
+function setSyncIcon(mode){
+  const icon = document.getElementById('sync-icon');
+  if(!icon) return;
+  icon.classList.remove('syncing','ok','err');
+  if(mode) icon.classList.add(mode);
+}
 document.getElementById('btn-refresh').onclick = async ()=>{
   if(!settings.gasUrl){
     alert('GAS URLが未設定です。⬇ ボタンからURLを設定してください。');
     return;
   }
+  const btn = document.getElementById('btn-refresh');
   try {
-    const btn = document.getElementById('btn-refresh');
-    btn.style.opacity = '0.5';
     btn.style.pointerEvents = 'none';
+    setSyncIcon('syncing');
     const payload = await gasFetchSync(settings.gasUrl);
     if(!payload.properties || !payload.properties.length){
+      setSyncIcon('err');
       alert('物件データが0件でした。');
+      setTimeout(()=>setSyncIcon(null), 2000);
       return;
     }
     const {upd, add} = applyGasSync(payload);
+    setSyncIcon('ok');
+    setTimeout(()=>setSyncIcon(null), 2500);
     alert(`同期完了: 更新 ${upd}件 / 新規 ${add}件`);
   } catch(e) {
+    setSyncIcon('err');
+    setTimeout(()=>setSyncIcon(null), 3500);
     alert('同期失敗: ' + e.message);
   } finally {
-    const btn = document.getElementById('btn-refresh');
-    btn.style.opacity = '1';
     btn.style.pointerEvents = 'auto';
   }
 };
@@ -2722,7 +2761,6 @@ document.getElementById('sheet-prop').onclick = closePropSheet;
 // repair sheet
 document.getElementById('rs-cancel').onclick = closeRepairSheet;
 document.getElementById('rs-save').onclick = saveRepairSheet;
-document.getElementById('rs-delete').onclick = deleteRepairProp;
 document.getElementById('sheet-repair').onclick = closeRepairSheet;
 // comment sheet
 document.getElementById('cs-cancel').onclick = closeCommentSheet;
@@ -2788,16 +2826,21 @@ async function autoSyncOnBoot(){
   if(!settings.gasUrl) return;
   const btn = document.getElementById('btn-refresh');
   try {
-    if(btn){ btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; btn.textContent = '⟳'; }
+    if(btn){ btn.style.pointerEvents = 'none'; }
+    setSyncIcon('syncing');
     const payload = await gasFetchSync(settings.gasUrl);
     if(payload && payload.properties && payload.properties.length){
       applyGasSync(payload);
       showList();
     }
+    setSyncIcon('ok');
+    setTimeout(()=>setSyncIcon(null), 1500);
   } catch(e) {
     console.warn('auto sync failed:', e);
+    setSyncIcon('err');
+    setTimeout(()=>setSyncIcon(null), 2500);
   } finally {
-    if(btn){ btn.style.opacity = '1'; btn.style.pointerEvents = 'auto'; btn.textContent = '↻'; }
+    if(btn){ btn.style.pointerEvents = 'auto'; }
   }
 }
 autoSyncOnBoot();

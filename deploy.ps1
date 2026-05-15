@@ -51,6 +51,29 @@ Copy-IfExists (Join-Path $srcZaiko "index.html") "zaiko\index.html"
 
 Write-Host ""
 
+# ===== 1.5. パスワードゲート script を各 index.html / .html に差し込む =====
+Write-Host "[1.5/4] パスワードゲートを差し込み..."
+$gateTag = '<script src="/gate.js" defer></script>'
+$targets = @(
+    "index.html",
+    "mitsumori\index.html","mitsumori\sales.html","mitsumori\invoice.html","mitsumori\progress.html",
+    "task-manager\index.html",
+    "zaiko\index.html"
+)
+foreach ($t in $targets) {
+    if (-not (Test-Path $t)) { continue }
+    $content = Get-Content -Raw -Path $t -Encoding UTF8
+    # 既に差し込み済みならスキップ
+    if ($content -match '/gate\.js') { continue }
+    # </head> の直前に挿入
+    $new = $content -replace '</head>', "$gateTag`r`n</head>"
+    if ($new -ne $content) {
+        Set-Content -Path $t -Value $new -Encoding UTF8 -NoNewline
+        Write-Host "  [OK] $t に gate.js 追加"
+    }
+}
+Write-Host ""
+
 # ===== 2. git status =====
 Write-Host "[2/4] 変更ファイルの確認..."
 Write-Host ""
