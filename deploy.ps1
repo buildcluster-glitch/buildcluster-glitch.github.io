@@ -22,25 +22,14 @@ Write-Host "[1/4] ローカルの最新ファイルをコピー中..."
 Write-Host ""
 
 $desktop = [Environment]::GetFolderPath("Desktop")
-$srcMitsumori = Join-Path $desktop "見積作成アプリ_electron\src"
-$srcTaskmgr   = Join-Path $desktop "工事タスクマネージャー"
-$srcZaiko     = Join-Path $desktop "在庫管理アプリ"
+$srcTaskmgr = Join-Path $desktop "工事タスクマネージャー"
+$srcZaiko   = Join-Path $desktop "在庫管理アプリ"
 
 function Copy-IfExists($src, $dst) {
     if (Test-Path $src) {
         Copy-Item -Force $src $dst
         Write-Host "  [OK] $dst"
     }
-}
-
-# 見積アプリ
-$mitsumoriFiles = @(
-    "index.html","sales.html","invoice.html","progress.html",
-    "bukken.js","data.js","templates.js",
-    "hiroidashi_template.js","suido_templates.js"
-)
-foreach ($f in $mitsumoriFiles) {
-    Copy-IfExists (Join-Path $srcMitsumori $f) "mitsumori\$f"
 }
 
 # 工事タスクマネージャー
@@ -56,7 +45,6 @@ Write-Host "[1.5/4] パスワードゲートを差し込み..."
 $gateTag = '<script src="/gate.js" defer></script>'
 $targets = @(
     "index.html",
-    "mitsumori\index.html","mitsumori\sales.html","mitsumori\invoice.html","mitsumori\progress.html",
     "task-manager\index.html",
     "zaiko\index.html"
 )
