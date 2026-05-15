@@ -93,6 +93,24 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# push 前にリモートの差分を取り込む(別端末/Web編集で先に commit されてた場合の保険)
+Write-Host ""
+Write-Host "  リモートとの整合チェック (git pull --rebase)..."
+& git pull --rebase origin main
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "  [NG] rebase でコンフリクト発生" -ForegroundColor Red
+    Write-Host "  手動で解決してください:"
+    Write-Host "    1. コンフリクトしたファイルを編集"
+    Write-Host "    2. git add <ファイル>"
+    Write-Host "    3. git rebase --continue"
+    Write-Host "  または中止:"
+    Write-Host "    git rebase --abort"
+    Write-Host ""
+    Read-Host "Enter で終了"
+    exit 1
+}
+
 & git push origin main
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
