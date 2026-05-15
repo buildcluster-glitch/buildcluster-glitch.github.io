@@ -222,7 +222,23 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px}
   .rep-amount{font-size:11px;font-weight:600;color:var(--ink);flex-shrink:0}
   .rep-st{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;
-    font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap}
+    font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap;cursor:pointer}
+  .rep-st:hover{outline:1px solid var(--accent)}
+
+  /* ステータス変更ポップオーバー */
+  .st-pop-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:90;
+    display:none;align-items:center;justify-content:center;padding:14px}
+  .st-pop-bg.on{display:flex}
+  .st-pop{background:#fff;border-radius:14px;padding:14px;max-width:340px;width:100%;
+    box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  .st-pop h4{margin:0 0 4px;font-size:13px}
+  .st-pop .st-pop-sub{font-size:11px;color:var(--mute);margin-bottom:10px}
+  .st-pop .st-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .st-pop .st-grid button{padding:8px 4px;border-radius:8px;font-size:11px;font-weight:600;
+    border:1px solid var(--line);background:#fff;color:var(--ink)}
+  .st-pop .st-grid button.on{outline:2px solid var(--accent)}
+  .st-pop .st-section-title{font-size:11px;color:var(--mute);font-weight:700;
+    margin:10px 0 4px;letter-spacing:.3px}
   .rep-addr{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rep-cust{flex-shrink:0;color:var(--ink);font-weight:500}
   .rep-tel{color:var(--accent);font-weight:600;flex-shrink:0}
@@ -514,6 +530,32 @@
       <button class="btn-ghost" id="ps-cancel">キャンセル</button>
       <button class="btn-danger hide" id="ps-delete">削除</button>
       <button class="btn-primary" id="ps-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== STATUS POPOVER (ステータス即変更) ========== -->
+<div class="st-pop-bg" id="st-pop-bg">
+  <div class="st-pop" onclick="event.stopPropagation()">
+    <h4 id="st-pop-title">ステータス変更</h4>
+    <div class="st-pop-sub" id="st-pop-sub"></div>
+    <div class="st-section-title">📍 ステータス</div>
+    <div class="st-grid" id="st-pop-status">
+      <button data-s="下書き">下書き</button>
+      <button data-s="対応中">対応中</button>
+      <button data-s="アポ済">アポ済</button>
+      <button data-s="提出済">見積提出済</button>
+      <button data-s="受注">受注</button>
+      <button data-s="施工指示あり">施工指示あり</button>
+      <button data-s="完了">完了</button>
+      <button data-s="失注">失注</button>
+      <button data-s="キャンセル">キャンセル</button>
+    </div>
+    <div class="st-section-title">⏱ 進行</div>
+    <div class="st-grid" id="st-pop-workflow" style="grid-template-columns:repeat(3,1fr)">
+      <button data-s="待機">待機</button>
+      <button data-s="対応中">対応中</button>
+      <button data-s="完了">完了</button>
     </div>
   </div>
 </div>
@@ -972,7 +1014,16 @@ function renderRepairList(){
       </div>`;
   }).join('');
   el.querySelectorAll('.rep-card').forEach(c=>{
-    c.onclick = ()=>openRepairSheet(c.dataset.id);
+    c.onclick = (e)=>{
+      // ステータスピルをタップした時はポップオーバー、それ以外は編集シート
+      const stEl = e.target.closest('.rep-st');
+      if(stEl){
+        e.stopPropagation();
+        openStatusPop(c.dataset.id);
+        return;
+      }
+      openRepairSheet(c.dataset.id);
+    };
   });
 }
 
@@ -1624,6 +1675,69 @@ function deleteProp(){
   state.properties = state.properties.filter(x=>x.id!==editingPropId);
   save(); closePropSheet(); showList();
 }
+
+/* ===== ステータス即変更ポップオーバー (修繕用) ===== */
+let _stPopTargetId = null;
+function openStatusPop(propId){
+  _stPopTargetId = propId;
+  const p = state.properties.find(x=>x.id===propId);
+  if(!p) return;
+  const r = p.repair || {};
+  document.getElementById('st-pop-title').textContent = (p.name||'(無題)') + (p.room?` ${p.room}`:'');
+  document.getElementById('st-pop-sub').textContent = 'タップで即変更・自動保存';
+  // 現状の選択をハイライト
+  document.querySelectorAll('#st-pop-status button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.s === (r.status||'対応中'));
+  });
+  document.querySelectorAll('#st-pop-workflow button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'待機'));
+  });
+  document.getElementById('st-pop-bg').classList.add('on');
+}
+function closeStatusPop(){
+  document.getElementById('st-pop-bg').classList.remove('on');
+  _stPopTargetId = null;
+}
+async function applyStatusFromPop(field, value){
+  if(!_stPopTargetId) return;
+  const p = state.properties.find(x=>x.id===_stPopTargetId);
+  if(!p) return;
+  if(!p.repair) p.repair = {};
+  p.repair[field] = value;
+  // ハイライト更新
+  const grid = field === 'status' ? '#st-pop-status' : '#st-pop-workflow';
+  document.querySelectorAll(`${grid} button`).forEach(b=>{
+    b.classList.toggle('on', b.dataset.s === value);
+  });
+  save();
+  renderList();
+  // Drive にも push
+  if(settings.gasUrl && settings.gasToken){
+    try {
+      const r = await pushRepairToLedger(p);
+      if(r && r.fileId){
+        p._driveFileId = r.fileId;
+        p._driveMonth = r.month || '';
+        p._driveSavedAt = new Date().toISOString();
+        save();
+      }
+    } catch(e){ console.warn('Drive push failed', e); }
+  }
+}
+// ポップオーバー外をタップで閉じる
+document.getElementById('st-pop-bg').onclick = closeStatusPop;
+document.getElementById('st-pop-status').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-s]');
+  if(!b) return;
+  e.stopPropagation();
+  applyStatusFromPop('status', b.dataset.s);
+});
+document.getElementById('st-pop-workflow').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-s]');
+  if(!b) return;
+  e.stopPropagation();
+  applyStatusFromPop('workflowStatus', b.dataset.s);
+});
 
 /* ===== 修繕・アフター 編集シート ===== */
 const REPAIR_STATUSES = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','完了','失注','キャンセル'];
