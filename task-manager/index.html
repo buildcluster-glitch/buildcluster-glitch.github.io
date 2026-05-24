@@ -559,13 +559,10 @@
     <h4 id="st-pop-title">進行ステータス変更</h4>
     <div class="st-pop-sub" id="st-pop-sub"></div>
     <div class="st-grid" id="st-pop-workflow" style="grid-template-columns:repeat(2,1fr)">
-      <button data-s="未対応">未対応</button>
-      <button data-s="アポ済">アポ済</button>
-      <button data-s="対応中">対応中</button>
-      <button data-s="施工指示あり">施工指示あり</button>
-      <button data-s="見積提出済">見積提出済</button>
+      <button data-s="アポ・手配 未">アポ・手配 未</button>
+      <button data-s="アポ・手配 済">アポ・手配 済</button>
+      <button data-s="待機">待機</button>
       <button data-s="長期連絡なし">長期連絡なし</button>
-      <button data-s="完了" style="grid-column:1/-1">完了</button>
     </div>
   </div>
 </div>
@@ -599,14 +596,11 @@
       <div id="rs-status-display" style="padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-weight:600">—</div>
     </div>
     <div class="field"><label>進行</label>
-      <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(3,1fr)">
-        <button data-s="未対応">未対応</button>
-        <button data-s="アポ済">アポ済</button>
-        <button data-s="対応中">対応中</button>
-        <button data-s="施工指示あり">施工指示あり</button>
-        <button data-s="見積提出済">見積提出済</button>
+      <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(2,1fr)">
+        <button data-s="アポ・手配 未">アポ・手配 未</button>
+        <button data-s="アポ・手配 済">アポ・手配 済</button>
+        <button data-s="待機">待機</button>
         <button data-s="長期連絡なし">長期連絡なし</button>
-        <button data-s="完了">完了</button>
       </div>
     </div>
     <div class="field"><label>進捗詳細メモ</label><textarea id="rs-progress" rows="2" placeholder="現状や次のアクション等"></textarea></div>
@@ -641,6 +635,13 @@
           <option value="restoration">原状回復のみ</option>
           <option value="repair">修繕のみ(原状回復以外)</option>
         </select>
+      </div>
+      <div class="field" style="margin-bottom:8px">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:normal;">
+          <input type="checkbox" id="im-gas-auto-sync" style="width:auto; margin:0;">
+          <span>バックグラウンドで自動同期(5分ごと + ウィンドウ復帰時)</span>
+        </label>
+        <p style="font-size:11px;color:var(--mute);margin:4px 0 0 22px">カレンダーアプリ側で最終確認日を変更した時に自動取込み。OFFにすると手動「GAS同期」のみ</p>
       </div>
       <div class="actions" style="margin:0">
         <button class="btn-ghost" id="im-gas-test">疎通確認</button>
@@ -737,6 +738,7 @@ let settings = loadSettings();
 if(!settings.users) settings.users = ['木村 優作','大村 将史','南部 大我','鈴木 悠平','最上 登生','山田 裕貴'];
 if(settings.currentUser===undefined) settings.currentUser = '';
 if(settings.gasUrl===undefined) settings.gasUrl = '';
+if(settings.autoSyncEnabled===undefined) settings.autoSyncEnabled = true;
 saveSettings();
 let state = load() || seed();
 let currentPropId = null;
@@ -971,16 +973,22 @@ function renderRepairList(){
   }
   const tagClass = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
   const statusCls = {
-    '下書き':'s-st-draft','対応中':'s-st-active','アポ済':'s-st-apo','提出済':'s-st-submit',
-    '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
+    // 新値 (v1.4.120〜)
+    '下書き':'s-st-draft','見積作成中':'s-st-active','提出済':'s-st-submit',
+    '受注（工事指示有）':'s-st-won','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel',
+    // 旧値の互換 (見積アプリで未マイグレの古いデータ用)
+    '対応中':'s-st-active','アポ済':'s-st-apo','受注':'s-st-won','施工指示あり':'s-st-order'
   };
-  const statusLabels = { '提出済':'見積提出済' }; // PC側表示と統一
+  const statusLabels = {
+    '提出済':'見積提出済',  // PC側表示と統一
+  };
   const wfCls = {
-    '未対応':'s-st-draft','アポ済':'s-st-apo','対応中':'s-st-active',
-    '施工指示あり':'s-st-order','見積提出済':'s-st-submit',
-    '長期連絡なし':'s-st-lost','完了':'s-st-done',
+    // 新値 (v1.4.120〜)
+    'アポ・手配 未':'s-st-draft','アポ・手配 済':'s-st-apo','待機':'s-st-active',
+    '長期連絡なし':'s-st-lost','-':'s-st-done','完了':'s-st-done',
     // 旧値の互換
-    '待機':'s-st-draft','提出済':'s-st-submit'
+    '未対応':'s-st-draft','アポ済':'s-st-apo','対応中':'s-st-active',
+    '施工指示あり':'s-st-order','見積提出済':'s-st-submit','提出済':'s-st-submit'
   };
   el.innerHTML = items.map((p,i)=>{
     const r = p.repair || {};
@@ -988,7 +996,7 @@ function renderRepairList(){
     const cls = tagClass[cat] || 'c4';
     const tagShort = {'山一地所':'山一','みどり不動産':'みどり','自社工事':'自社','その他':cat}[cat] || cat;
     const amount = r.amountExTax ? `¥${(Number(r.amountExTax)/10000).toFixed(0)}万` : '';
-    const status = r.status || '対応中';
+    const status = r.status || '見積作成中';
     const statusLabel = statusLabels[status] || status;
     const wf = r.workflowStatus || '';
     // 2行表示
@@ -1005,7 +1013,7 @@ function renderRepairList(){
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
           <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
           <span class="rep-st rep-st-readonly ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
-          <span class="rep-st rep-st-wf ${wfCls[wf]||'s-st-draft'}" data-wf="1">${esc(wf||'未対応')}</span>
+          <span class="rep-st rep-st-wf ${wfCls[wf]||'s-st-draft'}" data-wf="1">${esc(wf||'アポ・手配 未')}</span>
         </div>
         ${hasRow2?`
         <div class="rep-row2">
@@ -1689,7 +1697,7 @@ function openWorkflowPop(propId){
   document.getElementById('st-pop-sub').textContent = '進行をタップで即変更・自動保存';
   // 現状の選択をハイライト
   document.querySelectorAll('#st-pop-workflow button').forEach(b=>{
-    b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'待機'));
+    b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'アポ・手配 未'));
   });
   document.getElementById('st-pop-bg').classList.add('on');
 }
@@ -1734,7 +1742,8 @@ document.getElementById('st-pop-workflow').addEventListener('click', e=>{
 });
 
 /* ===== 修繕・アフター 編集シート ===== */
-const REPAIR_STATUSES = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','完了','失注','キャンセル'];
+// v1.4.120〜 営業ステータス簡素化 (旧値は互換のため受け入れるが新規選択肢は新値のみ)
+const REPAIR_STATUSES = ['下書き','見積作成中','提出済','受注（工事指示有）','完了','失注','キャンセル'];
 function openRepairSheet(propId){
   editingPropId = propId || null;
   const p = propId ? state.properties.find(x=>x.id===propId) : null;
@@ -1754,15 +1763,18 @@ function openRepairSheet(propId){
   val('rs-progress', r.creatorMemo || '');
   // ステータスは表示のみ(編集はPC側 or カード上の進行ピル経由のみ)
   const statusLabelMap = { '提出済':'見積提出済' };
-  const stCls = {
-    '下書き':'s-st-draft','対応中':'s-st-active','アポ済':'s-st-apo','提出済':'s-st-submit',
-    '受注':'s-st-won','施工指示あり':'s-st-order','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel'
+  // v1.4.120〜の statusCls 更新
+  const stClsMap = {
+    '下書き':'s-st-draft','見積作成中':'s-st-active','提出済':'s-st-submit',
+    '受注（工事指示有）':'s-st-won','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel',
+    // 旧互換
+    '対応中':'s-st-active','アポ済':'s-st-apo','受注':'s-st-won','施工指示あり':'s-st-order'
   };
-  const currentSt = r.status || '対応中';
+  const currentSt = r.status || '見積作成中';
   const stLabel = statusLabelMap[currentSt] || currentSt;
   document.getElementById('rs-status-display').innerHTML =
-    `<span class="rep-st ${stCls[currentSt]||'s-st-active'}" style="cursor:default">${esc(stLabel)}</span>`;
-  setPicker('rs-workflow', r.workflowStatus || '未対応');
+    `<span class="rep-st ${stClsMap[currentSt]||'s-st-active'}" style="cursor:default">${esc(stLabel)}</span>`;
+  setPicker('rs-workflow', r.workflowStatus || 'アポ・手配 未');
   // 元請けタグ表示 (読み取り専用)
   const cat = (p?.clientCat) || autoDetectClientCat(p||{}) || 'その他';
   const tagClsMap = {'山一地所':'c1','みどり不動産':'c2','自社工事':'c3','その他':'c4'};
@@ -1778,10 +1790,10 @@ async function saveRepairSheet(){
   const name = val('rs-name').trim();
   if(!name){ alert('物件名を入力してください'); return; }
   const existing = editingPropId ? state.properties.find(x=>x.id===editingPropId) : null;
-  // ステータスは編集不可。既存値を保持(無ければ「対応中」)
-  const status = existing?.repair?.status || '対応中';
+  // ステータスは編集不可。既存値を保持(無ければ「見積作成中」)
+  const status = existing?.repair?.status || '見積作成中';
   // 進行は picker から取得
-  const workflowStatus = getPicker('rs-workflow') || '待機';
+  const workflowStatus = getPicker('rs-workflow') || 'アポ・手配 未';
   const repair = {
     status,
     workflowStatus,
@@ -1859,8 +1871,8 @@ async function pushRepairToLedger(p){
       roomNo: p.room || '',
       shozaichi: p.address || '',
       kojiName: '修繕工事',
-      status: r.status || '対応中',                  // 9種類のステータス
-      workflowStatus: r.workflowStatus || '対応中',
+      status: r.status || '見積作成中',               // v1.4.120〜 新ステータス体系
+      workflowStatus: r.workflowStatus || 'アポ・手配 未',
       isConfirmed: false,
       isTemplate: false,
       atena: motouke,
@@ -2200,7 +2212,7 @@ async function gasPing(url){
 }
 
 function applyGasSync(payload){
-  let upd=0, add=0, skipped=0;
+  let upd=0, add=0, skipped=0, finalDateChanges=0;
   payload.properties.forEach(p=>{
     // estimateId 優先 → driveFileId → 物件名+号室 でマッチ
     let existing = null;
@@ -2215,15 +2227,23 @@ function applyGasSync(payload){
        new Date(existing._lastSyncedAt) > new Date(p.updatedAt)){
       skipped++; return;
     }
+    // 差分検出: 最終確認日(finalDate ← finalCheckDate)が変わったかをカウント
+    const oldFinalDate = String(existing?.finalDate || '').trim();
+    const newFinalDate = String(p.finalDate || '').trim();
     // 修繕案件の repair フィールド構築 (PC側 progress.html と同期)
-    const ACTIVE_REPAIR = ['対応中','アポ済','提出済','受注','施工指示あり'];
+    // v1.4.120〜 新ステータス体系 + 旧値の互換
+    const ACTIVE_REPAIR = [
+      '見積作成中','提出済','受注（工事指示有）',         // 新
+      '対応中','アポ済','受注','施工指示あり'              // 旧(マイグレ前データ用)
+    ];
+    const ACTIVE_WORKFLOW = ['アポ・手配 済','待機','対応中']; // 新+旧
     const isRepairItem = (p.kojiName && p.kojiName !== '原状回復工事') &&
-                         (ACTIVE_REPAIR.includes(p.status) || p.workflowStatus === '対応中');
+                         (ACTIVE_REPAIR.includes(p.status) || ACTIVE_WORKFLOW.includes(p.workflowStatus));
     let repairField = null;
     if(isRepairItem){
       repairField = {
-        status:         p.status || '対応中',
-        workflowStatus: p.workflowStatus || '未対応',
+        status:         p.status || '見積作成中',
+        workflowStatus: p.workflowStatus || 'アポ・手配 未',
         requestDate:    p.requestDate || '',
         responseDate:   p.responseDate || '',
         customerName:   p.customerName || '',
@@ -2270,6 +2290,8 @@ function applyGasSync(payload){
       syncTasks(existing, p.tasks || [], p.contractors || []);
       if(p.progress) applyProgressFromServer(existing, p.progress);
       upd++;
+      // 既存案件: oldFinalDate と newFinalDate が違えばカウント
+      if(oldFinalDate !== newFinalDate) finalDateChanges++;
     } else {
       const np = Object.assign(
         {id:uid(),layout:'',address:'',mgmt:'',moveout:'',entKey:'',entCode:'',tel:'',parking:'',finalBy:'',tasks:[],comments:[]},
@@ -2279,12 +2301,18 @@ function applyGasSync(payload){
       if(p.progress) applyProgressFromServer(np, p.progress);
       state.properties.unshift(np);
       add++;
+      // 新規案件: 最終確認日が入っていればカウント(新しい情報なので)
+      if(newFinalDate) finalDateChanges++;
     }
   });
   // ===== リコンサイル: payload に含まれない Drive 由来案件をローカルから除去 =====
   // (PC側でゴミ箱に移動された案件は GAS の filter で payload から弾かれるので、
   //  ローカルにのみ残ったままになる。それを掃除する)
-  const ACTIVE_REPAIR_RC = ['対応中','アポ済','提出済','受注','施工指示あり'];
+  // v1.4.120〜 新+旧両方
+  const ACTIVE_REPAIR_RC = [
+    '見積作成中','提出済','受注（工事指示有）',
+    '対応中','アポ済','受注','施工指示あり'
+  ];
   const receivedFileIds = new Set(
     (payload.properties||[])
       .map(p => p.driveFileId)
@@ -2307,7 +2335,8 @@ function applyGasSync(payload){
     const koji = (p.kojiName||'').trim();
     const isRestoration = !!p.isRestoration || koji === '原状回復工事';
     const isRepairActive = !isRestoration && koji !== '' && koji !== '原状回復工事' &&
-      (ACTIVE_REPAIR_RC.includes(p.repair?.status) || p.repair?.workflowStatus === '対応中');
+      (ACTIVE_REPAIR_RC.includes(p.repair?.status) ||
+       ['アポ・手配 済','待機','対応中'].includes(p.repair?.workflowStatus));
     if(kojiFilter === 'restoration' && !isRestoration) return true;
     if(kojiFilter === 'repair' && !isRepairActive) return true;
     // ここまで来た = 同期スコープ内で payload に居ない = PC側で削除/ゴミ箱化 → 除去
@@ -2316,7 +2345,7 @@ function applyGasSync(payload){
   });
   save();
   renderList();
-  return {upd, add, skipped, removed};
+  return {upd, add, skipped, removed, finalDateChanges};
 }
 
 // カテゴリ正規化（GAS側が「外注/自社/減工事」の日本語ラベルで返してくる）
@@ -2407,6 +2436,7 @@ async function runGasSync(){
   settings.gasToken = token;
   settings.gasKojiFilter = kojiFilter;
   settings.gasMode = 'estimate-app';
+  settings.autoSyncEnabled = !!document.getElementById('im-gas-auto-sync').checked;
   saveSettings();
   try {
     const payload = await gasFetchSync(url);
@@ -2510,6 +2540,7 @@ function openImportSheet(){
   val('im-gas-url', settings.gasUrl||'');
   val('im-gas-token', settings.gasToken||'');
   val('im-gas-koji-filter', settings.gasKojiFilter||'all');
+  document.getElementById('im-gas-auto-sync').checked = settings.autoSyncEnabled !== false;
   document.getElementById('im-preview').classList.add('hide');
   importParsed = null;
   document.getElementById('sheet-import').classList.add('on');
@@ -2689,6 +2720,11 @@ document.getElementById('im-back').onclick = ()=>{
 };
 document.getElementById('im-gas-sync').onclick = runGasSync;
 document.getElementById('im-gas-test').onclick = runGasPing;
+// 自動同期チェックボックスはトグルした瞬間に保存(同期ボタンを押さなくても効く)
+document.getElementById('im-gas-auto-sync').onchange = e => {
+  settings.autoSyncEnabled = !!e.target.checked;
+  saveSettings();
+};
 document.getElementById('im-reset').onclick = ()=>{
   if(!confirm('この端末のローカルデータを全てクリアします。\nGAS URLと設定は保持されます。\n\nよろしいですか？')) return;
   var gasUrl = settings.gasUrl;
@@ -2821,17 +2857,57 @@ migrateStatus();
 // ヘッダーのチェック者ラベルを反映
 updateUserLabel();
 
-// 起動時にGAS同期を自動実行（サイレント・エラー時のみ表示）
-async function autoSyncOnBoot(){
+// 自動同期トースト(右下・自動非表示)。type: 'syncing'|'success'|'error'
+function showAutoSyncToast(text, type){
+  let el = document.getElementById('auto-sync-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'auto-sync-toast';
+    el.style.cssText = 'position:fixed; bottom:20px; right:20px; padding:8px 14px; border-radius:6px; font-size:13px; z-index:9999; box-shadow:0 2px 8px rgba(0,0,0,0.15); transition:opacity 0.3s; pointer-events:none; opacity:0; max-width:320px; line-height:1.4; font-weight:600;';
+    document.body.appendChild(el);
+  }
+  const palette = {
+    syncing: { bg:'#dbeafe', fg:'#1e40af', bd:'#93c5fd' },
+    success: { bg:'#dcfce7', fg:'#166534', bd:'#86efac' },
+    error:   { bg:'#fee2e2', fg:'#991b1b', bd:'#fca5a5' },
+  }[type] || { bg:'#f3f4f6', fg:'#374151', bd:'#d1d5db' };
+  el.textContent = text;
+  el.style.background = palette.bg;
+  el.style.color = palette.fg;
+  el.style.border = '1px solid ' + palette.bd;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  if(type !== 'syncing'){
+    el._t = setTimeout(()=>{ el.style.opacity = '0'; }, type === 'success' ? 4000 : 3500);
+  }
+}
+function hideAutoSyncToast(){
+  const el = document.getElementById('auto-sync-toast');
+  if(el){ clearTimeout(el._t); el.style.opacity = '0'; }
+}
+
+// GAS自動同期。opts.showToast=true で「更新中…」+ 差分>0時に完了トースト表示
+async function autoSyncOnBoot(opts){
+  opts = opts || {};
   if(!settings.gasUrl) return;
   const btn = document.getElementById('btn-refresh');
   try {
     if(btn){ btn.style.pointerEvents = 'none'; }
     setSyncIcon('syncing');
+    if(opts.showToast) showAutoSyncToast('☁ 更新中...', 'syncing');
     const payload = await gasFetchSync(settings.gasUrl);
     if(payload && payload.properties && payload.properties.length){
-      applyGasSync(payload);
+      const r = applyGasSync(payload);
       showList();
+      if(opts.showToast){
+        if(r.finalDateChanges > 0){
+          showAutoSyncToast(`✅ 最終確認日が更新されました(${r.finalDateChanges}件)`, 'success');
+        } else {
+          hideAutoSyncToast();
+        }
+      }
+    } else if(opts.showToast){
+      hideAutoSyncToast();
     }
     setSyncIcon('ok');
     setTimeout(()=>setSyncIcon(null), 1500);
@@ -2839,29 +2915,38 @@ async function autoSyncOnBoot(){
     console.warn('auto sync failed:', e);
     setSyncIcon('err');
     setTimeout(()=>setSyncIcon(null), 2500);
+    if(opts.showToast) showAutoSyncToast(`✗ 同期失敗: ${e.message}`, 'error');
   } finally {
     if(btn){ btn.style.pointerEvents = 'auto'; }
   }
 }
+// 起動時はトースト無しでサイレント実行(初回ロード時の見え方優先)
 autoSyncOnBoot();
 
-// 1分ごとに自動同期 (タブが見えている時だけ実行)
-const AUTO_SYNC_INTERVAL_MS = 60 * 1000;
+// ========== 自動同期ポーリング & フォーカス検知 ==========
+// 仕様(2026-05-20):
+//   - 5分ごとにポーリング (タブ非表示時は止める / settings.autoSyncEnabled で無効化可)
+//   - window focus / visibilitychange(visible) でも同期
+//   - 30秒以内の連続実行はスロットル
+//   - 差分検出: 最終確認日(finalDate)が変わった件数を applyGasSync が返す
+//     カレンダーアプリ側で hatchuOrder.finalCheckDate を変更 → 自動取込み
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SYNC_THROTTLE_MS = 30 * 1000;
 let _lastAutoSyncAt = Date.now();
-setInterval(()=>{
-  if(document.visibilityState !== 'visible') return;
+function _shouldRunAutoSync(){
+  if(settings.autoSyncEnabled === false) return false;
+  if(document.visibilityState !== 'visible') return false;
+  if(Date.now() - _lastAutoSyncAt < AUTO_SYNC_THROTTLE_MS) return false;
+  return true;
+}
+function _triggerAutoSync(){
+  if(!_shouldRunAutoSync()) return;
   _lastAutoSyncAt = Date.now();
-  autoSyncOnBoot();
-}, AUTO_SYNC_INTERVAL_MS);
-
-// タブが再アクティブになった時(別アプリから戻った/別タブから戻った時)も同期
-// ただし直近30秒以内に同期済みなら省略(連打防止)
-document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState !== 'visible') return;
-  if(Date.now() - _lastAutoSyncAt < 30 * 1000) return;
-  _lastAutoSyncAt = Date.now();
-  autoSyncOnBoot();
-});
+  autoSyncOnBoot({ showToast: true });
+}
+setInterval(_triggerAutoSync, AUTO_SYNC_INTERVAL_MS);
+document.addEventListener('visibilitychange', _triggerAutoSync);
+window.addEventListener('focus', _triggerAutoSync);
 
 showList();
 </script>
