@@ -221,6 +221,11 @@
   .rep-row1{display:flex;align-items:center;gap:7px;flex-wrap:nowrap;min-width:0}
   .rep-row2{display:flex;align-items:center;gap:10px;margin-top:4px;
     font-size:11px;color:var(--mute);flex-wrap:nowrap;min-width:0}
+  .rep-row3{display:flex;align-items:center;gap:4px;margin-top:4px;
+    font-size:11px;color:#475569;min-width:0;
+    background:#f8fafc;border-left:3px solid var(--accent);padding:5px 8px;border-radius:4px}
+  .rep-row3 .rep-fulldoc{font-size:11px;flex-shrink:0;opacity:.7}
+  .rep-row3 .rep-shortdesc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
   .rep-no{font-size:10px;color:var(--mute);font-weight:700;min-width:18px;text-align:right;flex-shrink:0}
   .rep-tag{padding:1px 6px;border-radius:4px;font-size:10px;color:#fff;font-weight:700;flex-shrink:0}
   .rep-tag.c1{background:#0ea5e9}
@@ -586,7 +591,11 @@
       <div class="field"><label>お客様</label><input id="rs-customer"></div>
       <div class="field"><label>TEL</label><input id="rs-tel" type="tel"></div>
     </div>
-    <div class="field"><label>依頼内容</label><textarea id="rs-reqdesc" rows="3" placeholder="例: 浴室前のフローリング剥がれのため修繕依頼"></textarea></div>
+    <div class="field"><label>依頼内容 <span style="color:var(--mute);font-weight:400;font-size:11px">(ショート版)</span></label><textarea id="rs-reqdesc" rows="2" placeholder="例: 浴室前のフローリング剥がれのため修繕依頼"></textarea></div>
+    <div class="field" id="rs-reqdesc-full-field" style="display:none">
+      <label>📄 依頼内容（原文ママ） <span style="color:var(--mute);font-weight:400;font-size:11px">(PDF/メール抜粋・参照のみ)</span></label>
+      <div id="rs-reqdesc-full" style="padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:#334155"></div>
+    </div>
     <div class="field-row">
       <div class="field"><label>営業担当</label><input id="rs-sales"></div>
       <div class="field"><label>連絡者</label><input id="rs-contact"></div>
@@ -1006,6 +1015,10 @@ function renderRepairList(){
     const cust = r.customerName || '';
     const tel  = r.customerTel || '';
     const hasRow2 = addr || cust || tel;
+    const shortDesc = (r.requestDesc || '').trim();
+    const hasFullDesc = !!(r.requestDescFull && r.requestDescFull.trim());
+    // ショート版が空なら原文の冒頭をフォールバック表示
+    const descToShow = shortDesc || (hasFullDesc ? r.requestDescFull.slice(0, 30) + (r.requestDescFull.length > 30 ? '…' : '') : '');
     return `
       <div class="rep-card" data-id="${p.id}">
         <div class="rep-row1">
@@ -1020,6 +1033,10 @@ function renderRepairList(){
           ${addr?`<span class="rep-addr">📍 ${esc(addr)}</span>`:''}
           ${cust?`<span class="rep-cust">${esc(cust)}</span>`:''}
           ${tel?`<span class="rep-tel">📞 ${esc(tel)}</span>`:''}
+        </div>`:''}
+        ${descToShow?`
+        <div class="rep-row3" title="${hasFullDesc?'タップで原文表示':''}">
+          ${hasFullDesc?'<span class="rep-fulldoc">📄</span>':''}<span class="rep-shortdesc">${esc(descToShow)}</span>
         </div>`:''}
       </div>`;
   }).join('');
@@ -1758,6 +1775,17 @@ function openRepairSheet(propId){
   val('rs-customer', r.customerName || '');
   val('rs-tel', r.customerTel || '');
   val('rs-reqdesc', r.requestDesc || '');
+  // 原文ママ(あれば表示・無ければセクション非表示)
+  const fullEl = document.getElementById('rs-reqdesc-full');
+  const fullField = document.getElementById('rs-reqdesc-full-field');
+  if(fullEl && fullField){
+    if(r.requestDescFull && r.requestDescFull.trim()){
+      fullEl.textContent = r.requestDescFull;
+      fullField.style.display = '';
+    } else {
+      fullField.style.display = 'none';
+    }
+  }
   val('rs-sales', r.salesRep || '');
   val('rs-contact', r.contactPerson || '');
   val('rs-progress', r.creatorMemo || '');
@@ -1801,7 +1829,8 @@ async function saveRepairSheet(){
     responseDate: val('rs-plandate'),         // 対応予定日 → meta.responseDate
     customerName: val('rs-customer').trim(),
     customerTel: val('rs-tel').trim(),
-    requestDesc: val('rs-reqdesc').trim(),    // → meta.requestDetail
+    requestDesc: val('rs-reqdesc').trim(),    // → meta.requestDetail (ショート版・編集可)
+    requestDescFull: existing?.repair?.requestDescFull || '',  // 原文ママは編集不可・既存値保持
     salesRep: val('rs-sales').trim(),         // 営業担当 → meta.atenaTantou
     contactPerson: val('rs-contact').trim(),  // 連絡者 → meta.taikyo.tachiaiPerson
     creatorMemo: val('rs-progress').trim(),   // 進捗詳細 → meta.creatorMemo
@@ -1880,6 +1909,7 @@ async function pushRepairToLedger(p){
       creator: settings.currentUser || '',
       requestDate: r.requestDate || '',
       requestDetail: r.requestDesc || '',
+      requestDetailFull: r.requestDescFull || '',  // 原文ママを保持(タスクマネージャー側から消失防止)
       responseDate: r.responseDate || '',            // 対応予定日
       creatorMemo: r.creatorMemo || '',              // 進捗詳細メモ
       taikyo: {
@@ -2248,7 +2278,8 @@ function applyGasSync(payload){
         responseDate:   p.responseDate || '',
         customerName:   p.customerName || '',
         customerTel:    p.customerTel || '',
-        requestDesc:    p.requestDetail || '',
+        requestDesc:     p.requestDetail || '',
+        requestDescFull: p.requestDetailFull || '',  // 原文ママ(v1.4.135〜)
         salesRep:       p.atenaTantou || '',                       // 営業担当 ← atenaTantou
         contactPerson:  p.salesPerson || '',                        // 連絡者 ← tachiaiPerson(GAS側で salesPerson 名でくる)
         creatorMemo:    p.creatorMemo || '',
