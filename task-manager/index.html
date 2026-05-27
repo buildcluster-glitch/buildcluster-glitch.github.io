@@ -217,7 +217,12 @@
   /* ---------- repair card (修繕・アフター用 / 2行コンパクト) ---------- */
   .rep-card{background:#fff;border:1px solid var(--line);border-radius:10px;
     padding:8px 10px;margin-bottom:6px;cursor:pointer;overflow:hidden}
-  .rep-card:active{background:#f8fafc}
+  .rep-card:active{opacity:.85}
+  /* workflowStatus 別 背景色 */
+  .rep-card.wf-mi   {background:#fce7f3;border-color:#fbcfe8} /* アポ・手配 未  : ピンク */
+  .rep-card.wf-zumi {background:#fef9c3;border-color:#fde68a} /* アポ・手配 済  : 黄    */
+  .rep-card.wf-taiki{background:#dbeafe;border-color:#bfdbfe} /* 待機           : 青    */
+  .rep-card.wf-long {background:#e5e7eb;border-color:#cbd5e1} /* 長期連絡なし   : グレー */
   .rep-row1{display:flex;align-items:center;gap:7px;flex-wrap:nowrap;min-width:0}
   .rep-row2{display:flex;align-items:center;gap:10px;margin-top:4px;
     font-size:11px;color:var(--mute);flex-wrap:nowrap;min-width:0}
@@ -360,6 +365,14 @@
         <button class="chip" data-f="wip">進行中</button>
         <button class="chip" data-f="done">完了</button>
         <button class="chip" data-f="archived">アーカイブ</button>
+      </div>
+      <!-- 修繕タブ専用: 進行(workflowStatus)で絞り込み -->
+      <div class="chips" id="progress-chips" style="display:none">
+        <button class="chip on" data-pf="all">すべて</button>
+        <button class="chip" data-pf="アポ・手配 未">アポ・手配 未</button>
+        <button class="chip" data-pf="アポ・手配 済">アポ・手配 済</button>
+        <button class="chip" data-pf="待機">待機</button>
+        <button class="chip" data-pf="長期連絡なし">長期連絡なし</button>
       </div>
       <div class="chips" id="client-chips">
         <button class="chip on" data-c="all">全元請け</button>
@@ -752,6 +765,7 @@ saveSettings();
 let state = load() || seed();
 let currentPropId = null;
 let currentFilter = 'all';
+let currentProgressFilter = 'all'; // 修繕タブの workflowStatus 絞込
 let currentClientCat = 'all';
 let currentKojiFilter = 'restoration'; // 'restoration' / 'repair' (※'all' タブは廃止)
 let currentMineOnly = false; // 修繕タブで「自分担当のみ」
@@ -884,6 +898,11 @@ function matchesFilter(p){
   if(currentFilter==='all') return true;
   return dominantStatus(p)===currentFilter;
 }
+// 修繕タブの 進行(workflowStatus) フィルタ
+function matchesProgress(p){
+  if(currentProgressFilter === 'all') return true;
+  return (p.repair?.workflowStatus || 'アポ・手配 未') === currentProgressFilter;
+}
 function matchesSearch(p){
   if(!searchQ) return true;
   const q = searchQ.toLowerCase();
@@ -969,9 +988,15 @@ function matchesMine(p){
 }
 function renderRepairList(){
   const el = document.getElementById('property-list');
-  const items = state.properties.filter(p=>matchesFilter(p)&&matchesSearch(p)&&matchesClientCat(p)&&matchesKojiFilter(p)&&matchesMine(p))
+  // 進行(workflowStatus) の表示優先順
+  const WF_ORDER = {'アポ・手配 未':0,'アポ・手配 済':1,'待機':2,'長期連絡なし':3};
+  const wfRank = (p)=> WF_ORDER[p.repair?.workflowStatus] ?? 9;
+  const items = state.properties.filter(p=>matchesProgress(p)&&matchesSearch(p)&&matchesClientCat(p)&&matchesKojiFilter(p)&&matchesMine(p))
     .sort((a,b)=>{
-      // 依頼日の新しい順 → 無ければ発注日
+      // 第1キー: 進行ステータス順 (未→済→待機→長期連絡なし)
+      const wa = wfRank(a), wb = wfRank(b);
+      if(wa !== wb) return wa - wb;
+      // 第2キー: 依頼日の新しい順 → 無ければ発注日
       const da = (a.repair?.requestDate || a.orderDate || '0000');
       const db = (b.repair?.requestDate || b.orderDate || '0000');
       return db.localeCompare(da);
@@ -1019,8 +1044,11 @@ function renderRepairList(){
     const hasFullDesc = !!(r.requestDescFull && r.requestDescFull.trim());
     // ショート版が空なら原文の冒頭をフォールバック表示
     const descToShow = shortDesc || (hasFullDesc ? r.requestDescFull.slice(0, 30) + (r.requestDescFull.length > 30 ? '…' : '') : '');
+    // 進行(workflowStatus) 別の背景色クラス
+    const wfBgMap = {'アポ・手配 未':'wf-mi','アポ・手配 済':'wf-zumi','待機':'wf-taiki','長期連絡なし':'wf-long'};
+    const wfBg = wfBgMap[wf] || 'wf-mi';
     return `
-      <div class="rep-card" data-id="${p.id}">
+      <div class="rep-card ${wfBg}" data-id="${p.id}">
         <div class="rep-row1">
           <span class="rep-no">${i+1}</span>
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
@@ -2682,6 +2710,12 @@ document.getElementById('filter-chips').onclick = e=>{
   document.querySelectorAll('#filter-chips .chip').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); currentFilter = b.dataset.f; renderList();
 };
+// 修繕タブ用 進行フィルタ
+document.getElementById('progress-chips').onclick = e=>{
+  const b = e.target.closest('.chip'); if(!b) return;
+  document.querySelectorAll('#progress-chips .chip').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); currentProgressFilter = b.dataset.pf; renderList();
+};
 document.getElementById('client-chips').onclick = e=>{
   const b = e.target.closest('.chip'); if(!b) return;
   document.querySelectorAll('#client-chips .chip').forEach(x=>x.classList.remove('on'));
@@ -2698,6 +2732,11 @@ function updateKojiTitleAndChrome() {
   // 「自分担当のみ」チップは修繕タブのみ表示
   const mineBar = document.getElementById('mine-chips');
   if (mineBar) mineBar.style.display = (currentKojiFilter === 'repair') ? 'flex' : 'none';
+  // フィルタチップ切替: 修繕タブ = 進行フィルタ / 原状回復タブ = 既存タスク状態フィルタ
+  const stdChips = document.getElementById('filter-chips') || document.querySelector('.chips:not(#client-chips):not(#mine-chips):not(#progress-chips)');
+  const progChips = document.getElementById('progress-chips');
+  if (progChips) progChips.style.display = (currentKojiFilter === 'repair') ? 'flex' : 'none';
+  if (stdChips) stdChips.style.display = (currentKojiFilter === 'repair') ? 'none' : 'flex';
 }
 function setupMineChip(){
   const btn = document.getElementById('chip-mine-only');
