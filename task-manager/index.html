@@ -2329,7 +2329,17 @@ function applyGasSync(payload){
     if(isRepairItem){
       repairField = {
         status:         p.status || '見積作成中',
-        workflowStatus: p.workflowStatus || 'アポ・手配 未',
+        workflowStatus: (function(wf){
+          // v1.4.120 旧→新 マイグレーション (PC側で未マイグレな見積を TM 側で吸収表示)
+          const MAP = {
+            '対応中': '待機',
+            '未対応': 'アポ・手配 未',
+            'アポ済': 'アポ・手配 済',
+            '施工指示あり': 'アポ・手配 済',
+            '見積提出済': '待機',
+          };
+          return MAP[wf] || wf || 'アポ・手配 未';
+        })(p.workflowStatus),
         requestDate:    p.requestDate || '',
         responseDate:   p.responseDate || '',
         customerName:   p.customerName || '',
