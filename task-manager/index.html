@@ -247,6 +247,19 @@
     font-size:11px;font-weight:700;flex-shrink:0;white-space:nowrap;
     min-height:28px;min-width:60px;justify-content:center;
     touch-action:manipulation;user-select:none}
+  /* 担当者バッチ (パーソナルカラー・他アプリと統一) */
+  .rep-person{display:inline-flex;align-items:center;gap:3px;
+    padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;
+    flex-shrink:0;white-space:nowrap;border:1px solid rgba(0,0,0,.08)}
+  .rep-person.p-suzuki{background:#a7f3d0;color:#065f46} /* 鈴木悠平 : 薄緑 */
+  .rep-person.p-omura {background:#fca5a5;color:#991b1b} /* 大村将史 : 薄赤 */
+  .rep-person.p-yamada{background:#7dd3fc;color:#0c4a6e} /* 山田裕貴 : 水色 */
+  .rep-person.p-kimura{background:#bfdbfe;color:#1e3a8a} /* 木村優作 : 薄青 */
+  .rep-person.p-nambu {background:#fde68a;color:#78350f} /* 南部大我 : 薄黄 */
+  .rep-person.p-mogami{background:#d8b4fe;color:#4c1d95} /* 最上登生 : 薄紫 */
+  .rep-person.p-omw   {background:#fbcfe8;color:#9d174d} /* 大村まどか: 薄ピンク */
+  .rep-person.p-matsuo{background:#fed7aa;color:#9a3412} /* 松尾美子 : 薄オレンジ */
+  .rep-person.p-other {background:#e2e8f0;color:#475569} /* その他    : 薄グレー */
   /* タップ可の進行ピルだけハイライト */
   .rep-st-wf{cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
   .rep-st-wf:hover{outline:1px solid var(--accent)}
@@ -1047,12 +1060,27 @@ function renderRepairList(){
     // 進行(workflowStatus) 別の背景色クラス
     const wfBgMap = {'アポ・手配 未':'wf-mi','アポ・手配 済':'wf-zumi','待機':'wf-taiki','長期連絡なし':'wf-long'};
     const wfBg = wfBgMap[wf] || 'wf-mi';
+    // 担当者バッチ (パーソナルカラー)
+    const personName = (r.contactPerson || '').trim();
+    let personCls = 'p-other';
+    if (/山田/.test(personName)) personCls = 'p-yamada';
+    else if (/まどか|大村\s*ま/.test(personName)) personCls = 'p-omw';
+    else if (/大村/.test(personName)) personCls = 'p-omura';
+    else if (/南部/.test(personName)) personCls = 'p-nambu';
+    else if (/木村/.test(personName)) personCls = 'p-kimura';
+    else if (/鈴木/.test(personName)) personCls = 'p-suzuki';
+    else if (/最上/.test(personName)) personCls = 'p-mogami';
+    else if (/松尾/.test(personName)) personCls = 'p-matsuo';
+    const personHtml = personName
+      ? `<span class="rep-person ${personCls}" title="担当: ${esc(personName)}">👤 ${esc(personName)}</span>`
+      : '';
     return `
       <div class="rep-card ${wfBg}" data-id="${p.id}">
         <div class="rep-row1">
           <span class="rep-no">${i+1}</span>
           <span class="rep-tag ${cls}">${esc(tagShort)}</span>
           <span class="rep-name">${esc(p.name||'(無題)')}${p.room?` <span class="rep-room">${esc(p.room)}</span>`:''}</span>
+          ${personHtml}
           <span class="rep-st rep-st-readonly ${statusCls[status]||'s-st-active'}">${esc(statusLabel)}</span>
           <span class="rep-st rep-st-wf ${wfCls[wf]||'s-st-draft'}" data-wf="1">${esc(wf||'アポ・手配 未')}</span>
         </div>
