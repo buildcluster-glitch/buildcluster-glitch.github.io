@@ -260,11 +260,10 @@
   .rep-person.p-omw   {background:#fbcfe8;color:#9d174d} /* 大村まどか: 薄ピンク */
   .rep-person.p-matsuo{background:#fed7aa;color:#9a3412} /* 松尾美子 : 薄オレンジ */
   .rep-person.p-other {background:#e2e8f0;color:#475569} /* その他    : 薄グレー */
-  /* タップ可の進行ピルだけハイライト */
-  .rep-st-wf{cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
-  .rep-st-wf:hover{outline:1px solid var(--accent)}
-  .rep-st-wf:active{opacity:.7;transform:scale(.96)}
-  .rep-st-readonly{cursor:default}
+  /* タップ可ピル(進行・ステータス両方) */
+  .rep-st-wf,.rep-st-readonly{cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+  .rep-st-wf:hover,.rep-st-readonly:hover{outline:1px solid var(--accent)}
+  .rep-st-wf:active,.rep-st-readonly:active{opacity:.7;transform:scale(.96)}
 
   /* ステータス変更ポップオーバー */
   .st-pop-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:90;
@@ -282,7 +281,8 @@
     margin:10px 0 4px;letter-spacing:.3px}
   .rep-addr{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rep-cust{flex-shrink:0;color:var(--ink);font-weight:500}
-  .rep-tel{color:var(--accent);font-weight:600;flex-shrink:0}
+  .rep-tel{color:var(--accent);font-weight:600;flex-shrink:0;text-decoration:none;cursor:pointer}
+  .rep-tel:active{opacity:.6}
   .rep-st.s-st-draft {background:#f1f5f9;color:var(--mute)}
   .rep-st.s-st-active{background:#fef3c7;color:#b45309}
   .rep-st.s-st-apo   {background:#dbeafe;color:#1e40af}
@@ -595,6 +595,16 @@
       <button data-s="待機">待機</button>
       <button data-s="長期連絡なし">長期連絡なし</button>
     </div>
+    <!-- ステータス変更モード(動的に表示切替) -->
+    <div class="st-grid" id="st-pop-status" style="grid-template-columns:repeat(3,1fr);display:none">
+      <button data-s="下書き">下書き</button>
+      <button data-s="見積作成中">見積作成中</button>
+      <button data-s="提出済">見積提出済</button>
+      <button data-s="受注（工事指示有）">受注（工事指示有）</button>
+      <button data-s="完了">完了</button>
+      <button data-s="失注">失注</button>
+      <button data-s="キャンセル" style="grid-column:1/-1">キャンセル</button>
+    </div>
   </div>
 </div>
 
@@ -626,9 +636,16 @@
       <div class="field"><label>営業担当</label><input id="rs-sales"></div>
       <div class="field"><label>連絡者</label><input id="rs-contact"></div>
     </div>
-    <div class="field">
-      <label>ステータス <span style="color:var(--mute);font-weight:400;font-size:11px">(表示のみ・変更はPC側で)</span></label>
-      <div id="rs-status-display" style="padding:8px 12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px;font-weight:600">—</div>
+    <div class="field"><label>ステータス</label>
+      <div class="cat-picker" id="rs-status" style="grid-template-columns:repeat(3,1fr)">
+        <button data-s="下書き">下書き</button>
+        <button data-s="見積作成中">見積作成中</button>
+        <button data-s="提出済">見積提出済</button>
+        <button data-s="受注（工事指示有）">受注（工事指示有）</button>
+        <button data-s="完了">完了</button>
+        <button data-s="失注">失注</button>
+        <button data-s="キャンセル" style="grid-column:1/-1">キャンセル</button>
+      </div>
     </div>
     <div class="field"><label>進行</label>
       <div class="cat-picker" id="rs-workflow" style="grid-template-columns:repeat(2,1fr)">
@@ -1088,7 +1105,7 @@ function renderRepairList(){
         <div class="rep-row2">
           ${addr?`<span class="rep-addr">📍 ${esc(addr)}</span>`:''}
           ${cust?`<span class="rep-cust">${esc(cust)}</span>`:''}
-          ${tel?`<span class="rep-tel">📞 ${esc(tel)}</span>`:''}
+          ${tel?`<a class="rep-tel" href="tel:${encodeURIComponent(tel.replace(/[^0-9+]/g,''))}" onclick="event.stopPropagation()" title="タップで発信">📞 ${esc(tel)}</a>`:''}
         </div>`:''}
         ${descToShow?`
         <div class="rep-row3" title="${hasFullDesc?'タップで原文表示':''}">
@@ -1098,11 +1115,18 @@ function renderRepairList(){
   }).join('');
   el.querySelectorAll('.rep-card').forEach(c=>{
     c.onclick = (e)=>{
-      // 進行ピルをタップした時はポップオーバー(workflowStatus変更)
-      const wfEl = e.target.closest('.rep-st-wf');
-      if(wfEl){
+      // 電話リンクは独自処理(tel:発信)に任せる
+      if(e.target.closest('.rep-tel')) return;
+      // 進行ピル → 進行ポップオーバー
+      if(e.target.closest('.rep-st-wf')){
         e.stopPropagation();
         openWorkflowPop(c.dataset.id);
+        return;
+      }
+      // ステータスピル(readonly でなくなった)→ ステータス変更ポップオーバー
+      if(e.target.closest('.rep-st-readonly')){
+        e.stopPropagation();
+        openStatusValuePop(c.dataset.id);
         return;
       }
       openRepairSheet(c.dataset.id);
@@ -1763,17 +1787,36 @@ function deleteProp(){
 let _stPopTargetId = null;
 function openWorkflowPop(propId){
   _stPopTargetId = propId;
+  _stPopMode = 'workflowStatus';
   const p = state.properties.find(x=>x.id===propId);
   if(!p) return;
   const r = p.repair || {};
-  document.getElementById('st-pop-title').textContent = (p.name||'(無題)') + (p.room?` ${p.room}`:'');
-  document.getElementById('st-pop-sub').textContent = '進行をタップで即変更・自動保存';
-  // 現状の選択をハイライト
+  document.getElementById('st-pop-title').textContent = '進行 ・ ' + (p.name||'(無題)') + (p.room?` ${p.room}`:'');
+  document.getElementById('st-pop-sub').textContent = 'タップで即変更・自動保存';
+  document.getElementById('st-pop-workflow').style.display = 'grid';
+  document.getElementById('st-pop-status').style.display = 'none';
   document.querySelectorAll('#st-pop-workflow button').forEach(b=>{
     b.classList.toggle('on', b.dataset.s === (r.workflowStatus||'アポ・手配 未'));
   });
   document.getElementById('st-pop-bg').classList.add('on');
 }
+// ステータス変更ポップオーバー (見積作成中 / 提出済 / 受注 ... の9値)
+function openStatusValuePop(propId){
+  _stPopTargetId = propId;
+  _stPopMode = 'status';
+  const p = state.properties.find(x=>x.id===propId);
+  if(!p) return;
+  const r = p.repair || {};
+  document.getElementById('st-pop-title').textContent = 'ステータス ・ ' + (p.name||'(無題)') + (p.room?` ${p.room}`:'');
+  document.getElementById('st-pop-sub').textContent = 'タップで即変更・自動保存';
+  document.getElementById('st-pop-status').style.display = 'grid';
+  document.getElementById('st-pop-workflow').style.display = 'none';
+  document.querySelectorAll('#st-pop-status button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.s === (r.status||'見積作成中'));
+  });
+  document.getElementById('st-pop-bg').classList.add('on');
+}
+let _stPopMode = 'workflowStatus';
 // 旧名互換(他から呼ばれてる場合のため)
 function openStatusPop(propId){ openWorkflowPop(propId); }
 function closeStatusPop(){
@@ -1786,8 +1829,9 @@ async function applyStatusFromPop(field, value){
   if(!p) return;
   if(!p.repair) p.repair = {};
   p.repair[field] = value;
-  // ハイライト更新
-  document.querySelectorAll(`#st-pop-workflow button`).forEach(b=>{
+  // ハイライト更新 (現在開いてるグリッドのみ)
+  const gridId = field === 'workflowStatus' ? 'st-pop-workflow' : 'st-pop-status';
+  document.querySelectorAll(`#${gridId} button`).forEach(b=>{
     b.classList.toggle('on', b.dataset.s === value);
   });
   save();
@@ -1812,6 +1856,12 @@ document.getElementById('st-pop-workflow').addEventListener('click', e=>{
   if(!b) return;
   e.stopPropagation();
   applyStatusFromPop('workflowStatus', b.dataset.s);
+});
+document.getElementById('st-pop-status').addEventListener('click', e=>{
+  const b = e.target.closest('button[data-s]');
+  if(!b) return;
+  e.stopPropagation();
+  applyStatusFromPop('status', b.dataset.s);
 });
 
 /* ===== 修繕・アフター 編集シート ===== */
@@ -1845,19 +1895,8 @@ function openRepairSheet(propId){
   val('rs-sales', r.salesRep || '');
   val('rs-contact', r.contactPerson || '');
   val('rs-progress', r.creatorMemo || '');
-  // ステータスは表示のみ(編集はPC側 or カード上の進行ピル経由のみ)
-  const statusLabelMap = { '提出済':'見積提出済' };
-  // v1.4.120〜の statusCls 更新
-  const stClsMap = {
-    '下書き':'s-st-draft','見積作成中':'s-st-active','提出済':'s-st-submit',
-    '受注（工事指示有）':'s-st-won','完了':'s-st-done','失注':'s-st-lost','キャンセル':'s-st-cancel',
-    // 旧互換
-    '対応中':'s-st-active','アポ済':'s-st-apo','受注':'s-st-won','施工指示あり':'s-st-order'
-  };
-  const currentSt = r.status || '見積作成中';
-  const stLabel = statusLabelMap[currentSt] || currentSt;
-  document.getElementById('rs-status-display').innerHTML =
-    `<span class="rep-st ${stClsMap[currentSt]||'s-st-active'}" style="cursor:default">${esc(stLabel)}</span>`;
+  // ステータス: ピッカーで編集可
+  setPicker('rs-status', r.status || '見積作成中');
   setPicker('rs-workflow', r.workflowStatus || 'アポ・手配 未');
   // 元請けタグ表示 (読み取り専用)
   const cat = (p?.clientCat) || autoDetectClientCat(p||{}) || 'その他';
@@ -1874,9 +1913,8 @@ async function saveRepairSheet(){
   const name = val('rs-name').trim();
   if(!name){ alert('物件名を入力してください'); return; }
   const existing = editingPropId ? state.properties.find(x=>x.id===editingPropId) : null;
-  // ステータスは編集不可。既存値を保持(無ければ「見積作成中」)
-  const status = existing?.repair?.status || '見積作成中';
-  // 進行は picker から取得
+  // ステータス・進行 共に picker から取得
+  const status = getPicker('rs-status') || existing?.repair?.status || '見積作成中';
   const workflowStatus = getPicker('rs-workflow') || 'アポ・手配 未';
   const repair = {
     status,
