@@ -30,6 +30,14 @@
   .sec{ font-size:11px; color:var(--accent); font-weight:700; margin:8px 0 2px; }
   .kyaku{ background:#fffbeb; }
   .empty{ text-align:center; color:var(--muted); padding:40px 12px; }
+  /* カテゴリ絞り込みチップ */
+  .cats{ display:flex; gap:6px; overflow-x:auto; padding:6px 10px 8px; background:var(--bg); -webkit-overflow-scrolling:touch; border-bottom:1px solid var(--line); }
+  .cats::-webkit-scrollbar{ display:none; }
+  .chip{ flex:0 0 auto; font-size:13px; padding:7px 13px; border:1px solid var(--line); border-radius:18px; background:#fff; color:#334155; white-space:nowrap; }
+  .chip.on{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  .chip .n{ opacity:.6; font-size:11px; margin-left:3px; }
+  /* カテゴリ見出し */
+  .gh{ font-size:12px; font-weight:700; color:var(--accent); padding:10px 4px 4px; position:sticky; top:92px; background:var(--bg); z-index:5; }
   /* 設定 */
   #settings{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:20; align-items:flex-start; justify-content:center; padding:20px; }
   #settings.open{ display:flex; }
@@ -54,6 +62,7 @@
   <input id="search" type="search" placeholder="🔍 工事名・カテゴリで検索" autocomplete="off">
   <select id="moto"></select>
 </div>
+<div class="cats" id="cats"></div>
 <div class="meta" id="meta"></div>
 <main id="list"><div class="empty">⚙設定でGAS URL・トークンを入れて「更新」を押してください</div></main>
 
@@ -75,6 +84,7 @@
 <script>
 const LS = { url:'tanka_gas_url', token:'tanka_gas_token', moto:'tanka_moto' };
 let DATA = null; // {updatedAt, motoCols, items}
+let curCat = ''; // 選択中カテゴリ('' = すべて)
 const $ = s => document.querySelector(s);
 const fmt = n => n ? '¥'+Number(n).toLocaleString() : '—';
 
@@ -105,6 +115,7 @@ async function load(){
     if(!d.value){ $('#list').innerHTML = '<div class="empty">単価データがまだありません。<br>PC側で「📱スマホ単価表へ共有」を押してください。</div>'; return; }
     DATA = JSON.parse(d.value);
     buildMotoSelect();
+    buildCats();
     render();
   }catch(e){
     $('#list').innerHTML = '<div class="empty">取得エラー: '+ (e.message||e) +'<br><br>⚙設定のURL/トークンを確認してください</div>';
@@ -118,6 +129,22 @@ function buildMotoSelect(){
   sel.onchange = () => { localStorage.setItem(LS.moto, sel.value); render(); };
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function buildCats(){
+  const counts = {};
+  (DATA.items||[]).forEach(it => { const c = it.cat||'(未分類)'; counts[c] = (counts[c]||0)+1; });
+  const cats = Object.keys(counts);
+  if(curCat && !counts[curCat]) curCat = '';
+  const chips = [`<button class="chip ${curCat===''?'on':''}" data-cat="">すべて<span class="n">${(DATA.items||[]).length}</span></button>`]
+    .concat(cats.map(c => `<button class="chip ${curCat===c?'on':''}" data-cat="${esc(c)}">${esc(c)}<span class="n">${counts[c]}</span></button>`));
+  const el = document.getElementById('cats');
+  el.innerHTML = chips.join('');
+  el.querySelectorAll('.chip').forEach(b => b.onclick = () => {
+    curCat = b.dataset.cat;
+    el.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.dataset.cat===curCat));
+    render();
+    window.scrollTo(0,0);
+  });
+}
 
 function priceForRow(it, motoKey){
   if(motoKey==='__tenant__') return it.tenant;
@@ -126,20 +153,27 @@ function priceForRow(it, motoKey){
 }
 function render(){
   if(!DATA){ return; }
-  const q = $('#search').value.trim().toLowerCase();
+  const terms = $('#search').value.trim().toLowerCase().split(/[\s　]+/).filter(Boolean); // 複数語AND
   const motoKey = $('#moto').value;
   const motoLabel = $('#moto').selectedOptions[0]?.textContent || '';
-  const items = (DATA.items||[]).filter(it => {
-    if(!q) return true;
-    return (it.item+' '+it.cat).toLowerCase().includes(q);
+  let items = (DATA.items||[]);
+  if(curCat) items = items.filter(it => (it.cat||'(未分類)')===curCat);
+  if(terms.length) items = items.filter(it => {
+    const hay = (it.item+' '+it.cat+' '+(it.partNo||'')).toLowerCase();
+    return terms.every(t => hay.includes(t));
   });
   const up = DATA.updatedAt ? new Date(DATA.updatedAt) : null;
-  $('#meta').textContent = `${(DATA.items||[]).length}項目${up?` ／ 更新 ${up.getFullYear()}/${up.getMonth()+1}/${up.getDate()} ${String(up.getHours()).padStart(2,'0')}:${String(up.getMinutes()).padStart(2,'0')}`:''} ／ 表示単価: ${motoLabel}`;
-  if(!items.length){ $('#list').innerHTML = '<div class="empty">該当なし</div>'; return; }
-  $('#list').innerHTML = items.map((it,i) => {
+  $('#meta').textContent = `${items.length}件${(curCat||terms.length)?` / 全${(DATA.items||[]).length}`:''}${up?` ／ 更新 ${up.getMonth()+1}/${up.getDate()} ${String(up.getHours()).padStart(2,'0')}:${String(up.getMinutes()).padStart(2,'0')}`:''} ／ 単価: ${motoLabel}`;
+  if(!items.length){ $('#list').innerHTML = '<div class="empty">該当なし<br><small>カテゴリ「すべて」や別の語で試してください</small></div>'; return; }
+  // カテゴリ見出しでグルーピング(全件表示時に区切りを出す)
+  const showGroups = !curCat;
+  let html = '', lastCat = null;
+  items.forEach((it,i) => {
+    const c = it.cat||'(未分類)';
+    if(showGroups && c!==lastCat){ html += `<div class="gh">${esc(c)}</div>`; lastCat = c; }
     const p = priceForRow(it, motoKey);
-    const motoRows = (DATA.motoCols||[]).filter(c => (it.prices||{})[c]).map(c => `<div class="prow"><span>${esc(c)}</span><b>${fmt(it.prices[c])}</b></div>`).join('');
-    return `<div class="card">
+    const motoRows = (DATA.motoCols||[]).filter(col => (it.prices||{})[col]).map(col => `<div class="prow"><span>${esc(col)}</span><b>${fmt(it.prices[col])}</b></div>`).join('');
+    html += `<div class="card">
       <div class="card-head" data-i="${i}">
         <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div></div>
         <div class="price">${fmt(p)}<small>${esc(motoLabel)}</small></div>
@@ -153,7 +187,8 @@ function render(){
         ${it.material?`<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
       </div>
     </div>`;
-  }).join('');
+  });
+  $('#list').innerHTML = html;
   document.querySelectorAll('.card-head').forEach(h => h.onclick = () => {
     $('#d'+h.dataset.i).classList.toggle('open');
   });
