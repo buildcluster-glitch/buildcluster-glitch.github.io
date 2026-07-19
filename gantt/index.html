@@ -3216,6 +3216,16 @@ function initWebView() {
     try {
       let seed = null;
       try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) seed = JSON.parse(raw) || null; } catch (e) {}
+      // 🩹 一度だけ強制フル再同期(2026-07-19): 旧版はquota超過をsaveEstimatesが握りつぶし(alertのみ・throwしない)、
+      //    同期ループがstorageErrorに気づかず lastSyncAt を打ってしまった=「入り切った分だけで同期済み」の毒マーク。
+      //    以降は差分のみで永久に欠損(山田実機: 122/426件で固着)。この版を初めて読み込んだ端末は
+      //    lastSyncAt を消して次の自動同期をフルにする(成功すれば以後は通常の差分運用)。
+      try {
+        if (!localStorage.getItem('gantt_resync_20260719')) {
+          localStorage.removeItem(_SYNC_KEY);
+          localStorage.setItem('gantt_resync_20260719', '1');
+        }
+      } catch (e) {}
       let stored = null;
       try { stored = await __ganttIdbGet(); } catch (e) { console.warn('[gantt-idb] 読込不可(メモリのみで継続)', e); }
       const base = Object.assign({}, seed || {}, stored || {});
