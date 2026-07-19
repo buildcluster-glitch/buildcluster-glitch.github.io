@@ -1,0 +1,3338 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>工事進捗 - ビルドクラスタ</title>
+<style>
+  :root {
+    --bg:#f5f5f7; --panel:#fff; --line:#e1e1e6; --accent:#2563eb; --accent-dk:#1d4ed8;
+    --text:#111; --muted:#666; --warn:#d97706; --ok:#16a34a; --danger:#dc2626;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: "Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo","Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif,emoji; background:var(--bg); color:var(--text); }
+  nav.app-switcher { display:flex; gap:1px; background:#0f172a; padding:0; }
+  nav.app-switcher a { padding:8px 18px; background:#1e293b; color:#cbd5e1; text-decoration:none; font-size:13px; transition:0.15s; }
+  nav.app-switcher a:hover { background:#334155; color:#fff; }
+  nav.app-switcher a.active { background:#2563eb; color:#fff; font-weight:600; }
+  /* 埋め込みモード(?embed=1): 業者発注書のモーダルからiframe表示する時、上部アプリナビを隠す(v1.4.294) */
+  body.embed-mode nav.app-switcher { display:none; }
+  /* Web閲覧版(GitHub Pages公開・Electron外): 編集UIを隠して読み取り専用にする。
+     書き込み自体は autoPushFromProgress / gasSaveLedgerFromProgress 入口の IS_WEB_VIEW ガードで遮断済み
+     =CSSは見た目の整理、安全はJS側が保証する二段構え */
+  body.web-view nav.app-switcher { display:none; }
+  body.web-view #btn-kintone-pending,
+  body.web-view #btn-detail-save,
+  body.web-view #btn-detail-open-est,
+  body.web-view #btn-detail-open-kani { display:none !important; }
+  body.web-view #detail-body input, body.web-view #detail-body select,
+  body.web-view #detail-body textarea, body.web-view #detail-body button {
+    pointer-events:none; opacity:.8; background:#f8fafc !important;
+  }
+  body.web-view .prg-edit { pointer-events:none; opacity:.85; background:transparent !important; }
+  #webview-bar {
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+    background:#0f172a; color:#e2e8f0; font-size:12px; padding:5px 10px;
+  }
+  #webview-bar input { font-size:12px; padding:2px 6px; border-radius:4px; border:1px solid #475569; background:#1e293b; color:#e2e8f0; }
+  #webview-bar button { font-size:12px; padding:2px 10px; border-radius:4px; border:1px solid #475569; background:#334155; color:#fff; cursor:pointer; }
+  header { background:#111; color:#fff; padding:10px 16px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; }
+  header .meta { font-size:12px; color:#bbb; }
+  main { padding:12px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  label { font-size:12px; color:var(--muted); }
+  input[type=text], input[type=date], input[type=number], select, textarea {
+    font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:#fff;
+  }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  button { font:inherit; padding:6px 12px; border:1px solid var(--line); background:#fff; border-radius:4px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.primary:hover { background:var(--accent-dk); }
+  button.danger { color:var(--danger); }
+  button:hover { background:#f0f0f3; }
+  button.primary:hover { background:var(--accent-dk); color:#fff; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; background:#eee; }
+  .grow { flex:1; }
+  /* モード切替タブ */
+  .mode-tabs { display:flex; gap:0; border-bottom:2px solid var(--line); margin-bottom:8px; }
+  .mode-tab { padding:8px 18px; cursor:pointer; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-2px; }
+  .mode-tab:hover { background:#f0f0f3; }
+  .mode-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; background:#eff6ff; }
+  /* テーブル */
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left; vertical-align:top; white-space:nowrap; }
+  th { background:#fafafa; position:sticky; top:0; z-index:1; font-weight:600; font-size:11px; color:#444; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  tr.row-clickable { cursor:pointer; }
+  tr.row-clickable:hover td { background:#f0f9ff; }
+  tr.row-confirmed td { background:#f0fdf4; }
+  tr.row-confirmed:hover td { background:#dcfce7; }
+  /* v1.4.127: 進行ステータスによる行背景色(修繕系) */
+  /* 待機 → 青 / アポ・手配 未 → ピンク / アポ・手配 済 → 黄 */
+  /* row-confirmed より優先度を上げるため、両方付いた場合はこちらが勝つように設計 */
+  tr.wf-machi    td { background:#dbeafe !important; }    /* 待機: 青系 */
+  tr.wf-machi:hover td { background:#bfdbfe !important; }
+  tr.wf-mihai    td { background:#fce7f3 !important; }    /* アポ・手配 未: ピンク */
+  tr.wf-mihai:hover td { background:#fbcfe8 !important; }
+  tr.wf-sumi     td { background:#fef9c3 !important; }    /* アポ・手配 済: 黄 */
+  tr.wf-sumi:hover td { background:#fef08a !important; }
+  /* v1.4.628/636: 完了工事は緑で色付け(山田: 原状回復の完了=緑と統一)。confirmed/wf色より後に定義=優先 */
+  tr.row-done    td { background:#dcfce7 !important; }    /* 完了工事: 緑系(原状回復のrcolor-greenと同色) */
+  tr.row-done:hover td { background:#bbf7d0 !important; }
+  /* v1.4.632/633: 原状回復タブの行色(山田指定)。色味は修繕・アフタータブに合わせた淡いパステル(100番台)。 */
+  tr.rcolor-blue   td { background:#dbeafe !important; }  /* 見積作成中・提出済: 青(=待機色と同系) */
+  tr.rcolor-blue:hover   td { background:#bfdbfe !important; }
+  tr.rcolor-red    td { background:#fce7f3 !important; }  /* 受注+待機(発注前): 修繕タブのアポ未と同じ淡いピンク(山田: 修繕と同じ色) */
+  tr.rcolor-red:hover    td { background:#fbcfe8 !important; }
+  tr.rcolor-yellow td { background:#fef9c3 !important; }  /* 着工(発注済・工事中): 黄(=修繕のアポ済色と同じ) */
+  tr.rcolor-yellow:hover td { background:#fef08a !important; }
+  tr.rcolor-green  td { background:#dcfce7 !important; }  /* 完了: 緑(淡) */
+  tr.rcolor-green:hover  td { background:#bbf7d0 !important; }
+  .viewer-wrap { max-height: calc(100vh - 220px); overflow:auto; }
+  /* バッジ */
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+  .badge-juchu { background:#bbf7d0; color:#14532d; }
+  .badge-shutsumai { background:#dbeafe; color:#1e40af; }
+  .badge-shitsuchu { background:#fecaca; color:#7f1d1d; }
+  .badge-kanryou { background:#d1fae5; color:#065f46; }
+  .badge-shitagaki { background:#e5e7eb; color:#374151; }
+  .badge-confirmed { background:#16a34a; color:#fff; }
+  .badge-paid { background:#bbf7d0; color:#14532d; }
+  .badge-unpaid { background:#fee2e2; color:#7f1d1d; }
+  .badge-juchugata { background:#fef3c7; color:#92400e; }
+  /* 詳細モーダル */
+  #detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px; }
+  #detail-overlay.open { display:flex; }
+  #detail-modal { background:#fff; border-radius:8px; max-width:920px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); }
+  #detail-modal .modal-head { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+  #detail-modal .modal-head h2 { margin:0; font-size:16px; flex:1; }
+  #detail-modal .modal-body { padding:16px 18px; }
+  #detail-modal fieldset { border:1px solid #e5e7eb; padding:10px 14px; margin:0 0 12px; border-radius:6px; }
+  #detail-modal legend { font-weight:600; font-size:12px; color:#374151; padding:0 6px; }
+  #detail-modal .grid {
+    display:grid; grid-template-columns: 110px 1fr 110px 1fr; gap:6px 10px; align-items:center; font-size:12px;
+  }
+  #detail-modal .grid label { font-size:11px; color:var(--muted); }
+  #detail-modal .grid input[type=text], #detail-modal .grid input[type=date], #detail-modal .grid select { width:100%; font-size:12px; }
+  #detail-modal .grid .span2 { grid-column: span 3; }
+  #detail-modal .modal-foot { padding:12px 18px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:8px; }
+  /* チェック行 */
+  .checkrow { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; }
+  .checkrow label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .checkrow input[type=checkbox] { width:16px; height:16px; }
+  /* 元請けタグ(色はJS側で動的指定) */
+  .motouke-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap; }
+  /* 業者タグ */
+  .supplier-tag { display:inline-block; padding:1px 6px; border-radius:8px; font-size:11px; font-weight:600; white-space:nowrap; }
+  /* 業者列セクション境界(業者①の業者名列の左に縦線) */
+  th.sup-section-start, td.sup-section-start { border-left:2px solid #f59e0b; }
+  /* 業者列の薄い背景 */
+  th.sup-col, td.sup-col { background:#fffbeb; }
+  td.sup-col.sup-empty { background:#f9fafb; color:#d1d5db; }
+  /* ビュー切替(一覧 / ガント) */
+  .view-tabs { display:flex; gap:4px; margin-left:auto; }
+  .view-tab { padding:4px 12px; cursor:pointer; font-size:12px; border:1px solid var(--line); background:#fff; border-radius:4px; }
+  .view-tab.active { background:#1e3a8a; color:#fff; border-color:#1e3a8a; font-weight:600; }
+  /* ガントチャート(table-layout: fixed + colgroup + ボーダーレス → セル幅と絶対配置位置を完全一致)
+     セル罫線は背景 gradient で描画 → ボーダー幅累積によるズレを排除 */
+  /* min-width:100% を外す → table-layout:fixed の colgroup 28px が忠実に守られる */
+  /* 親要素より狭ければ右側に余白(画面いっぱいまで広げない)・JSのcellWidth=28と一致 */
+  .gantt-table { width:max-content; border-collapse:separate; border-spacing:0; font-size:11px; table-layout:fixed; border:1px solid var(--line); }
+  .gantt-table th, .gantt-table td { border:none; padding:0; box-sizing:border-box; }
+  .gantt-table thead tr { border-bottom:2px solid var(--line); }
+  .gantt-table thead { background:#fafafa; }
+  /* ヘッダーセル(各日)に縦罫線を gradient で(28px ごと) */
+  .gantt-table thead th.gantt-day {
+    background-image: linear-gradient(to right, #e2e8f0 0px, #e2e8f0 1px, transparent 1px);
+    background-size: 100% 100%; background-repeat: no-repeat;
+  }
+  .gantt-table th { padding:2px 0; }
+  .gantt-day { padding:2px 0; text-align:center; line-height:1.2; }
+  /* メタセルの右に縦線を入れる(タイムライン領域との境界) */
+  .gantt-table .gantt-meta-cell { border-right:1px solid var(--line); }
+  /* データ行の境界(各物件) */
+  .gantt-table tbody tr { border-bottom:1px solid var(--line); }
+  .gantt-table tbody tr td { border-bottom:1px solid var(--line); }
+  /* background-color で指定(background ショートハンドだと gradient罫線が消える) */
+  .gantt-day.holiday { color:#dc2626; background-color:#fef2f2; }
+  .gantt-day.saturday { color:#2563eb; background-color:#eff6ff; }
+  .gantt-day.today { background-color:#fef9c3; font-weight:bold; box-shadow: inset 0 0 0 1px #f59e0b; }
+  .gantt-day small { font-size:9px; color:inherit; opacity:0.85; }
+  .gantt-row { cursor:pointer; }
+  .gantt-row:hover .gantt-meta-cell { background:#f0f9ff; }
+  .gantt-row td { padding:0; }
+  .gantt-track {
+    position:relative; padding:0; height:100%;
+    background-image: linear-gradient(to right, #f1f5f9 0px, #f1f5f9 1px, transparent 1px);
+    background-size: 42px 100%; background-repeat: repeat-x;
+  }
+  .gantt-bar {
+    position:absolute; height:18px; line-height:18px;
+    padding:0 5px; font-size:10px; white-space:nowrap;
+    border-radius:3px; overflow:hidden; text-overflow:ellipsis;
+    color:#fff; font-weight:600; box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  }
+  .gantt-bar.bar-clipped-left { border-top-left-radius:0; border-bottom-left-radius:0; padding-left:2px; }
+  .gantt-bar.bar-clipped-right { border-top-right-radius:0; border-bottom-right-radius:0; padding-right:2px; }
+  .gantt-marker { position:absolute; top:0; bottom:0; width:2px; pointer-events:none; }
+  .gantt-marker-label {
+    position:absolute; top:1px; font-size:9px; font-weight:700; pointer-events:none;
+    white-space:nowrap; transform:translateX(-50%);
+    background:rgba(255,255,255,0.8); padding:0 1px; border-radius:2px;
+  }
+  .gantt-meta-cell { width:200px; min-width:200px; max-width:200px; padding:4px 8px; vertical-align:middle; background:#fff; position:sticky; left:0; z-index:2; }
+  /* 固定ヘッダー/固定メタ列の重なり順: 行内のバー/マーカーチップ(z100〜)・今日線(z300)より上に。
+     日付ヘッダー(z400) < ヘッダー左上の物件セル(z450)。データ行のメタ列(z350)はチップより上・ヘッダーより下 */
+  .gantt-table thead th { z-index:400; }
+  .gantt-table thead th.gantt-meta-cell { z-index:450; }
+  .gantt-table tbody td.gantt-meta-cell { z-index:350; }
+  .gantt-controls { display:flex; gap:8px; align-items:center; padding:8px 0; }
+  .gantt-month-label { font-size:14px; font-weight:600; padding:0 12px; }
+  .gantt-empty { padding:30px; text-align:center; color:#9ca3af; }
+  .gantt-legend { display:flex; gap:14px; font-size:11px; color:#475569; padding:6px 10px; background:#f8fafc; border:1px solid var(--line); border-radius:4px; margin-top:8px; flex-wrap:wrap; }
+  .gantt-legend-mark { display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle; margin-right:3px; }
+  /* 集計サマリー */
+  .stats-bar { display:flex; gap:14px; font-size:12px; padding:6px 10px; background:#f1f5f9; border-radius:4px; margin-top:8px; }
+  .stats-bar b { color:#0f172a; }
+  /* インライン編集セル: 視覚的に「ここをクリックして入力できる」と分かるように */
+  input.prg-edit {
+    border: 1px solid #cbd5e1 !important;
+    background: #fff !important;
+    border-radius: 3px;
+    padding: 2px 5px !important;
+    color: #0f172a;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  }
+  input.prg-edit::placeholder { color: #94a3b8; font-style: italic; font-size: 10px; }
+  input.prg-edit:hover { background: #f0f9ff !important; border-color: #3b82f6 !important; }
+  input.prg-edit:focus {
+    outline: none;
+    background: #fff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.18);
+  }
+  /* 編集後の値があれば緑のドットで「入力済」マーク */
+  input.prg-edit:not(:placeholder-shown):not(:focus) {
+    background: #f0fdf4 !important;
+    border-color: #16a34a !important;
+  }
+  input[type="checkbox"].prg-edit { cursor: pointer; transform: scale(1.2); }
+  /* Drive保存ステータスのトースト */
+  .prg-save-toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: #16a34a; color: #fff;
+    padding: 8px 16px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 9999;
+    transition: opacity 0.3s, transform 0.3s;
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+  }
+  .prg-save-toast.show { opacity: 1; transform: translateY(0); }
+  .prg-save-toast.saving { background: #2563eb; }
+  .prg-save-toast.error { background: #dc2626; }
+</style>
+</head>
+<body>
+<!-- 発注担当・見積担当者の候補リスト(自由入力も可・datalist 連動) -->
+<datalist id="dl-order-tantou">
+  <option value="大村 まどか">
+  <option value="山田 裕貴">
+  <option value="大村 将史">
+  <option value="南部 大我">
+  <option value="木村 優作">
+  <option value="鈴木 悠平">
+  <option value="最上 登生">
+</datalist>
+<nav class="app-switcher">
+  <a href="index.html">📝 見積作成</a>
+  <a href="index.html#paint" title="外壁塗装工事の見積を作成">🎨 外壁塗装見積</a>
+  <a href="invoice.html#ledger">💰 請求書</a>
+  <a href="index.html#yamaichi-invoice" title="山一地所の請求書Excel(原状回復/修繕)を完了案件から自動生成・確認">📑 山一請求書</a>
+  <a href="sales.html">📊 売上集計</a>
+  <a href="index.html#ledger">📚 台帳</a>
+  <a href="progress.html" class="active">🔨 工事進捗</a>
+  <span style="flex:1;"></span>
+  <a href="index.html#tachiai">📋 立会チェック</a>
+  <a href="index.html#keiyaku">📝 契約ノート</a>
+  <a href="index.html#manual">📖 マニュアル</a>
+  <a href="index.html#feedback">💬 要望・バグ</a>
+  <a href="index.html#settings">⚙ 設定</a>
+</nav>
+<header>
+  <h1>🔨 工事進捗</h1>
+  <span class="meta">ビルドクラスタ / 原状回復・修繕</span>
+  <span class="pill" id="data-info" style="margin-left:auto; background:#1e3a8a; color:#fff;">読込中…</span>
+</header>
+<main>
+  <div class="mode-tabs">
+    <div class="mode-tab" data-mode="repair" title="原状回復以外すべて(修繕・リフォーム・アフター・植栽剪定・漏水復旧 等。入居中で日程調整が必要な工事)">🛠 修繕・アフター</div>
+    <div class="mode-tab" data-mode="restoration" title="工事名称=「原状回復工事」のみ表示(空室・退去後の工事)">🔑 原状回復(空室)</div>
+    <div class="mode-tab active" data-mode="all" title="原状回復・修繕をまとめて表示(既定)">🌐 すべて</div>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <input type="text" id="search-input" placeholder="現場名/号室/お客様名 などで検索" style="min-width:240px;" class="grow">
+      <select id="motouke-filter" title="元請けで絞込"><option value="">(全元請け)</option></select>
+      <!-- v1.4.122: ステータス選択肢を新体系に統一(台帳と同期) -->
+      <select id="status-filter" title="営業ステータスで絞込">
+        <option value="">(全ステータス)</option>
+        <option value="__juchu__">🎯 受注のみ</option>
+        <option value="__not_juchu__">⏳ 未受注(受注以外)</option>
+        <option value="下書き">📝 下書き</option>
+        <option value="見積作成中">🛠 見積作成中</option>
+        <option value="提出済">📤 見積提出済</option>
+        <option value="受注（工事指示有）">🎯 受注（工事指示有）</option>
+        <option value="失注">❌ 失注</option>
+        <option value="完了">✅ 完了</option>
+        <option value="キャンセル">✖ キャンセル</option>
+      </select>
+      <select id="workflow-filter" title="進行ステータスで絞込">
+        <option value="">(全進行ステータス)</option>
+        <option value="待機">⏳ 待機</option>
+        <option value="工事指示済">📤 工事指示済</option>
+        <option value="着工">🔨 着工</option>
+        <option value="完工">✅ 完工</option>
+        <option value="鍵交換済">🔑 鍵交換済</option>
+        <option value="入居済">🏠 入居済</option>
+        <option value="クローズ">📦 クローズ</option>
+      </select>
+      <select id="invoice-filter" title="請求/入金">
+        <option value="">(請求/入金 全て)</option>
+        <option value="invoice_unpaid">🟡 請求未</option>
+        <option value="invoice_paid">✅ 請求済</option>
+        <option value="payment_unpaid">🟡 入金未</option>
+        <option value="payment_paid">✅ 入金済</option>
+      </select>
+      <!-- v1.4.129: 台帳の「📝下書きを表示」と同じUXに合わせて反転(チェックすると完了が見える方式) -->
+      <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px;" title="完了案件(営業ステータス=完了 / 進行ステータス=クローズ・完了 / 完了日が今日以前)も一覧に含める。デフォルトはOFF=非表示">
+        <input type="checkbox" id="show-completed" style="width:auto;"> ✅ 完了案件を表示
+      </label>
+      <!-- v1.4.627: 進捗管理の対象外(下書き/見積作成中/提出済=受注前・失注・キャンセル)もチェックで表示(山田要望) -->
+      <label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; font-size:12px;" title="通常は非表示の『下書き・見積作成中・提出済(受注前)・失注・キャンセル』も一覧に含めます。デフォルトはOFF=非表示">
+        <input type="checkbox" id="show-all-statuses" style="width:auto;"> 🗂 対象外も表示
+      </label>
+      <button id="btn-clear-filters" title="絞込クリア" style="font-size:11px;">↺ 絞込解除</button>
+      <span class="pill" id="row-count">0件</span>
+      <button id="btn-reload" title="Drive台帳から全件取込み(他PCの最新版で上書き・1.4.66〜のforceModeと同等)" style="font-size:11px; background:#16a34a; border-color:#15803d; color:#fff; font-weight:600;">☁ 全件同期</button>
+      <button id="btn-kintone-pending" title="キントーン未反映(対応予定日/完了日が前回反映から変わった案件)を一覧表示→反映済みにできます。全PC共有・施工予定日はキントーン専用" style="font-size:11px; background:#7c3aed; border-color:#6d28d9; color:#fff; font-weight:600;">📋 キントーン要反映 <span id="kintone-pending-count" style="background:#fff; color:#7c3aed; border-radius:8px; padding:0 5px; font-weight:700;">0</span></button>
+      <div class="view-tabs">
+        <div class="view-tab active" data-view="list">📋 一覧</div>
+        <div class="view-tab" data-view="gantt">📊 ガント</div>
+      </div>
+    </div>
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="gantt-controls" id="gantt-controls" style="display:none;">
+      <select id="gantt-range-mode" title="表示範囲モード" style="font-size:12px;">
+        <option value="standard">1週間前〜40日後</option>
+        <option value="month">月単位</option>
+        <option value="rolling30">±30日(今日基準)</option>
+        <option value="rolling60">±60日(今日基準)</option>
+        <option value="rolling90">±90日(今日基準)</option>
+      </select>
+      <span id="gantt-month-nav" style="display:flex; gap:6px; align-items:center;">
+        <button id="btn-gantt-prev" title="前月">◀</button>
+        <span class="gantt-month-label" id="gantt-month-label"></span>
+        <button id="btn-gantt-next" title="翌月">▶</button>
+        <button id="btn-gantt-today" title="今月へ" style="font-size:11px;">📅 今月</button>
+      </span>
+      <select id="gantt-axis-mode" title="行の軸を切替(物件ごと/業者ごと)" style="font-size:12px;">
+        <option value="bukken">軸: 物件</option>
+        <option value="vendor">軸: 業者</option>
+      </select>
+      <select id="gantt-sort-mode" title="ガントの並び順" style="font-size:12px;">
+        <option value="default">並び: 標準</option>
+        <option value="nyukyo">並び: ▼入居が近い順</option>
+        <option value="key">並び: 🔑鍵交換が近い順</option>
+        <option value="kakunin">並び: ▽確認が近い順</option>
+        <option value="jokin">並び: 💊除菌が近い順</option>
+        <option value="juchu">並び: 受注が古い順</option>
+      </select>
+      <span style="color:var(--muted); font-size:11px; margin-left:14px;">バー = 業者工期 / マーカー = ▼完了 / ▼入居 / 🔑鍵 / ▽確認 / 💊除菌 / 🔧対応(修繕)</span>
+    </div>
+    <!-- 🚨入居決定×受注前バナー: 契約ノートに入居日があるのに見積が提出済(受注前)のままの案件 -->
+    <div id="gantt-keiyaku-alert" style="display:none; margin-top:6px; padding:6px 10px; background:#f5f3ff; border:1px solid #c4b5fd; border-radius:6px; font-size:12px;"></div>
+    <!-- ⚠日程未入力バナー: 工期もマーカーも無くガントに出ない案件の見落とし防止 -->
+    <div id="gantt-noplan" style="display:none; margin-top:6px; padding:6px 10px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:12px;"></div>
+  </div>
+  <div class="panel" style="padding:0;">
+    <div class="viewer-wrap">
+      <table id="progress-table">
+        <thead id="progress-thead"></thead>
+        <tbody id="progress-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="vendor-workload" class="gantt-legend" style="display:none; background:#fffbeb; border-color:#fcd34d;"></div>
+  <div id="gantt-legend" class="gantt-legend" style="display:none;"></div>
+</main>
+
+<!-- 詳細編集モーダル -->
+<div id="detail-overlay">
+  <div id="detail-modal">
+    <div class="modal-head">
+      <h2 id="detail-title">詳細</h2>
+      <span class="badge" id="detail-koji"></span>
+      <button id="btn-detail-close">×</button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-foot">
+      <button id="btn-detail-open-est" title="この見積を見積作成タブで開く">📝 見積を開く</button>
+      <button id="btn-detail-open-kani" title="この案件の簡易見積(明細なしで金額・外注を直接入力)を作成・編集します。見積作成アプリの台帳で簡易見積モーダルが開きます" style="background:#ede9fe; border:1px solid #8b5cf6; color:#5b21b6; font-weight:600;">⚡ 簡易見積</button>
+      <div style="display:flex; gap:8px;">
+        <button id="btn-detail-cancel">キャンセル</button>
+        <button id="btn-detail-save" class="primary">💾 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 自社スタッフ datalist(連絡者入力用) -->
+<datalist id="dl-staff">
+  <option value="山田 裕貴">
+  <option value="大村 将史">
+  <option value="南部 大我">
+  <option value="木村 優作">
+  <option value="鈴木 悠平">
+  <option value="最上 登生">
+</datalist>
+
+<!-- 対応予定時刻 候補(カレンダーアプリと統一: 8:00〜18:00 15分刻み + フリー候補)。自由入力も可 -->
+<datalist id="dl-resp-time"></datalist>
+<script>
+(function(){
+  var dl = document.getElementById('dl-resp-time');
+  if (!dl) return;
+  var opts = [];
+  for (var h = 8; h <= 18; h++) {
+    for (var mm = 0; mm < 60; mm += 15) {
+      if (h === 18 && mm > 0) break; // 18:00 まで
+      opts.push(h + ':' + (mm < 10 ? '0' + mm : mm));
+    }
+  }
+  ['午前中', '午後', '夕方', '終日', '時間調整中'].forEach(function(f){ opts.push(f); });
+  dl.innerHTML = opts.map(function(o){ return '<option value="' + o + '">'; }).join('');
+})();
+</script>
+
+<script>
+// ============================================================
+// localStorage 直読み (見積アプリと共通の保存キー)
+// ============================================================
+const STORAGE_KEY = 'mitsumori_estimates_v1';
+const SETTINGS_KEY = 'mitsumori_settings_v1';
+
+function loadEstimates() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (!s) return {};
+    return JSON.parse(s) || {};
+  } catch (e) {
+    console.error('[progress] localStorage 読込失敗', e);
+    return {};
+  }
+}
+function saveEstimates(estimates) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(estimates));
+    return true;
+  } catch (e) {
+    console.error('[progress] localStorage 保存失敗', e);
+    alert('保存失敗: ' + e.message);
+    return false;
+  }
+}
+function loadSettings() {
+  try {
+    const s = localStorage.getItem(SETTINGS_KEY);
+    if (!s) return {};
+    return JSON.parse(s) || {};
+  } catch (e) { return {}; }
+}
+
+// ============================================================
+// Web閲覧版モード (Electron外=GitHub Pages等で自動有効)
+//   このファイルをそのまま gantt ページとして公開し、カレンダー/スマホから
+//   閲覧する。アプリ側でガント仕様を変えてもビルド時の公開コピーだけで自動追従。
+//   読み取り(GAS同期)は既存のfetchフォールバックで動く。書き込みはここで遮断。
+// ============================================================
+const IS_WEB_VIEW = !window.bcApi;
+
+// GAS Web App 経由で見積を Drive 台帳に push
+async function gasSaveLedgerFromProgress(est) {
+  if (IS_WEB_VIEW) return null; // Web閲覧版はDrive台帳に書かない(読み取り専用)
+  const settings = loadSettings();
+  const url = (settings.gasSyncUrl || '').trim();
+  const token = (settings.gasSyncToken || '').trim();
+  if (!url || !token) return null;
+  const body = JSON.stringify({
+    token,
+    action: 'save-ledger',
+    content: JSON.stringify(est),
+    fileId: est._driveFileId || '',
+  });
+  let r;
+  if (window.bcApi?.fetchUrl) {
+    r = await window.bcApi.fetchUrl({
+      url, method: 'POST', body, headers: { 'Content-Type': 'text/plain' },
+    });
+  } else {
+    const res = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'text/plain' } });
+    r = { ok: res.ok, status: res.status, text: await res.text() };
+  }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = JSON.parse(r.text);
+  if (!data.ok) throw new Error(data.error || 'GAS応答エラー');
+  return data; // { fileId, id, month }
+}
+
+// =============================================================
+// Drive 台帳「全件同期」(forceMode=true で強制取込)
+// 進捗タブには編集中の見積概念がないので index.html の編集中ガード相当は不要
+// =============================================================
+async function gasFetchProgress(url, options = {}) {
+  const headers = {
+    ...(options.headers || {}),
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+  };
+  if (window.bcApi?.isElectron && window.bcApi.fetchUrl) {
+    const r = await window.bcApi.fetchUrl({
+      url, method: options.method || 'GET', body: options.body, headers,
+    });
+    if (!r.ok) throw new Error(r.error || 'fetch failed');
+    return { status: r.status, text: r.text };
+  }
+  const resp = await fetch(url, { ...options, headers, cache: 'no-store' });
+  const text = await resp.text();
+  return { status: resp.status, text };
+}
+async function gasCallProgress(body) {
+  const settings = loadSettings();
+  const url = (settings.gasSyncUrl || '').trim();
+  const token = (settings.gasSyncToken || '').trim();
+  if (!url || !token) throw new Error('GAS未設定');
+  const r = await gasFetchProgress(url, {
+    method: 'POST',
+    body: JSON.stringify({ ...body, token }),
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  });
+  if (r.status !== 200) throw new Error('HTTP ' + r.status);
+  const data = JSON.parse(r.text);
+  if (!data.ok) throw new Error(data.error || 'failed');
+  return data;
+}
+// v1.4.195: 差分同期対応。lastSyncAt を localStorage に保存し、
+//   通常クリック → 前回同期以降の変更分のみ取得(月ごとスキップ+ファイルごとスキップ)
+//   Shift+クリック → 強制全件同期(lastSyncAt リセット)
+const _SYNC_KEY = 'progress_lastSyncAt';
+function _updateSyncBtnTitle() {
+  const btn = document.getElementById('btn-reload');
+  if (!btn) return;
+  const t = localStorage.getItem(_SYNC_KEY);
+  if (t) {
+    const d = new Date(t);
+    const fmt = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    btn.title = `差分同期: ${fmt}以降の変更分のみ取込 | Shift+クリックで強制全件同期`;
+  } else {
+    btn.title = 'Drive台帳から全件取込み (初回) | Shift+クリックで強制全件同期';
+  }
+}
+async function fetchAllFromDrive(forceAll) {
+  const btn = document.getElementById('btn-reload');
+  if (!btn) return;
+  const settings = loadSettings();
+  if (!(settings.gasSyncUrl||'').trim() || !(settings.gasSyncToken||'').trim()) {
+    _showSaveToast('⚠ GAS URL/トークン未設定', 'error');
+    return;
+  }
+  const lastSyncAt = forceAll ? null : (localStorage.getItem(_SYNC_KEY) || null);
+  const isDelta = !forceAll && !!lastSyncAt;
+  const syncStartTime = new Date().toISOString(); // 同期開始時刻を記録(完了後にセット)
+  btn.disabled = true;
+  const orig = btn.textContent;
+  let total = 0;
+  let skippedFiles = 0;
+  let localKept = 0; // v1.4.625: ローカルの方が新しくDrive取込をスキップした件数(未push編集の保護)
+  let storageError = false;
+  try {
+    btn.textContent = isDelta ? '⏳ 差分確認中...' : '⏳ 月一覧取得中...';
+    _showSaveToast(isDelta ? `⏳ ${lastSyncAt.slice(0,10)}以降の差分確認中...` : '⏳ 月一覧取得中...', 'saving');
+    const monthsData = await gasCallProgress({ action: 'list-ledger-months' });
+    const monthsRaw = (monthsData.items || []);
+    let months = monthsRaw.map(m => m.month).filter(Boolean).sort();
+    if (!months.length) {
+      _showSaveToast('✅ 取込対象なし(Drive台帳が空)');
+      return;
+    }
+    // 差分モード: newestModifiedAt が lastSyncAt 以前の月をまるごとスキップ
+    let skippedMonths = 0;
+    if (isDelta) {
+      const allMonthCount = months.length;
+      months = monthsRaw
+        .filter(m => !m.newestModifiedAt || m.newestModifiedAt > lastSyncAt)
+        .map(m => m.month).filter(Boolean).sort();
+      skippedMonths = allMonthCount - months.length;
+      if (!months.length) {
+        _showSaveToast(`✅ 差分なし — 全${allMonthCount}ヶ月スキップ`);
+        localStorage.setItem(_SYNC_KEY, syncStartTime);
+        _updateSyncBtnTitle();
+        return;
+      }
+    } else if (months.length > 12) {
+      const totalEst = monthsRaw.reduce((s, m) => s + (Number(m.count) || 0), 0);
+      const ok = confirm(
+        `Drive 台帳に ${months.length}ヶ月分(計 約${totalEst}件)あります。\n` +
+        `すべて取込むと数分〜十数分かかります。\n` +
+        `件数が多いと localStorage が溢れる可能性があります(目安: 〜2000件)。\n\n` +
+        `続行しますか? (キャンセルで 直近12ヶ月のみ)`
+      );
+      if (!ok) months.splice(0, Math.max(0, months.length - 12));
+    }
+    for (let i = 0; i < months.length; i++) {
+      const m = months[i];
+      btn.textContent = `⏳ ${i+1}/${months.length}: ${m}`;
+      _showSaveToast(`⏳ ${m} 取得中... (${total}件更新済)`, 'saving');
+      try {
+        const listData = await gasCallProgress({ action: 'list-ledger', month: m });
+        let list = listData.items || [];
+        if (!list.length) continue;
+        // 差分モード: modifiedAt が lastSyncAt 以前のファイルはスキップ
+        if (isDelta && lastSyncAt) {
+          const before = list.length;
+          list = list.filter(meta => !meta.modifiedAt || meta.modifiedAt > lastSyncAt);
+          skippedFiles += (before - list.length);
+        }
+        if (!list.length) continue;
+        const CHUNK = 8;
+        for (let j = 0; j < list.length; j += CHUNK) {
+          const chunk = list.slice(j, j + CHUNK);
+          const contents = await Promise.all(chunk.map(async meta => {
+            try {
+              const d = await gasCallProgress({ action: 'get-ledger', fileId: meta.fileId });
+              return { meta, est: JSON.parse(d.content) };
+            } catch (e) { console.warn('[同期 get]', meta.fileId, e); return null; }
+          }));
+          for (const x of contents) {
+            if (!x || !x.est || !x.est.id) continue;
+            // v1.4.625/654: ローカルの方が新しい/同じなら上書きしない=編集を守る(★同じ更新日時でも守る=>=)。
+            //   Driveが「厳密に新しい」時だけ採用。これで保存済み編集が古い/同時刻のDrive版で消える事故を防ぐ(大村まどか報告)。
+            const local = allEstimates[x.est.id];
+            const driveU = x.est.updatedAt || x.meta.modifiedAt || '';
+            const localU = (local && local.updatedAt) || '';
+            if (local && localU && driveU && localU >= driveU) {
+              if (x.meta.fileId && !local._driveFileId) local._driveFileId = x.meta.fileId; // ファイルIDだけ補完
+              localKept++;
+              continue;
+            }
+            // v1.4.654: Driveが新しくても、Drive側が明細(lines)空でローカルに明細があれば明細は維持(発注明細の消失防止)
+            if (local && (!x.est.lines || !x.est.lines.length) && local.lines && local.lines.length) {
+              x.est.lines = local.lines;
+            }
+            x.est._driveFileId = x.meta.fileId;
+            x.est._driveMonth = m;
+            x.est._driveSavedAt = x.meta.modifiedAt || x.est._driveSavedAt || x.est.updatedAt;
+            allEstimates[x.est.id] = x.est;
+            total++;
+          }
+        }
+        try { saveEstimates(allEstimates); }
+        catch (e) {
+          if (/quota|exceed|storage/i.test(e.message || '')) { storageError = true; break; }
+          throw e;
+        }
+      } catch (e) {
+        console.error('[同期]', m, e);
+        if (e && /quota|exceed|storage/i.test(e.message || '')) { storageError = true; break; }
+      }
+    }
+    if (!storageError) {
+      localStorage.setItem(_SYNC_KEY, syncStartTime);
+      _updateSyncBtnTitle();
+    }
+    if (storageError) {
+      _showSaveToast(`⚠ 容量オーバーで中断(${total}件取込済)`, 'error');
+    } else if (isDelta) {
+      _showSaveToast(`✅ 差分同期完了: ${total}件更新, ${skippedMonths}ヶ月スキップ${localKept ? ` (ローカル優先 ${localKept}件保護)` : ''}`);
+    } else {
+      _showSaveToast(`✅ ${months.length}ヶ月: ${total}件 取込完了${localKept ? ` (ローカル優先 ${localKept}件保護)` : ''}`);
+    }
+    reload();
+  } catch (e) {
+    console.error('[同期]', e);
+    _showSaveToast(`✗ 同期失敗: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// 進捗タブ: 詳細編集後に Drive 台帳へ silent auto-push(debounce 1.5s)
+function _showSaveToast(text, type) {
+  let toast = document.getElementById('prg-save-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'prg-save-toast';
+    toast.className = 'prg-save-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.remove('saving','error');
+  if (type === 'saving') toast.classList.add('saving');
+  else if (type === 'error') toast.classList.add('error');
+  toast.classList.add('show');
+  if (toast._t) clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+function autoPushFromProgress(id) {
+  if (IS_WEB_VIEW) { _showSaveToast('📱 Web閲覧版は表示のみ — 編集はPCアプリで', 'error'); return; }
+  if (!id) return;
+  // v1.4.624: 旧実装は単一グローバルタイマーで、複数行を1.5秒以内に連続編集すると最後のidしかDrive pushされず取りこぼし
+  //   (=他PC/カレンダーに反映されず、後で全件同期すると古いDriveでローカル編集が消える「保存不備」の一因)。
+  //   → 保留Setに溜めて、まとめて全件pushする。
+  if (!autoPushFromProgress._pending) autoPushFromProgress._pending = new Set();
+  autoPushFromProgress._pending.add(id);
+  if (autoPushFromProgress._timer) clearTimeout(autoPushFromProgress._timer);
+  _showSaveToast('⏳ 1.5秒後にDriveへ保存します...', 'saving');
+  autoPushFromProgress._timer = setTimeout(async () => {
+    autoPushFromProgress._timer = null;
+    const ids = Array.from(autoPushFromProgress._pending);
+    autoPushFromProgress._pending = new Set();
+    _showSaveToast('☁ Drive保存中...', 'saving');
+    let ok = 0, fail = 0, gasUnset = false;
+    for (const pid of ids) {
+      const est = allEstimates[pid];
+      if (!est) continue;
+      try {
+        const r = await gasSaveLedgerFromProgress(est);
+        if (r && r.fileId) { est._driveFileId = r.fileId; est._driveMonth = r.month; est._driveSavedAt = new Date().toISOString(); ok++; }
+        else { gasUnset = true; }
+      } catch (e) { console.warn('[progress auto push 失敗]', pid, e); fail++; }
+    }
+    saveEstimates(allEstimates);
+    if (gasUnset && !ok && !fail) { _showSaveToast('⚠ GAS未設定: ローカル保存のみ', 'error'); return; }
+    if (fail) { _showSaveToast(`⚠ Drive保存 ${ok}件成功 / ${fail}件失敗`, 'error'); return; }
+    _showSaveToast(`✅ Drive保存済${ok > 1 ? (' ' + ok + '件') : ''}(他PCに反映されます)`, 'success');
+    // data-info も短時間書換え
+    const info = document.getElementById('data-info');
+    if (info) {
+      const orig = info.textContent;
+      info.textContent = '☁ Drive保存済';
+      info.style.background = '#16a34a';
+      setTimeout(() => { info.textContent = orig; info.style.background = '#1e3a8a'; }, 2000);
+    }
+  }, 1500);
+}
+
+// ============================================================
+// 共通ユーティリティ(見積アプリから必要分のみコピー)
+// ============================================================
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtNum(n) { const v = Number(n); return Number.isFinite(v) ? v.toLocaleString() : '0'; }
+function lineAmount(l) {
+  if (l.amountOverride != null && l.amountOverride !== '') return Number(l.amountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.unitPrice)||0);
+}
+function lineOrderAmount(l) {
+  if (l.orderAmountOverride != null && l.orderAmountOverride !== '') return Number(l.orderAmountOverride) || 0;
+  return (Number(l.qty)||0) * (Number(l.orderPrice)||0);
+}
+function lineMaterialAmount(l) {
+  return (Number(l.qty)||0) * (Number(l.materialPrice)||0);
+}
+// v1.4.125: 元請け名 短縮表記マップ(工事進捗タグ表示用)
+//   山一地所→山一 / ジェイエイ→JA / みどり不動産→みどり
+//   ワールドレジデンシャル→WRD / ハウビングショップ田中→HS田中
+//   JSB→JSB / 丸山不動産→丸山 / その他はそのまま(一般顧客等)
+function shortenMotouke(long) {
+  if (!long) return '';
+  const s = String(long).trim();
+  if (/^山一/.test(s)) return '山一';
+  if (/ジェイエイ|JA仙台|JA\s*仙台|^JA/i.test(s)) return 'JA';
+  if (/みどり/.test(s)) return 'みどり';
+  if (/JSB|ジェイ.?エス.?ビー/i.test(s)) return 'JSB';
+  // WIC / WRD / ワールドレジデンシャル / ワールドアイシティ(廃止旧称) を全て「WRD」に統一
+  if (/ワールド|^WIC$|^WRD$/i.test(s)) return 'WRD';
+  if (/ハウ[ビヴ]ングショップ.*田中|ハウビング田中|^HS田中/.test(s)) return 'HS田中';
+  if (/丸山/.test(s)) return '丸山';
+  if (/フリューゲル/.test(s)) return 'フリューゲル';
+  // v1.4.126: 東北分譲住宅 → 東北分譲(4文字)
+  if (/東北分譲/.test(s)) return '東北分譲';
+  return s;
+}
+// 法人接頭辞・接尾辞(株式会社/有限会社/㈱ 等)と末尾敬称(様/御中)を除去
+function stripCompanyForm(s) {
+  return String(s || '').trim()
+    .replace(/^(株式|有限|合同|合資|合名)会社\s*/, '')
+    .replace(/^\(株\)\s*/, '').replace(/^\(有\)\s*/, '').replace(/^\(同\)\s*/, '')
+    .replace(/^[㈱㈲㈳㈵]\s*/, '')
+    .replace(/\s*(株式|有限|合同|合資|合名)会社\s*$/, '')
+    .replace(/\s*\(株\)\s*$/, '').replace(/\s*\(有\)\s*$/, '').replace(/\s*\(同\)\s*$/, '')
+    .replace(/\s*[㈱㈲㈳㈵]\s*$/, '')
+    .replace(/\s*(御中|様|さま|殿)\s*$/, '')
+    .trim();
+}
+// 元請け名: 台帳と同じ仕様 — meta.atena(見積書宛先)を優先・法人接頭辞除去
+function getMotoukeName(est) {
+  const atena = stripCompanyForm(est.meta?.atena || '');
+  if (atena) return atena;
+  return stripCompanyForm(est.meta?.motouke || est.meta?.taikyo?.motouke || '');
+}
+// 元請け名 → タグ色(固定パレット + 未知名はハッシュ自動色)
+// v1.4.125: ワールド→WRD にキー名変更、HS田中 を追加
+const MOTOUKE_COLORS = {
+  '山一':        { bg:'#dbeafe', color:'#1e40af' },
+  'みどり':      { bg:'#dcfce7', color:'#166534' },
+  'JSB':         { bg:'#e9d5ff', color:'#6b21a8' },
+  'WRD':         { bg:'#fed7aa', color:'#7c2d12' },  // 旧'ワールド'
+  '丸山':        { bg:'#fef3c7', color:'#78350f' },
+  'フリューゲル':{ bg:'#fce7f3', color:'#9d174d' },
+  '自社':        { bg:'#e5e7eb', color:'#374151' },
+  'JA':          { bg:'#cffafe', color:'#155e75' },
+  'HS田中':      { bg:'#fde68a', color:'#854d0e' },  // ハウビングショップ田中
+  '東北分譲':    { bg:'#ddd6fe', color:'#4c1d95' },
+  // WIC=WRD=株式会社ワールドレジデンシャル に統合(v1.4.125〜)
+};
+// 業者名 → タグ色(GAS版スクリプトと同じ実運用パレット)
+// 部分一致でマッチ(「思綺美装(株)」「FKK MOTORS」等にも対応)
+const VENDOR_COLORS = [
+  { match: 'FKK',         bg:'#F8BBD0', color:'#880E4F' }, // ピンク
+  { match: '思綺美装',    bg:'#A5D6A7', color:'#1B5E20' }, // 緑
+  { match: '赤間',        bg:'#FFF9C4', color:'#F57F17' }, // 黄
+  { match: 'ムラカベ',    bg:'#CE93D8', color:'#4A148C' }, // 紫
+  { match: 'ハルノデザイン',bg:'#E1BEE7', color:'#6A1B9A' }, // 淡紫
+  { match: 'はやでん',    bg:'#FFCC80', color:'#E65100' }, // オレンジ
+  { match: 'ヒラヤマ',    bg:'#B3E5FC', color:'#01579B' }, // 水色
+  { match: '戸引製畳',    bg:'#2E7D32', color:'#FFFFFF' }, // 深緑
+  { match: "OM'S",        bg:'#90CAF9', color:'#0D47A1' }, // 青
+  { match: 'OMsONE',      bg:'#90CAF9', color:'#0D47A1' }, // 青(別表記)
+  { match: 'こころ',      bg:'#FFD180', color:'#BF360C' }, // 暖色
+  { match: 'クマガイ',    bg:'#80CBC4', color:'#004D40' }, // ティール
+];
+function vendorColor(name) {
+  if (!name) return null;
+  const upper = name.toUpperCase();
+  for (const v of VENDOR_COLORS) {
+    const u = v.match.toUpperCase();
+    if (upper === u || upper.includes(u) || u.includes(upper)) {
+      return { bg: v.bg, color: v.color };
+    }
+  }
+  return null;
+}
+function motoukeColor(name) {
+  if (!name) return { bg:'#f3f4f6', color:'#6b7280' };
+  // 1. 完全一致(短縮形 "山一"等)
+  if (MOTOUKE_COLORS[name]) return MOTOUKE_COLORS[name];
+  // 2. shortenMotouke を経由して再マッピング(=「山一地所」→「山一」で色取得)
+  const short = (typeof shortenMotouke === 'function') ? shortenMotouke(name) : name;
+  if (short !== name && MOTOUKE_COLORS[short]) return MOTOUKE_COLORS[short];
+  // 3. 未知名 → 文字列ハッシュから HSL 自動色生成
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return { bg: `hsl(${h}, 65%, 90%)`, color: `hsl(${h}, 65%, 28%)` };
+}
+function motoukeTagHtml(name) {
+  if (!name) return '<span style="color:#9ca3af; font-size:11px;">-</span>';
+  const c = motoukeColor(name);
+  // v1.4.125: タグ表示は短縮名(山一/JA/みどり/WRD/HS田中/JSB/丸山 等)を使う
+  //   元の正式名は title 属性でホバー表示
+  const short = (typeof shortenMotouke === 'function') ? shortenMotouke(name) : name;
+  const titleAttr = (short !== name) ? ` title="${escapeHtml(name)}"` : '';
+  return `<span class="motouke-tag" style="background:${c.bg}; color:${c.color};"${titleAttr}>${escapeHtml(short)}</span>`;
+}
+// 業者名 → タグ色(固定パレット優先、未登録は元請けハッシュ流用)
+function supplierColor(name) {
+  return vendorColor(name) || motoukeColor(name);
+}
+
+// 自社スタッフ パーソナルカラー(スケジュール管理アプリと統一)
+const STAFF_COLORS = {
+  '鈴木悠平': { bg:'#a7f3d0', color:'#065f46' }, // 薄緑
+  '大村将史': { bg:'#fca5a5', color:'#991b1b' }, // 薄赤
+  '山田裕貴': { bg:'#7dd3fc', color:'#0c4a6e' }, // 水色
+  '木村優作': { bg:'#bfdbfe', color:'#1e3a8a' }, // 薄青
+  '南部大我': { bg:'#fde68a', color:'#78350f' }, // 薄黄
+  '最上登生': { bg:'#d8b4fe', color:'#4c1d95' }, // 薄紫
+};
+function staffBadgeHtml(name) {
+  if (!name) return '<span style="color:#9ca3af; font-size:11px;">-</span>';
+  // スペースあり・なし両方に対応(「山田裕貴」→「山田 裕貴」どちらもマッチ)
+  const key = name.replace(/\s/g, '');
+  const found = Object.entries(STAFF_COLORS).find(([k]) => k.replace(/\s/g,'') === key);
+  if (!found) return `<span style="font-size:12px;">${escapeHtml(name)}</span>`;
+  const { bg, color } = found[1];
+  return `<span style="display:inline-block; padding:1px 7px; border-radius:10px; background:${bg}; color:${color}; font-size:12px; font-weight:600; white-space:nowrap;">${escapeHtml(name)}</span>`;
+}
+function supplierTagHtml(name) {
+  if (!name) return '';
+  const c = supplierColor(name);
+  return `<span class="supplier-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(name)}</span>`;
+}
+function isJishaSupplier(s) {
+  const v = (s || '').trim();
+  return !v || v === 'ビルドクラスタ';
+}
+
+// 業者ごとの集計(発注金額・開始/終了工期)
+function suppliersFor(est) {
+  const lines = est.lines || [];
+  const map = new Map(); // supplier → { amount, qtyTotal, periods:[{start,end}], items:[] }
+  lines.forEach(l => {
+    if (!l.item || l.reduced) return;
+    if (isJishaSupplier(l.supplier)) return; // 自社工事は集計対象外(発注先ではない)
+    const sup = l.supplier;
+    if (!map.has(sup)) map.set(sup, { supplier: sup, amount: 0, periods: [], items: [] });
+    const e = map.get(sup);
+    e.amount += lineOrderAmount(l);
+    if (l.hatchuPeriodStart || l.hatchuPeriodEnd) {
+      e.periods.push({ start: l.hatchuPeriodStart || '', end: l.hatchuPeriodEnd || '' });
+    }
+    e.items.push(l.item);
+  });
+  // 開始工期=最早 / 終了工期=最遅 (M/D 文字列ベースで簡易ソート)
+  const result = [];
+  map.forEach(e => {
+    const starts = e.periods.map(p => p.start).filter(Boolean).sort(cmpMonthDay);
+    const ends = e.periods.map(p => p.end).filter(Boolean).sort(cmpMonthDay);
+    result.push({
+      supplier: e.supplier,
+      amount: Math.round(e.amount),
+      periodStart: starts[0] || '',
+      periodEnd: ends[ends.length - 1] || '',
+      itemCount: e.items.length,
+    });
+  });
+  // 金額降順
+  result.sort((a, b) => b.amount - a.amount);
+  return result;
+}
+function cmpMonthDay(a, b) {
+  const pa = parseMd(a), pb = parseMd(b);
+  if (!pa.m || !pb.m) return a.localeCompare(b);
+  return (pa.m * 100 + pa.d) - (pb.m * 100 + pb.d);
+}
+function parseMd(s) {
+  if (!s) return {m:0,d:0};
+  const m = /^(\d{1,2})\/(\d{1,2})/.exec(String(s).trim());
+  return m ? { m:Number(m[1]), d:Number(m[2]) } : {m:0,d:0};
+}
+
+// 見積金額集計
+function estimateTotal(est) {
+  return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineAmount(l), 0);
+}
+function materialTotal(est) {
+  return (est.lines||[]).reduce((s,l) => l.reduced ? s : s + lineMaterialAmount(l), 0);
+}
+// v1.4.237: 社内工事ボリューム判定(index.html の calcWorkloadStatus と同ロジック)
+//   台帳から移設 → 工事進捗タブで事前補修が必要な案件(普/重/激重)を可視化
+const WL_HEAVY_KEYWORDS = ['シール','シーリング','コーキング','大工','木工','巾木','框','フローリング張替','フローリング交換','CF張替','CF交換','換気扇','レンジフード','塗装','ペンキ','吹付','吹き付','網戸張替','網戸交換','網戸張り替え'];
+const WL_LIGHT_KEYWORDS = ['照明','電球','LED','シーリングライト','ペンダント'];
+// v1.4.970: 「シール剥がし」が 'シール' に当たって重扱いされる誤判定を除去(index.html と同じ引き算方式)
+const WL_NOT_HEAVY_RE = /シール(剥がし|剥し|はがし|跡)/g;
+function wlIsJishaLine(l) {
+  if (l && l.hatchuSection === 'jisha') return true;
+  if (l && l.hatchuSection === 'gaichuu') return false;
+  const s = (l && l.supplier ? l.supplier : '').trim();
+  return !s || s === 'ビルドクラスタ';
+}
+function calcWorkloadStatus(est) {
+  const lines = (est?.lines || []).filter(l => l && l.item && !l.reduced && wlIsJishaLine(l));
+  const heavy = [], medium = [], light = [];
+  lines.forEach(l => {
+    const text = `${l.category||''} ${l.item||''} ${l.specs||''}`;
+    const label = [l.room, l.item, l.specs].filter(Boolean).join(' ').trim();
+    if (WL_LIGHT_KEYWORDS.some(k => text.includes(k))) { light.push(label); return; }
+    const heavyText = text.replace(WL_NOT_HEAVY_RE, '');
+    if (WL_HEAVY_KEYWORDS.some(k => heavyText.includes(k))) heavy.push(label);
+    else medium.push(label);
+  });
+  const hc = heavy.length;
+  let level;
+  if (lines.length === 0) level = '無';
+  else if (hc === 0) level = '軽';
+  else if (hc <= 2) level = '普';
+  else if (hc <= 4) level = '重';
+  else level = '激重';
+  return { level, score: hc, totalJishaLines: lines.length, heavyItems: heavy, mediumItems: medium, lightItems: light };
+}
+const WL_BADGE_STYLE = {
+  '無':   { bg:'#f1f5f9', color:'#64748b', border:'#cbd5e1', emoji:'⚪' },
+  '軽':   { bg:'#dcfce7', color:'#166534', border:'#16a34a', emoji:'🟢' },
+  '普':   { bg:'#fef9c3', color:'#854d0e', border:'#ca8a04', emoji:'🟡' },
+  '重':   { bg:'#fed7aa', color:'#9a3412', border:'#ea580c', emoji:'🟠' },
+  '激重': { bg:'#fecaca', color:'#991b1b', border:'#dc2626', emoji:'🔴' },
+};
+// 工事進捗の物件名に出す社内工事ボリュームバッジ。
+// v1.4.238: 台帳ではないので 軽 も表示OK(ユーザー要望)。社内工事0行の「無」のみ非表示
+function workloadBadgeHtml(est) {
+  const wl = calcWorkloadStatus(est);
+  if (wl.totalJishaLines === 0 || wl.level === '無') return '';
+  const s = WL_BADGE_STYLE[wl.level];
+  if (!s) return '';
+  let tip = `🏋 社内工事ボリューム: ${wl.level}\n重い行 ${wl.score}件 / 計 ${wl.totalJishaLines}行`;
+  if (wl.heavyItems.length) {
+    tip += '\n--- 事前補修推奨 ---\n' + wl.heavyItems.slice(0,5).join('\n');
+    if (wl.heavyItems.length > 5) tip += '\n…';
+  }
+  return ` <span title="${escapeHtml(tip)}" style="display:inline-block; padding:0 5px; background:${s.bg}; color:${s.color}; border:1px solid ${s.border}; border-radius:6px; font-size:9px; font-weight:700; vertical-align:middle;">${s.emoji}${wl.level}</span>`;
+}
+// 業務種別判定: '原状回復工事' のみ restoration、それ以外(修繕/アフター/リフォーム/植栽剪定/漏水復旧/その他/未設定)は全て repair 扱い
+// → 入居中物件で日程調整が必要な工事はすべて 修繕・アフター のフローで管理する方針
+function workflowOf(est) {
+  const k = (est.meta?.kojiName || '').trim();
+  return k === '原状回復工事' ? 'restoration' : 'repair';
+}
+// v1.4.972: 「原状回復の性質を持つ修繕」判定(山田 2026-07-17)。
+//   工事種別が「修繕工事」「追加提案工事」等でも、入居日・鍵交換日・除菌日・最終確認日が入っている案件は
+//   =空室で入居に向けて動いている(原状回復の段取りに乗っている)ので、🔑原状回復タブにも出す。
+//   例: 萩が丘戸建て(追加提案工事)は▽確認7/21が入っているのに、種別だけで弾くと原状回復タブから消えていた。
+//   方針=「両方に出す」(山田判断): 修繕タブからは消さない(種別としては修繕のままなので)。
+//     ※カレンダーアプリは同じ問題を「工程3件以上の修繕を原状回復扱い＋修繕タブには出さない(_repairResto)」で
+//       解いており、判定基準も排他方針もガントとは別物。揃える必要が出たらここを見直すこと。
+//   ★workflowOf は書き換えないこと: _estScheduleDates が 'repair' の時だけ対応予定日を数えているため、
+//     あちらを変えると修繕の🔧対応マーカーが消える(=「数えるもの」と「描くもの」の一致が崩れる)。
+//   ※完了日は原状回復・修繕どちらにも入るので判定に使わない(使うと全案件が原状回復になる)。
+//   ※「未定」等の日付として読めない値も、その欄を埋めた=原状回復として管理している証拠なので性質ありと見る。
+function hasRestorationNature(est) {
+  if (workflowOf(est) === 'restoration') return true;
+  const ho = est?.meta?.hatchuOrder || {};
+  return [ho.nyukyoDate, ho.keyChangeDate, ho.jokinDate, ho.finalCheckDate]
+    .some(v => String(v || '').trim() !== '');
+}
+
+// 鍵回収・鍵残しの自動判定(GAS版スクリプトのロジック移植)
+// 鍵交換日 vs 業者最終日 vs 除菌日 の前後関係から判定
+//   - 業者も除菌も鍵交換前  → 「鍵業者」回収・残し不要
+//   - 除菌だけ後            → 「除菌業者」回収・残し不要
+//   - 業者だけ後            → 「弊社」回収・後続業者用に「要連絡」
+//   - 両方後                → 後の方で判定
+//   戻り値: { collector, nokoshi } どちらも空文字可
+function autoDetectKeyHandling(est) {
+  const m = est.meta || {};
+  const ho = m.hatchuOrder || {};
+  const keyExDate = mdToDateOf(ho.keyChangeDate);
+  if (!keyExDate) return { collector: '', nokoshi: '' }; // 鍵交換日が無ければ判定不能
+  const sterilDate = mdToDateOf(ho.jokinDate);
+  const hasSteril = !!m.jokinDone || !!sterilDate;
+  // 業者最終日 = 完了予定日(finalCheckDate) または 業者の最遅終了日
+  let companyLastDate = mdToDateOf(ho.finalCheckDate);
+  if (!companyLastDate) {
+    const sups = suppliersFor(est);
+    let latest = null;
+    for (const s of sups) {
+      const d = mdToDateOf(s.periodEnd) || mdToDateOf(s.periodStart);
+      if (d && (!latest || d > latest)) latest = d;
+    }
+    companyLastDate = latest;
+  }
+  const companyAfterKey = companyLastDate && companyLastDate >= keyExDate;
+  const sterilAfterKey = (sterilDate && sterilDate > keyExDate) || (hasSteril && !sterilDate);
+  if (!companyAfterKey && !sterilAfterKey) {
+    return { collector: '鍵業者', nokoshi: '' };
+  } else if (sterilAfterKey && !companyAfterKey) {
+    return { collector: '除菌業者', nokoshi: '' };
+  } else if (companyAfterKey && !sterilAfterKey) {
+    return { collector: '弊社', nokoshi: '要連絡' };
+  } else {
+    // 両方後 → 後の方で判定
+    if (sterilDate && companyLastDate) {
+      if (companyLastDate >= sterilDate) {
+        return { collector: '弊社', nokoshi: '' };
+      } else {
+        return { collector: '除菌業者', nokoshi: '要連絡' };
+      }
+    }
+    return { collector: '要確認', nokoshi: '要連絡' };
+  }
+}
+// v1.4.972: 🔑鍵残しの「後続業者への連絡」済/未の記録(山田要望・ガントのチップをクリックでトグル)。
+//   保存先 = meta.kagiRenrakuDone = { at: ISO, by: 名前 }(済) / フィールド削除(未)。
+//   台帳JSONに同乗してDrive経由で全PC共有。誰がいつ連絡したかも残る(監査ログと同じ思想)。
+function toggleKagiRenraku(id) {
+  if (IS_WEB_VIEW) { _showSaveToast('📱 Web閲覧版は表示のみ — 鍵連絡の記録はPCアプリで', 'error'); return; }
+  const est = allEstimates[id];
+  if (!est?.meta) return;
+  if (est.meta.kagiRenrakuDone) {
+    delete est.meta.kagiRenrakuDone;
+  } else {
+    let by = '';
+    try { by = (JSON.parse(localStorage.getItem('mitsumori_settings_v1') || '{}').userName || ''); } catch (e) {}
+    est.meta.kagiRenrakuDone = { at: new Date().toISOString(), by: by || '(名前未設定)' };
+  }
+  est.updatedAt = new Date().toISOString();
+  saveEstimates(allEstimates);
+  autoPushFromProgress(est.id);   // 1.5秒デバウンスでDriveへ(既存の編集経路と同じ)
+  renderProgress();
+}
+// "M/D" or "M/D(曜)" or ISO 文字列 → Date(0時0分)
+// 表示用: ISO形式(YYYY-MM-DD / YYYY/MM/DD) → M/D に変換。M/D 等はそのまま返す
+function stripYearForDisplay(s) {
+  if (!s) return '';
+  const str = String(s).trim();
+  const iso = /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(.*)$/.exec(str);
+  if (iso) return `${Number(iso[2])}/${Number(iso[3])}${iso[4] || ''}`;
+  return str;
+}
+// 当初 vs 現在の最終確認日のスリップ日数(progress.html 内インライン版)
+//   index.html の finalCheckDateSlip と同じロジック
+function _parseMDLocal(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  let m = /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/.exec(str);
+  if (m) return { m: Number(m[2]), d: Number(m[3]) };
+  m = /^(\d{1,2})\/(\d{1,2})/.exec(str);
+  if (m) return { m: Number(m[1]), d: Number(m[2]) };
+  return null;
+}
+function finalCheckSlipLabel(current, original) {
+  if (!current || !original) return '';
+  const cur = _parseMDLocal(current);
+  const org = _parseMDLocal(original);
+  if (!cur || !org) return '';
+  const y = new Date().getFullYear();
+  const days = Math.round((new Date(y, cur.m-1, cur.d) - new Date(y, org.m-1, org.d)) / 86400000);
+  if (days === 0) return '';
+  return days > 0 ? `${days}日遅延` : `${-days}日前倒し`;
+}
+
+// M/D 形式は「今日に最も近い年(去年/今年/来年の中)」を選ぶ
+//   例: 今日=5/7 で "3/15" → 今年3/15(過去53日)
+//       今日=5/7 で "11/15" → 去年11/15(過去173日)or 今年11/15(未来192日)→ 過去の方が近いので去年
+function mdToDateOf(s) {
+  if (!s) return null;
+  const str = String(s).trim();
+  if (!str) return null;
+  // ISO形式 (YYYY-MM-DD)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
+  if (iso) return new Date(Number(iso[1]), Number(iso[2])-1, Number(iso[3]));
+  // YYYY/M/D・YYYY年M月D日 (契約ノートの入居日形式。取込された ho.nyukyoDate もこの形で入り得る)
+  const ymd = /^(\d{4})[\/年](\d{1,2})[\/月](\d{1,2})/.exec(str);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2])-1, Number(ymd[3]));
+  // M/D 形式
+  const md = /^(\d{1,2})\/(\d{1,2})/.exec(str);
+  if (md) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const m = Number(md[1]), d = Number(md[2]);
+    // 去年・今年・来年 の3候補から「今日に最も近い」を選ぶ
+    const candidates = [
+      new Date(today.getFullYear() - 1, m - 1, d),
+      new Date(today.getFullYear(),     m - 1, d),
+      new Date(today.getFullYear() + 1, m - 1, d),
+    ];
+    let best = candidates[1];
+    let bestDiff = Math.abs(best - today);
+    for (const c of candidates) {
+      const diff = Math.abs(c - today);
+      if (diff < bestDiff) { bestDiff = diff; best = c; }
+    }
+    return best;
+  }
+  return null;
+}
+
+// 入居日欄の状態判定: 「7/28」=確定 / 「7/28予定…」「7/28入居希望…」=仮 / 「未定」=未定
+//   kind: 'kakutei' | 'kari' | 'mitei' | 'none'
+function nyukyoStatusOf(ho) {
+  const raw = String((ho && ho.nyukyoDate) || '').trim();
+  if (!raw) return { kind: 'none', d: null, raw };
+  if (raw.includes('未定')) return { kind: 'mitei', d: null, raw };
+  const d = mdToDateOf(raw);
+  if (!d) return { kind: 'none', d: null, raw };
+  return { kind: /予定|希望/.test(raw) ? 'kari' : 'kakutei', d, raw };
+}
+
+// ⚠入居に間に合わない判定: 入居日より「後」に工期終了/最終確認/鍵交換/除菌があれば列挙して返す(無ければnull)
+//   同日はOK(鍵交換当日入居あり得る)。入居日が読めない(未定/空)ならnull
+function nyukyoRiskOf(est, nyk) {
+  if (!nyk || !nyk.d) return null;
+  const late = [];
+  const _md = d => `${d.getMonth()+1}/${d.getDate()}`;
+  suppliersFor(est).forEach(s => {
+    const e = mdToDateOf(s.periodEnd) || mdToDateOf(s.periodStart);
+    if (e && e > nyk.d) late.push(`${s.supplier}工期〜${_md(e)}`);
+  });
+  const ho = est.meta?.hatchuOrder || {};
+  [['▽最終確認', ho.finalCheckDate], ['🔑鍵交換', ho.keyChangeDate], ['💊除菌', ho.jokinDate]].forEach(([label, v]) => {
+    const d = mdToDateOf(v);
+    if (d && d > nyk.d) late.push(`${label}${_md(d)}`);
+  });
+  return late.length ? late : null;
+}
+
+// v1.4.972: 「この案件が持っている日程」の定義を1箇所に集約。
+//   ★ガントの表示条件(hasGanttItemsInRange)と⚠日程未入力バナーが必ず同じ定義を使うための共通関数。
+//     別々に書くと片方だけ直して食い違い、「バナーに出るのにガントにも出ない案件」が生まれる。
+//   背景: 修繕は工期でなく「対応予定日(responseDate)」が主役。これを日程と認めていなかったため、
+//         対応予定日が入っている修繕がガントに1行も出ず、⚠バナーに49件も溜まっていた(山田報告 2026-07-17)。
+//   ※原状回復の responseDate はアポ日で、マーカーを描かない(=出しても空行になる)ので数えない。
+//     「日程として数えるもの」と「マーカーとして描くもの」は必ず一致させること。
+function _estScheduleDates(est) {
+  const out = [];
+  const ho = est?.meta?.hatchuOrder || {};
+  [ho.completeDate, ho.nyukyoDate, ho.keyChangeDate, ho.finalCheckDate, ho.jokinDate].forEach(v => {
+    const d = mdToDateOf(v);
+    if (d) out.push(d);
+  });
+  if (workflowOf(est) === 'repair') {
+    const d = mdToDateOf(est?.meta?.responseDate);
+    if (d) out.push(d);
+  }
+  return out;
+}
+// 今日列のハイライト(全行を貫く縦帯)。範囲外なら空文字
+function ganttTodayLineHtml(rangeStart, rangeEnd, cellWidth) {
+  const t = new Date();
+  t.setHours(0,0,0,0);
+  if (t < rangeStart || t > rangeEnd) return '';
+  const off = dayDiff(t, rangeStart);
+  return `<div style="position:absolute; left:${off * cellWidth}px; width:${cellWidth}px; top:0; bottom:0; background:rgba(245,158,11,0.10); border-left:2px solid #f59e0b; pointer-events:none; z-index:300;"></div>`;
+}
+
+// ⚠日程未入力バナー: 工期もマーカーも1つも無い=どの月のガントにも出ない案件を列挙(クリックで詳細)
+function renderGanttNoplanBanner(rows) {
+  const el = document.getElementById('gantt-noplan');
+  if (!el) return;
+  const noPlan = (rows || []).filter(est => {
+    // v1.4.972: 終わった案件・まだ書きかけの案件は「手配漏れ」ではないので出さない
+    //   (バナーが壁になって誰も見なくなるのを防ぐ。下書きは山田判断で除外 2026-07-17)
+    //   ※status未設定の古いデータは下書き扱い。※🚨入居決定×受注前バナーは逆に下書きも拾う(そちらが本題なので)
+    if (['完了', '失注', 'キャンセル', '下書き'].includes(est.meta?.status || '下書き')) return false;
+    if (suppliersFor(est).some(s => s.periodStart || s.periodEnd)) return false;
+    // 日程の定義はガント表示条件と同一(_estScheduleDates)。修繕の対応予定日もここで日程として数える
+    return _estScheduleDates(est).length === 0;
+  });
+  if (!noPlan.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const chips = noPlan.map(est => {
+    const m = est.meta || {};
+    return `<span class="noplan-chip" data-id="${escapeHtml(est.id)}" title="クリックで詳細を開く" style="display:inline-block; padding:1px 8px; margin:1px 2px; border-radius:4px; background:#fff; border:1px solid #fca5a5; color:#991b1b; cursor:pointer; white-space:nowrap;">${escapeHtml(m.bukken||'(無題)')} ${escapeHtml(m.roomNo||'')}</span>`;
+  }).join('');
+  el.style.display = 'block';
+  el.innerHTML = `<b style="color:#b91c1c;">⚠ 日程未入力でガントに出ていない案件 ${noPlan.length}件:</b> ${chips}`;
+  el.querySelectorAll('.noplan-chip').forEach(c => c.addEventListener('click', () => openDetailModal(c.dataset.id)));
+}
+
+// 🚨入居決定×受注前バナー: 契約ノートに入居日が載っているのに、その物件号室の見積が
+//   全部「受注前(下書き/見積作成中/提出済/対応中/アポ済)」のままの案件を列挙(クリックで詳細)。
+//   同物件の別パターンが受注/完了まで進んでいれば正常とみなして出さない。
+//   入居日が30日以上過去の契約ノート行はノイズ防止のため対象外。
+const _PREORDER_STATUSES = ['下書き', '見積作成中', '提出済', '対応中', 'アポ済'];
+function renderGanttKeiyakuAlert() {
+  const el = document.getElementById('gantt-keiyaku-alert');
+  if (!el) return;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() - 30);
+  // 契約ノート: 入居日あり行の索引(norm物件|norm号室 → row)
+  //   nyukyobiは基本「2026/7/28」形式(index.htmlの_keiyakuDaysUntilと同じ)。前後に文字が混ざっても拾う
+  const _kNyukyoDate = (s) => {
+    const m = String(s || '').match(/(\d{4})[\/年](\d{1,2})[\/月](\d{1,2})/);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return mdToDateOf(s);
+  };
+  const kmap = new Map();
+  (loadKeiyakuStateP().rows || []).forEach(r => {
+    if (!r || !r.nyukyobi) return;
+    const d = _kNyukyoDate(r.nyukyobi);
+    if (!d || d < limit) return;
+    const key = _kNormBukkenP(r.bukken) + '|' + _kNormRoomP(r.heya);
+    if (!kmap.has(key)) kmap.set(key, { row: r, d });
+  });
+  if (!kmap.size) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  // 見積を物件|号室でグループ化(原状回復のみ・削除/テンプレ除外)
+  const groups = new Map();
+  Object.values(allEstimates || {}).forEach(e => {
+    if (!e?.meta || e.deleted || e.meta.isTemplate) return;
+    if ((e.meta.kojiName || '') !== '原状回復工事') return;
+    const key = _kNormBukkenP(e.meta.bukken) + '|' + _kNormRoomP(e.meta.roomNo);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+  const alerts = [];
+  kmap.forEach(({ row, d }, key) => {
+    const group = groups.get(key);
+    if (!group || !group.length) return; // 見積が無い物件は対象外(依頼が来ていない可能性)
+    const active = group.filter(e => !['失注', 'キャンセル'].includes(e.meta.status || ''));
+    if (!active.length) return;
+    // 1件でも受注以降(受注/完了 等=PREORDER以外)まで進んでいればOK
+    if (active.some(e => !_PREORDER_STATUSES.includes(e.meta.status || '下書き'))) return;
+    active.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    alerts.push({ est: active[0], row, d });
+  });
+  if (!alerts.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  alerts.sort((a, b) => a.d - b.d); // 入居が近い順
+  const chips = alerts.map(({ est, row, d }) => {
+    const m = est.meta || {};
+    const dd = dayDiff(d, today);
+    const cd = dd === 0 ? '今日!' : (dd > 0 ? `あと${dd}日` : `${-dd}日前`);
+    return `<span class="keiyaku-alert-chip" data-id="${escapeHtml(est.id)}" title="契約ノート入居日: ${escapeHtml(row.nyukyobi)} / 台帳ステータス: ${escapeHtml(m.status || '下書き')}\nクリックで詳細を開く" style="display:inline-block; padding:1px 8px; margin:1px 2px; border-radius:4px; background:#fff; border:1px solid #c4b5fd; color:#5b21b6; cursor:pointer; white-space:nowrap;">${escapeHtml(m.bukken || '(無題)')} ${escapeHtml(m.roomNo || '')} <b>入居${d.getMonth()+1}/${d.getDate()}(${cd})</b> [${escapeHtml(m.status || '下書き')}]</span>`;
+  }).join('');
+  el.style.display = 'block';
+  el.innerHTML = `<b style="color:#5b21b6;">🚨 入居が決まっているのに受注前のまま ${alerts.length}件:</b> ${chips}`;
+  el.querySelectorAll('.keiyaku-alert-chip').forEach(c => c.addEventListener('click', () => openDetailModal(c.dataset.id)));
+}
+
+// 業者軸の1行: 行=業者・バー=物件(クリックで詳細)。レーン割当は物件軸と同じGreedy
+function ganttVendorRowHtml(vendorName, entries, rangeStart, rangeEnd, totalDays, cellWidth) {
+  entries.sort((a, b) => (a.sd - b.sd) || (a.ed - b.ed));
+  const laneEnd = [];
+  entries.forEach(p => {
+    let lane = -1;
+    for (let i = 0; i < laneEnd.length; i++) {
+      if (laneEnd[i] < p.sd) { lane = i; laneEnd[i] = p.ed; break; }
+    }
+    if (lane < 0) { lane = laneEnd.length; laneEnd.push(p.ed); }
+    p.lane = lane;
+  });
+  const numLanes = Math.max(1, laneEnd.length);
+  const BAR_HEIGHT = 20, LANE_GAP = 2, VPADDING = 4;
+  const rowHeight = VPADDING + numLanes * BAR_HEIGHT + (numLanes - 1) * LANE_GAP + VPADDING;
+  const c = supplierColor(vendorName);
+  const barsHtml = entries.map(p => {
+    const m = p.est.meta || {};
+    const label = `${m.bukken||''} ${m.roomNo||''}`.trim();
+    const left = p.sd * cellWidth;
+    const width = Math.max(2, (p.ed - p.sd + 1) * cellWidth - 2);
+    const top = VPADDING + p.lane * (BAR_HEIGHT + LANE_GAP);
+    const clipPrefix = p.clipL ? '◀' : '';
+    const clipSuffix = p.clipR ? '▶' : '';
+    // 物件軸と同じ状態装飾: 完了=グレー / 編集中=黄アウトライン
+    const _done = (m.status === '完了');
+    const _editing = (p.est.id === localStorage.getItem('mitsumori_current_id_v1'));
+    const _fx = (_done ? ' filter:grayscale(1); opacity:.6;' : '') + (_editing && !_done ? ' outline:2px solid #eab308; outline-offset:-1px;' : '');
+    return `<div class="gantt-bar gantt-vbar" data-id="${escapeHtml(p.est.id)}" style="left:${left}px; width:${width}px; top:${top}px; height:${BAR_HEIGHT}px; line-height:${BAR_HEIGHT}px; background:${c.bg}; color:${c.color}; cursor:pointer;${_fx}" title="${escapeHtml(label)}\n${escapeHtml(vendorName)} / ¥${fmtNum(p.s.amount)}\n工期: ${escapeHtml(p.s.periodStart||'-')}〜${escapeHtml(p.s.periodEnd||'-')}\n(クリックで詳細)">${clipPrefix}${escapeHtml(label)}${clipSuffix}</div>`;
+  }).join('');
+  const bukkenCount = new Set(entries.map(p => p.est.id)).size;
+  const metaCellHtml = `<span class="supplier-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(vendorName)}</span> <b>${bukkenCount}件</b>`;
+  return `<tr style="height:${rowHeight}px;">
+    <td class="gantt-meta-cell">${metaCellHtml}</td>
+    <td colspan="${totalDays}" class="gantt-track" style="height:${rowHeight}px;">
+      ${barsHtml}
+      ${ganttTodayLineHtml(rangeStart, rangeEnd, cellWidth)}
+    </td>
+  </tr>`;
+}
+
+// ============================================================
+// 状態
+// ============================================================
+let allEstimates = {};       // localStorage の全見積
+let currentMode = 'all'; // restoration / repair / all
+// v1.4.972: デフォルトを「すべて」に変更(山田 2026-07-17)。旧既定'repair'では原状回復が、
+//   'restoration'では修繕が見えず、「萩ケ丘戸建てがガントに出ない」の一次原因になっていた。
+//   ※URLパラメータ(?mode=...)指定時はそちらが優先(applyInitialViewFromUrl)＝発注書のガント工期設定
+//     モーダルが ?mode=restoration で参照している経路は従来どおり影響なし。
+let currentView = 'list';    // list / gantt
+let currentGanttYM = null;   // {y, m} 表示中の月(月単位モード用)
+let currentGanttRangeMode = 'standard';  // 'standard'(1週間前〜40日後・デフォ) / 'month' / 'rolling30' / 'rolling60' / 'rolling90'
+let currentGanttSort = 'default';     // 'default'(一覧と同じ並び) / 'nyukyo'(▼入居が近い順)
+let currentGanttAxis = 'bukken';      // 'bukken'(行=物件) / 'vendor'(行=業者・バー=物件)
+let editingId = null;        // 詳細モーダルで編集中の id
+
+// v1.4.122: 新ステータス体系のバッジ(旧キーも引き続き定義してマイグレ前データに対応)
+const STATUS_BADGES = {
+  '下書き':                  { cls:'badge-shitagaki', icon:'📝' },
+  '見積作成中':              { cls:'badge-juchugata', icon:'🛠' },   // 黄色背景(進行中)
+  '提出済':                  { cls:'badge-shutsumai', icon:'📤' },
+  '受注（工事指示有）':      { cls:'badge-juchu', icon:'🎯' },
+  '失注':                    { cls:'badge-shitsuchu', icon:'❌' },
+  '完了':                    { cls:'badge-kanryou', icon:'✅' },
+  'キャンセル':              { cls:'badge-shitsuchu', icon:'✖' },
+  // 旧ステータスキー(マイグレ前データの一時表示用)
+  '対応中':                  { cls:'badge-juchugata', icon:'🛠' },
+  'アポ済':                  { cls:'badge-juchugata', icon:'📅' },
+  '受注':                    { cls:'badge-juchu', icon:'🎯' },
+  '施工指示あり':            { cls:'badge-shutsumai', icon:'🔨' },
+};
+// プルダウンに出すのは新体系のみ
+const STATUS_OPTIONS = ['下書き','見積作成中','提出済','受注（工事指示有）','失注','完了','キャンセル'];
+// v1.4.140: 旧営業ステータス → 新体系マイグレーションマップ(index.html の STATUS_MIGRATION_MAP と同値)
+const STATUS_MIGRATION_MAP_PRG = {
+  '対応中':       '見積作成中',
+  'アポ済':       '見積作成中',
+  '受注':         '受注（工事指示有）',
+  '施工指示あり': '受注（工事指示有）',
+  '減工事あり':   '提出済',
+};
+function migrateMetaStatus(meta) {
+  if (!meta) return false;
+  const cur = meta.status;
+  if (!cur) return false;
+  if (STATUS_MIGRATION_MAP_PRG.hasOwnProperty(cur)) {
+    meta.status = STATUS_MIGRATION_MAP_PRG[cur];
+    return true;
+  }
+  return false;
+}
+const WORKFLOW_OPTIONS_RESTORATION = ['待機','工事指示済','着工','完工','鍵交換済','入居済','クローズ'];
+// v1.4.120: 修繕系の進行ステータス選択肢を整理
+//   旧: ['未対応','アポ済','対応中','施工指示あり','見積提出済','長期連絡なし','完了'] (7)
+//   新: ['アポ・手配 未','待機','アポ・手配 済','長期連絡なし','-'] (5)
+const WORKFLOW_OPTIONS_REPAIR = ['アポ・手配 未','待機','アポ・手配 済','長期連絡なし','-'];
+// 旧 → 新 マイグレーションマップ
+const WORKFLOW_MIGRATION_MAP_REPAIR = {
+  '未対応':       'アポ・手配 未',
+  'アポ済':       'アポ・手配 済',
+  '対応中':       '待機',
+  '施工指示あり': 'アポ・手配 済',
+  '見積提出済':   '待機',
+  '完了':         '-',
+  // '長期連絡なし' は同名で残る
+  // '待機' も同名で残る(原状回復系も使う)
+};
+// v1.4.123: 営業ステータス → 進行ステータス 自動連動マップ(修繕系のみ)
+//   見積作成中/受注（工事指示有） → アポ・手配 未
+//   提出済 → 待機
+//   完了 → -
+const STATUS_TO_WORKFLOW_REPAIR = {
+  '見積作成中':           'アポ・手配 未',
+  '受注（工事指示有）':   'アポ・手配 未',
+  '提出済':               '待機',
+  '完了':                 '-',
+};
+function applyStatusToWorkflow(meta) {
+  if (!meta) return false;
+  if (meta.kojiName === '原状回復工事') return false; // 原状回復は別系統
+  const mapped = STATUS_TO_WORKFLOW_REPAIR[meta.status];
+  if (mapped !== undefined && meta.workflowStatus !== mapped) {
+    meta.workflowStatus = mapped;
+    return true;
+  }
+  return false;
+}
+// v1.4.676: 原状回復は完了日入力(=工事完了)で進行ステータスも「完工」へ進める(鈴木悠平要望
+//   「完了日を入れると完了になるが横の『着工』も『完工』に変えてほしい」)。
+//   待機/工事指示済/着工 → 完工。完工より先(鍵交換済/入居済/クローズ)へは戻さない。
+//   ※修繕系は applyStatusToWorkflow が status→workflowStatus を担うのでここでは対象外(原状回復のみ)。
+function advanceRestorationWorkflowOnComplete(meta) {
+  if (!meta || meta.kojiName !== '原状回復工事') return false;
+  if (['待機', '工事指示済', '着工'].includes(meta.workflowStatus || '')) {
+    meta.workflowStatus = '完工';
+    return true;
+  }
+  return false;
+}
+
+// 読込時に workflowStatus を新体系に変換(repair 案件のみ)
+function migrateWorkflowStatus(meta) {
+  if (!meta) return false;
+  // 原状回復は別系統なので触らない
+  if (meta.kojiName === '原状回復工事') return false;
+  const cur = meta.workflowStatus;
+  if (!cur) return false;
+  if (WORKFLOW_MIGRATION_MAP_REPAIR.hasOwnProperty(cur)) {
+    meta.workflowStatus = WORKFLOW_MIGRATION_MAP_REPAIR[cur];
+    return true;
+  }
+  return false;
+}
+
+// v1.4.661: 修繕系で「対応予定日/時間」が入っているのに進行が「アポ・手配 未」のままなら
+//   「アポ・手配 済」へ自動昇格(山田要望)。インライン入力時は change ハンドラ[1438]が拾うが、
+//   台帳/全件同期/取込 経由で対応日が入ったケースは拾えないため、読込時にも一括で救済する。
+//   ※「待機」「長期連絡なし」等は手動意図とみなし触らない(未→済 のみ)。
+function autoApoFromResponseDate(meta) {
+  if (!meta) return false;
+  if (meta.kojiName === '原状回復工事') return false; // 修繕系のみ
+  if ((meta.workflowStatus || '') !== 'アポ・手配 未') return false;
+  const hasDate = String(meta.responseDate || '').trim() || String(meta.responseTime || '').trim();
+  if (!hasDate) return false;
+  meta.workflowStatus = 'アポ・手配 済';
+  return true;
+}
+
+// ============================================================
+// 描画
+// ============================================================
+// 工事進捗タブの表示対象判定
+//   v1.4.117〜 トリガーを isConfirmed → hatchuLocked に変更
+//     見積確定版 = 請求書集計用 / 発注確定 = 社内タスクマネージャー&カレンダー用 という分離方針
+//   v1.4.119〜 「完了」案件もここでパスさせ、下流の hideCompleted フィルタで一括制御
+//     (デフォルト hideCompleted=true で非表示維持。チェック外すと完了も見える)
+//   表示対象: 発注確定(hatchuLocked) あり OR (修繕・アフター系で「進行中ステータス or 完了」)
+//   進行中ステータス = 対応中 / アポ済 / 提出済 / 受注 / 施工指示あり
+//   非表示(isProgressVisible 段階): 下書き / 失注 / キャンセル(進捗管理対象外)
+//   原状回復は発注確定必須(空室工事は業者発注確定してから工程管理)
+//   後方互換: hatchuLocked 未定義の旧データで isConfirmed=true & purchaseOrders[]あり もロック扱い
+// v1.4.120: 旧 ['対応中','アポ済','提出済','受注','施工指示あり'] → ステータス体系整理
+//   - 対応中 → 見積作成中 / 受注+施工指示あり → 受注（工事指示有） / アポ済 削除
+//   旧データ互換のため旧名も引き続き ACTIVE 扱い(マイグレ済データ + 旧データ両方で動く)
+const ACTIVE_REPAIR_STATUSES = ['見積作成中', '提出済', '受注（工事指示有）', '対応中', 'アポ済', '受注', '施工指示あり'];
+// v1.4.487: 「発注済」= 業者発注確定したときだけ(hatchuLocked または 発注スナップショットあり)。
+//   見積確定(確定版マーク isConfirmed)では発注済にしない=index.htmlの台帳定義と統一。
+function _isOrderConfirmedP(m){ return !!(m && (m.hatchuLocked || (Array.isArray(m.purchaseOrders) && m.purchaseOrders.length > 0))); }
+function isProgressVisible(e) {
+  if (!e || e.deleted || e.meta?.isTemplate) return false;
+  // v1.4.627: 「🗂 対象外も表示」ON時は下書き/見積作成中/提出済(受注前)/失注/キャンセルも通す(山田要望)。
+  //   ※完了/クローズの非表示は別チェック「✅完了案件を表示」(下流 hideCompleted)が引き続き制御。
+  if (document.getElementById('show-all-statuses')?.checked) return true;
+  const poExists = Array.isArray(e.meta?.purchaseOrders) && e.meta.purchaseOrders.length > 0;
+  const hatchuLocked = !!(e.meta?.hatchuLocked || (poExists && e.meta?.isConfirmed));
+  if (hatchuLocked) return true;
+  const status = e.meta?.status || '';
+  // v1.4.626: 原状回復は従来「発注確定必須」だったが、発注確定前でも『受注(工事指示有)』の案件を表示する(山田要望)。
+  //   → 待機/工事指示済 の段階(発注前)から進捗タブで追える。発注確定すると自動で着工になり引き続き表示。
+  //   ※下書き/見積作成中/提出済(まだ受注前)・失注/キャンセル は対象外。完了は下流 hideCompleted で制御。
+  if (e.meta?.kojiName === '原状回復工事') {
+    return ['受注（工事指示有）', '受注', '施工指示あり', '完了'].includes(status);
+  }
+  // v1.4.119: '完了' もパスさせる(下流 hideCompleted フィルタで制御)
+  // v1.4.120: workflowStatus フォールバックも新体系(アポ・手配 済)対応 + 旧'対応中'維持(マイグレ前データ用)
+  return ACTIVE_REPAIR_STATUSES.includes(status)
+      || status === '完了'
+      || ['対応中', 'アポ・手配 済'].includes(e.meta?.workflowStatus || '');
+}
+
+function reload() {
+  allEstimates = loadEstimates();
+  // v1.4.120: 旧 workflowStatus(未対応/アポ済/対応中/施工指示あり/見積提出済/完了)を新体系に変換
+  // v1.4.140: 旧 status(対応中/アポ済/受注/施工指示あり)も新体系に変換
+  let _autoApoChanged = false;
+  Object.values(allEstimates).forEach(e => {
+    if (e && e.meta) {
+      migrateWorkflowStatus(e.meta);
+      migrateMetaStatus(e.meta);
+      // v1.4.661: 対応予定日が入っている修繕案件の進行を「アポ・手配 済」に自動昇格
+      if (autoApoFromResponseDate(e.meta)) { e.updatedAt = new Date().toISOString(); _autoApoChanged = true; }
+    }
+  });
+  if (_autoApoChanged) { try { saveEstimates(allEstimates); } catch (_) {} }
+  // テンプレ・ゴミ箱は除外
+  const all = Object.values(allEstimates).filter(e => e && !e.deleted && !e.meta?.isTemplate);
+  const confirmed = all.filter(isProgressVisible);
+  const confirmedCount = confirmed.filter(e => _isOrderConfirmedP(e.meta)).length;
+  const inProgressCount = confirmed.length - confirmedCount;
+  document.getElementById('data-info').textContent =
+    `✅発注済 ${confirmedCount}件${inProgressCount ? ' / 🛠対応中 '+inProgressCount+'件' : ''} / 全 ${all.length}件`;
+  // 元請けフィルタ候補を再構築(確定版のみから)
+  const motoukes = [...new Set(confirmed.map(getMotoukeName).filter(Boolean))].sort();
+  const sel = document.getElementById('motouke-filter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">(全元請け)</option>' + motoukes.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  if (motoukes.includes(cur)) sel.value = cur;
+  renderProgress();
+  if (typeof _updateKintonePendingCount === 'function') _updateKintonePendingCount(); // v1.4.666
+}
+
+// 進行ステータス デフォルト表示順
+// v1.4.629: 原状回復は 待機→工事指示済→着工→… の順に(着工より待機を上に表示・山田要望)。修繕系(アポ・手配)は先頭のまま。
+const WF_SORT_ORDER = ['アポ・手配 未','アポ・手配 済','待機','工事指示済','着工','完工','鍵交換済','入居済','長期連絡なし','クローズ','-'];
+
+function getFilteredRows() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const motouke = document.getElementById('motouke-filter').value.trim();
+  const status = document.getElementById('status-filter').value.trim();
+  const workflow = document.getElementById('workflow-filter').value.trim();
+  const invoice = document.getElementById('invoice-filter').value.trim();
+  // 工事進捗タブは 確定版 OR (修繕・アフター系で対応中) のみ表示
+  let rows = Object.values(allEstimates).filter(isProgressVisible);
+  // 完了案件の表示制御
+  // - 完了日が「今日以前」になったら非表示(=実際に完了が到来した時点で隠す)
+  // - 完了日が「未来」のうちは表示維持(予定段階では一覧に残す)
+  // - 進行ステータスがクローズ/完了なら無条件で非表示
+  // - v1.4.119〜 営業ステータス '完了' もこのフィルタの管轄に追加
+  // - v1.4.128〜 ステータスフィルタが明示的に「完了」「キャンセル」「失注」のときは
+  //   隠しを無視(ユーザーが明示的に絞り込んでるのに隠されたら矛盾するため)
+  // - v1.4.129〜 チェックボックスを「✅完了案件を表示」(チェックで表示)に反転
+  //   (台帳の「📝下書きを表示」と同じUXに統一)
+  // ※ 編集セッション中の案件(_recentlyEdited)はフィルタ対象外
+  const _explicitCompletedFilter = (status === '完了' || status === 'キャンセル' || status === '失注');
+  const showCompleted = document.getElementById('show-completed')?.checked;
+  const hideCompleted = !showCompleted && !_explicitCompletedFilter;
+  if (hideCompleted) {
+    const today0 = new Date();
+    today0.setHours(0,0,0,0);
+    rows = rows.filter(e => {
+      // 直近編集された案件はフィルタしない(編集セッション中は表示維持)
+      if (window._recentlyEditedIds && window._recentlyEditedIds.has(e.id)) return true;
+      const ho = e.meta?.hatchuOrder || {};
+      const wf = e.meta?.workflowStatus || '待機';
+      // v1.4.120: 新体系では '完了' → '-' に変更されたので両方判定
+      if (wf === 'クローズ' || wf === '完了' || wf === '-') return false;     // 進行ステータスが完了系 → 無条件で隠す
+      // v1.4.119: 営業ステータス '完了' も非表示対象に
+      if ((e.meta?.status || '') === '完了') return false;
+      const cd = (ho.completeDate || '').trim();
+      if (cd) {
+        const completeD = (typeof mdToDateOf === 'function') ? mdToDateOf(cd) : null;
+        if (completeD && completeD <= today0) return false;     // 完了日が今日以前なら隠す
+        // 完了日が未来 or パース失敗 → 表示維持
+      }
+      return true;
+    });
+  }
+  // モード別 (修繕工事 / それ以外)
+  // v1.4.972: 原状回復タブは「性質が原状回復のもの」を出す(種別が修繕でも入居日/鍵交換/除菌/最終確認が
+  //   入っていれば含む)。修繕タブは種別ベースのまま=両方に出る案件が生まれるのは意図的(山田判断)。
+  if (currentMode === 'restoration') rows = rows.filter(e => hasRestorationNature(e));
+  else if (currentMode === 'repair') rows = rows.filter(e => workflowOf(e) === 'repair');
+  // 元請け
+  if (motouke) rows = rows.filter(e => getMotoukeName(e) === motouke);
+  // 営業ステータス
+  if (status) {
+    // v1.4.122: 受注フィルタは新旧両ステータス対応('受注'/'受注（工事指示有）'/'施工指示あり')
+    const JUCHU_STATUSES = ['受注', '受注（工事指示有）', '施工指示あり'];
+    if (status === '__juchu__') rows = rows.filter(e => JUCHU_STATUSES.includes(e.meta?.status||'下書き'));
+    else if (status === '__not_juchu__') rows = rows.filter(e => !JUCHU_STATUSES.includes(e.meta?.status||'下書き'));
+    else rows = rows.filter(e => (e.meta?.status||'下書き') === status);
+  }
+  // 進行ステータス
+  if (workflow) rows = rows.filter(e => (e.meta?.workflowStatus||'待機') === workflow);
+  // 請求/入金
+  if (invoice === 'invoice_unpaid') rows = rows.filter(e => (e.meta?.invoiceStatus||'未') === '未');
+  else if (invoice === 'invoice_paid') rows = rows.filter(e => (e.meta?.invoiceStatus||'未') === '済');
+  else if (invoice === 'payment_unpaid') rows = rows.filter(e => (e.meta?.paymentStatus||'未') === '未');
+  else if (invoice === 'payment_paid') rows = rows.filter(e => (e.meta?.paymentStatus||'未') === '済');
+  // 全文検索
+  if (q) {
+    rows = rows.filter(e => {
+      const hay = [
+        e.meta?.bukken, e.meta?.roomNo, e.meta?.atena, e.meta?.folderName,
+        e.meta?.kojiName, e.meta?.taikyo?.contractorName, e.meta?.taikyo?.contractorTel,
+        e.meta?.requestDetail, e.meta?.requestDetailFull, e.meta?.contactPerson,
+        ...(e.lines||[]).map(l => l.item),
+        ...(e.lines||[]).map(l => l.supplier),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  // 並び順: _prgSort で指定された列でソート(デフォルト=進行ステータス昇順)
+  const sortKey = (window._prgSort && window._prgSort.key) || 'workflow';
+  const sortDir = (window._prgSort && window._prgSort.dir) || 'asc';
+  const getSortVal = (e, k) => {
+    if (k === 'workflow') {
+      const wf = (e.meta?.workflowStatus || '待機').trim();
+      const idx = WF_SORT_ORDER.indexOf(wf);
+      return String(idx === -1 ? 99 : idx).padStart(2, '0');
+    }
+    if (k === 'updated') return e.updatedAt || '';
+    if (k === 'created') return e.createdAt || '';
+    if (k === 'requestDate') return e.meta?.requestDate || '';
+    if (k === 'responseDate') return e.meta?.responseDate || '';
+    if (k === 'completeDate') return e.meta?.hatchuOrder?.completeDate || '';
+    if (k === 'finalCheckDate') return e.meta?.hatchuOrder?.finalCheckDate || '';
+    return '';
+  };
+  rows.sort((a,b) => {
+    const va = String(getSortVal(a, sortKey) || '');
+    const vb = String(getSortVal(b, sortKey) || '');
+    // 空欄は末尾に
+    if (!va && !vb) return 0;
+    if (!va) return 1;
+    if (!vb) return -1;
+    const cmp = va.localeCompare(vb);
+    if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+    // 同じ値なら更新日時降順(セカンダリソート)
+    return (b.updatedAt||'').localeCompare(a.updatedAt||'');
+  });
+  // === 集約: 台帳と同じロジック(patternGroupId or 物件名+号室+工事種別)===
+  //   3件以上の同一案件の見積(リフォーム提案+原状回復提案 等)を1行に集約
+  //   確定版があれば各別行・なしなら代表(オリジナル or 最古作成)を1件だけ表示
+  const _groupReps = new Map();
+  const _noGroup = [];
+  rows.forEach(e => {
+    const gid = e.meta?.patternGroupId;
+    const bukken = (e.meta?.bukken || '').trim();
+    const room = (e.meta?.roomNo || '').trim();
+    const koji = (e.meta?.kojiName || '').trim();
+    const key = gid || (bukken ? `__virt__|${bukken}|${room}|${koji}` : e.id);
+    if (key === e.id) { _noGroup.push(e); return; }
+    if (!_groupReps.has(key)) _groupReps.set(key, []);
+    _groupReps.get(key).push(e);
+  });
+  const _reps = [];
+  _groupReps.forEach(group => {
+    group.sort((a, b) => {
+      if (a.meta?.patternLabel === 'オリジナル' && b.meta?.patternLabel !== 'オリジナル') return -1;
+      if (b.meta?.patternLabel === 'オリジナル' && a.meta?.patternLabel !== 'オリジナル') return 1;
+      return (a.createdAt||'').localeCompare(b.createdAt||'');
+    });
+    const confirmedOnes = group.filter(e => e.meta?.isConfirmed);
+    if (confirmedOnes.length >= 1) {
+      confirmedOnes.forEach(c => _reps.push(c));
+      const nonConfirmed = group.filter(e => !e.meta?.isConfirmed);
+      if (nonConfirmed.length) _reps.push(nonConfirmed[0]);
+    } else {
+      _reps.push(group[0]);
+    }
+  });
+  return [..._reps, ..._noGroup].sort((a,b) => {
+    const va = String(getSortVal(a, sortKey) || '');
+    const vb = String(getSortVal(b, sortKey) || '');
+    if (!va && !vb) return (b.updatedAt||'').localeCompare(a.updatedAt||'');
+    if (!va) return 1;
+    if (!vb) return -1;
+    const cmp = va.localeCompare(vb);
+    if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+    return (b.updatedAt||'').localeCompare(a.updatedAt||'');
+  });
+}
+
+function renderProgress() {
+  const rows = getFilteredRows();
+  document.getElementById('row-count').textContent = `${rows.length}件`;
+  // 統計
+  const stats = computeStats(rows);
+  document.getElementById('stats-bar').innerHTML = `
+    💰 売上(税別): <b>¥${fmtNum(stats.totalAmount)}</b>
+    / 🎯 受注: <b>${stats.juchu}件</b>
+    / ⏳ 未受注: <b>${stats.notJuchu}件</b>
+    / ✅ 完了: <b>${stats.kanryou}件</b>
+    / 🟡 請求未: <b>${stats.invoiceUnpaid}件</b>
+    / 🟡 入金未: <b>${stats.paymentUnpaid}件</b>
+  `;
+  // ビュー切替: 一覧 / ガント
+  const ganttCtrl = document.getElementById('gantt-controls');
+  const tableEl = document.getElementById('progress-table');
+  const legendEl = document.getElementById('gantt-legend');
+  const workloadEl = document.getElementById('vendor-workload');
+  if (currentView === 'gantt') {
+    ganttCtrl.style.display = 'flex';
+    if (legendEl) legendEl.style.display = 'block';
+    if (workloadEl) workloadEl.style.display = 'block';
+    tableEl.classList.add('gantt-table');
+    renderGantt(rows);
+  } else {
+    ganttCtrl.style.display = 'none';
+    if (legendEl) legendEl.style.display = 'none';
+    if (workloadEl) workloadEl.style.display = 'none';
+    const noplanEl = document.getElementById('gantt-noplan');
+    if (noplanEl) noplanEl.style.display = 'none';
+    const keiyakuEl = document.getElementById('gantt-keiyaku-alert');
+    if (keiyakuEl) keiyakuEl.style.display = 'none';
+    tableEl.classList.remove('gantt-table');
+    tableEl.style.width = '';  // ガントで明示した幅を一覧では解除
+    const _cg = tableEl.querySelector('colgroup');
+    if (_cg) _cg.remove();     // ガント用colgroupも除去(一覧の列幅を狂わせない)
+    renderList(rows);
+  }
+}
+
+function renderList(rows) {
+  const thead = document.getElementById('progress-thead');
+  const tbody = document.getElementById('progress-tbody');
+  // 一覧時は colgroup を削除(ガント時の固定幅指定が残ってると一覧の列幅が壊れる)
+  const tableEl = document.getElementById('progress-table');
+  const cg = tableEl?.querySelector('colgroup');
+  if (cg) cg.remove();
+  thead.innerHTML = headerHtmlFor(currentMode);
+  tbody.innerHTML = rows.map((est, i) => rowHtmlFor(currentMode, est, i+1)).join('');
+  // 行クリックで詳細モーダル(input/checkbox クリックは弾く)
+  tbody.querySelectorAll('tr.row-clickable').forEach(tr => {
+    tr.addEventListener('click', (e) => {
+      // input/checkbox 上のクリックはモーダル開かない(編集に集中)
+      if (e.target.closest('input, select, textarea, button, .prg-edit')) return;
+      openDetailModal(tr.dataset.id);
+    });
+  });
+  // インライン編集ハンドラ(delegated): change/blur で値を保存
+  tbody.querySelectorAll('.prg-edit').forEach(inp => {
+    inp.addEventListener('click', e => e.stopPropagation()); // 行クリックを止める
+    inp.addEventListener('change', e => {
+      const tr = e.target.closest('tr');
+      if (!tr) return;
+      const id = tr.dataset.id;
+      const est = allEstimates[id];
+      if (!est) return;
+      const path = e.target.dataset.path; // 'meta' | 'hatchuOrder' | 'taikyo'
+      const f = e.target.dataset.f;
+      let _wfAutoChanged = false; // v1.4.559: 自動で進行ステータスを変えた時に再描画する
+      let val;
+      if (e.target.type === 'checkbox') val = e.target.checked;
+      else val = e.target.value.trim();
+      // パス: meta直下 / meta.hatchuOrder / meta.taikyo
+      if (!est.meta) est.meta = {};
+      if (path === 'meta') {
+        est.meta[f] = val;
+        // v1.4.624: 見積担当(creator)は taikyo.tachiaiPerson と同一の共有フィールド。表示は tachiaiPerson 優先のため、
+        //   creator だけ書くと編集が画面に反映されない → 両方へ書く(台帳/工事進捗/カレンダーで担当を一致させる)。
+        if (f === 'creator') { if (!est.meta.taikyo) est.meta.taikyo = {}; est.meta.taikyo.tachiaiPerson = val; }
+        // v1.4.123: 営業ステータス変更時に進行ステータスを自動連動(修繕系のみ)
+        if (f === 'status' && typeof applyStatusToWorkflow === 'function') {
+          if (applyStatusToWorkflow(est.meta)) {
+            // 進行ステータスも更新したので該当 select の表示も同期
+            const wfSel = tr.querySelector('.prg-wf-sel');
+            if (wfSel) wfSel.value = est.meta.workflowStatus;
+          }
+        }
+        // v1.4.559: 対応予定日/時間を入れたら「アポ・手配 未」→「アポ・手配 済」に自動更新(修繕系)
+        if ((f === 'responseDate' || f === 'responseTime') && val && (est.meta.workflowStatus || '') === 'アポ・手配 未') {
+          est.meta.workflowStatus = 'アポ・手配 済';
+          const wfSel = tr.querySelector('.prg-wf-sel');
+          if (wfSel) wfSel.value = est.meta.workflowStatus;
+          _wfAutoChanged = true;
+        }
+      } else if (path === 'hatchuOrder') {
+        if (!est.meta.hatchuOrder) est.meta.hatchuOrder = {};
+        est.meta.hatchuOrder[f] = val;
+        // 最終確認日を初めて入れた時に当初値もキャプチャ(2026-05-20追加)
+        if (f === 'finalCheckDate' && !est.meta.hatchuOrder.originalFinalCheckDate && val) {
+          est.meta.hatchuOrder.originalFinalCheckDate = val;
+        }
+        // v1.4.624: 完了日が入った瞬間 status='完了' + completedAt を連動(台帳/進捗モーダルと同じ。インライン入力だけ抜けていた=完了日ミスマッチの一因)
+        if (f === 'completeDate' && val && est.meta.status !== '完了') {
+          est.meta.status = '完了';
+          if (!est.meta.completedAt) { const isoMatch = String(val).match(/^\d{4}-\d{2}-\d{2}/); est.meta.completedAt = isoMatch ? String(val).slice(0,10) : new Date().toISOString().slice(0,10); }
+          if (typeof applyStatusToWorkflow === 'function') applyStatusToWorkflow(est.meta);
+          // v1.4.676: 原状回復は進行ステータスも 着工→完工 に進める(鈴木要望)
+          if (typeof advanceRestorationWorkflowOnComplete === 'function') advanceRestorationWorkflowOnComplete(est.meta);
+          const stSel = tr.querySelector('.prg-status-sel'); if (stSel) stSel.value = '完了';
+          const wfSel2 = tr.querySelector('.prg-wf-sel'); if (wfSel2 && est.meta.workflowStatus) wfSel2.value = est.meta.workflowStatus;
+          _wfAutoChanged = true; // 行色・並び順を更新
+        }
+      } else if (path === 'taikyo') {
+        if (!est.meta.taikyo) est.meta.taikyo = {};
+        est.meta.taikyo[f] = val;
+      }
+      est.updatedAt = new Date().toISOString();
+      // 編集セッション記録: この案件はフィルタで隠さない(再描画時に消えるのを防ぐ)
+      if (!window._recentlyEditedIds) window._recentlyEditedIds = new Set();
+      window._recentlyEditedIds.add(id);
+      saveEstimates(allEstimates);
+      if (typeof _updateKintonePendingCount === 'function') _updateKintonePendingCount(); // v1.4.666: 日付編集でバッジ更新
+      // Drive 自動push(他PCに反映)
+      if (typeof autoPushFromProgress === 'function') autoPushFromProgress(id);
+      // 進行ステータス変更時: 色と行順をリアルタイム更新(自動でアポ済にした時も)
+      if (f === 'workflowStatus' || _wfAutoChanged) {
+        renderProgress();
+      }
+    });
+  });
+}
+
+// ============================================================
+// ガントチャート
+// ============================================================
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); } // m = 1〜12
+const DOW_CHARS = ['日','月','火','水','木','金','土'];
+function dowOf(y, m, d) { return DOW_CHARS[new Date(y, m-1, d).getDay()]; }
+function shiftMonth(y, m, delta) {
+  let mm = m + delta;
+  let yy = y;
+  while (mm < 1) { mm += 12; yy -= 1; }
+  while (mm > 12) { mm -= 12; yy += 1; }
+  return { y: yy, m: mm };
+}
+
+// ローカル日付ベースで2つのDateの日数差を計算(タイムゾーン影響を排除)
+function dayDiff(a, b) {
+  const a0 = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const b0 = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((a0 - b0) / 86400000);
+}
+
+// 日付範囲ベースでバー範囲を計算(月単位もローリングも共通)
+// {sd,ed,clipL,clipR} or null  (sd/ed は範囲開始日からのオフセット 0始まり)
+function ganttBarRangeByDates(periodStart, periodEnd, rangeStart, rangeEnd) {
+  const sD = mdToDateOf(periodStart);
+  const eD_ = mdToDateOf(periodEnd) || sD;
+  if (!sD) return null;
+  const eD = eD_ || sD;
+  // 期間が範囲と重ならない
+  if (sD > rangeEnd) return null;
+  if (eD < rangeStart) return null;
+  const offsetStart = Math.max(0, dayDiff(sD, rangeStart));
+  const offsetEnd = Math.min(
+    dayDiff(rangeEnd, rangeStart),
+    dayDiff(eD, rangeStart)
+  );
+  return {
+    sd: offsetStart,
+    ed: offsetEnd,
+    clipL: sD < rangeStart,
+    clipR: eD > rangeEnd,
+  };
+}
+
+// 表示範囲を {start, end, totalDays, label} で返す
+function getGanttDateRange() {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const mode = currentGanttRangeMode;
+  if (mode === 'month') {
+    if (!currentGanttYM) currentGanttYM = { y: today.getFullYear(), m: today.getMonth()+1 };
+    const { y, m } = currentGanttYM;
+    const dim = daysInMonth(y, m);
+    const start = new Date(y, m-1, 1);
+    const end = new Date(y, m-1, dim);
+    return { start, end, totalDays: dim, label: `${y}年 ${m}月` };
+  }
+  // 標準(デフォ): 1週間前〜40日後。直近の振り返り+先の予定を1画面スクロールで
+  if (mode === 'standard') {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 7);
+    const end = new Date(today);
+    end.setDate(end.getDate() + 40);
+    return { start, end, totalDays: 48, label: `${formatYmd(start)} 〜 ${formatYmd(end)} (1週間前〜40日後)` };
+  }
+  // ローリング: 今日〜N日先(過去は表示しない、未来重視)
+  const days = mode === 'rolling30' ? 30 : (mode === 'rolling60' ? 60 : 90);
+  const start = new Date(today);
+  const end = new Date(today);
+  end.setDate(end.getDate() + days);
+  return { start, end, totalDays: days+1, label: `${formatYmd(start)} 〜 ${formatYmd(end)} (今日+${days}日)` };
+}
+function formatYmd(d) {
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// 業者バッジ絞込: 選択中の業者名(null=全表示)・再描画用の行ソース保持
+let _vendorFilter = null;
+let _lastGanttRows = [];
+function renderGantt(rows) {
+  _lastGanttRows = rows;
+  const { start: rangeStart, end: rangeEnd, totalDays, label } = getGanttDateRange();
+  const cellWidth = 42;
+  document.getElementById('gantt-month-label').textContent = label;
+  // 月単位以外は月送りボタン非表示
+  const monthNav = document.getElementById('gantt-month-nav');
+  if (monthNav) monthNav.style.display = (currentGanttRangeMode === 'month') ? 'flex' : 'none';
+  // ⚠日程未入力バナー(表示範囲に関係なく全対象案件から検出)
+  renderGanttNoplanBanner(rows);
+  // 🚨入居決定×受注前バナー(契約ノート×台帳全件から検出)
+  renderGanttKeiyakuAlert();
+  // 並びセレクトは物件軸のみ有効
+  const _sortSel = document.getElementById('gantt-sort-mode');
+  if (_sortSel) _sortSel.style.display = (currentGanttAxis === 'vendor') ? 'none' : '';
+  // ヘッダ(範囲開始日から totalDays 分の日付セル)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let headerCells = '';
+  const cur = new Date(rangeStart);
+  for (let i = 0; i < totalDays; i++) {
+    const dow = ['日','月','火','水','木','金','土'][cur.getDay()];
+    const m = cur.getMonth()+1;
+    const d = cur.getDate();
+    let cls = 'gantt-day';
+    if (dow === '日') cls += ' holiday';
+    else if (dow === '土') cls += ' saturday';
+    if (cur.getTime() === today.getTime()) cls += ' today';
+    // 月初は月ラベル付与
+    const monthLbl = (d === 1 || i === 0) ? `<small style="color:#1e3a8a; font-weight:700;">${m}月</small><br>` : '';
+    headerCells += `<th class="${cls}">${monthLbl}${d}<br><small>${dow}</small></th>`;
+    cur.setDate(cur.getDate() + 1);
+  }
+  // colgroup でセル幅を厳密に固定(table-layout:fixed と組み合わせ → ヘッダ・データ行で位置が完全一致)
+  let colgroupHtml = '<colgroup><col style="width:200px;">';
+  for (let i = 0; i < totalDays; i++) colgroupHtml += `<col style="width:${cellWidth}px;">`;
+  colgroupHtml += '</colgroup>';
+  // 既存 colgroup を置換 or 追加
+  const tableEl = document.getElementById('progress-table');
+  if (tableEl) {
+    let cg = tableEl.querySelector('colgroup');
+    if (cg) cg.remove();
+    tableEl.insertAdjacentHTML('afterbegin', colgroupHtml);
+    // テーブル幅を明示(メタ200px+日数×42px)。width:100%のままだと親幅に圧縮されて
+    // 絶対px配置のバー/マーカーと日付列がズレる(±60/90日モードの潜在バグ・standard導入で顕在化)
+    tableEl.style.width = (200 + totalDays * cellWidth) + 'px';
+  }
+  document.getElementById('progress-thead').innerHTML = `<tr>
+    <th class="gantt-meta-cell">物件 / 元請</th>
+    ${headerCells}
+  </tr>`;
+  // データ行
+  const tbody = document.getElementById('progress-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">表示できる物件がありません(✅発注済=業者発注確定した見積のみ表示)</td></tr>`;
+    return;
+  }
+  // 各見積を行として描画 (範囲内に何らかの工期/マーカーがある物件のみ表示)
+  const rangeRows = rows.filter(est => hasGanttItemsInRange(est, rangeStart, rangeEnd));
+  if (!rangeRows.length) {
+    tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">${label} に該当する工期/マーカーがある物件はありません</td></tr>`;
+    renderVendorWorkload(rangeRows);
+    renderGanttLegend(rangeRows);
+    return;
+  }
+  // 業者バッジ絞込(選択中の業者を含む物件だけ)。バッジ集計は絞込前の rangeRows から出す(切替できるように)
+  const visibleRows = _vendorFilter
+    ? rangeRows.filter(est => suppliersFor(est).some(s => s.supplier === _vendorFilter))
+    : rangeRows;
+  if (!visibleRows.length) {
+    tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">「${escapeHtml(_vendorFilter)}」の物件はこの期間にありません(バッジ再タップで解除)</td></tr>`;
+    renderVendorWorkload(rangeRows);
+    renderGanttLegend(rangeRows);
+    return;
+  }
+  // 軸=業者: 行=業者・バー=物件(クリックで詳細)。マーカーは物件固有なので出さない
+  if (currentGanttAxis === 'vendor') {
+    const vmap = new Map();
+    visibleRows.forEach(est => {
+      suppliersFor(est).forEach(s => {
+        if (!(s.periodStart || s.periodEnd)) return;
+        const r = ganttBarRangeByDates(s.periodStart, s.periodEnd, rangeStart, rangeEnd);
+        if (!r) return;
+        if (!vmap.has(s.supplier)) vmap.set(s.supplier, []);
+        vmap.get(s.supplier).push({ est, s, ...r });
+      });
+    });
+    const vendors = [...vmap.entries()].sort((a, b) => b[1].length - a[1].length);
+    if (!vendors.length) {
+      tbody.innerHTML = `<tr><td colspan="${totalDays+1}" class="gantt-empty">${label} に工期バーのある業者はいません</td></tr>`;
+    } else {
+      tbody.innerHTML = vendors.map(([name, entries]) => ganttVendorRowHtml(name, entries, rangeStart, rangeEnd, totalDays, cellWidth)).join('');
+      tbody.querySelectorAll('.gantt-vbar').forEach(b => b.addEventListener('click', () => openDetailModal(b.dataset.id)));
+    }
+    renderVendorWorkload(rangeRows);
+    renderGanttLegend(rangeRows);
+    return;
+  }
+  // v1.4.972: ソートを5種に拡張(山田要望)。日付系(入居/鍵交換/確認/除菌)は共通ルール=
+  //   「今日以降を昇順(近い順) → 過去を新しい順 → (入居のみ)未定 → 記載なし」。
+  //   受注順だけ性質が違う=受注日は常に過去なので「古い順」(=受注から時間が経って放置気味の案件が上)。
+  //   受注日は監査ログ(meta.statusHistory・v1.4.971)から「受注系に変わった最後の記録」を引く。
+  //   ⚠過去案件は履歴が無い(ログはv1.4.971以降に溜まる)ので受注順では末尾に落ちる。
+  let orderedRows = visibleRows;
+  if (currentGanttSort !== 'default') {
+    const _JUCHU_ST = ['受注（工事指示有）', '受注', '施工指示あり'];
+    const _sortDateOf = (est) => {
+      const ho2 = est.meta?.hatchuOrder || {};
+      switch (currentGanttSort) {
+        case 'nyukyo':  return nyukyoStatusOf(ho2).d;
+        case 'key':     return mdToDateOf(ho2.keyChangeDate);
+        case 'kakunin': return mdToDateOf(ho2.finalCheckDate);
+        case 'jokin':   return mdToDateOf(ho2.jokinDate);
+        case 'juchu': {
+          const h = Array.isArray(est.meta?.statusHistory) ? est.meta.statusHistory : [];
+          for (let i = h.length - 1; i >= 0; i--) {
+            if (_JUCHU_ST.includes(h[i].to)) {
+              const d = new Date(h[i].at);
+              return Number.isFinite(d.getTime()) ? d : null;
+            }
+          }
+          return null;
+        }
+      }
+      return null;
+    };
+    const rankOf = (est) => {
+      const d = _sortDateOf(est);
+      if (currentGanttSort === 'juchu') return d ? [0, d.getTime()] : [1, 0]; // 受注が古い順・履歴なしは末尾
+      if (d) return (d >= today) ? [0, d.getTime()] : [1, -d.getTime()];
+      // 入居ソートだけ「未定」(欄は埋めたが日付なし)を記載なしより上に
+      if (currentGanttSort === 'nyukyo' && nyukyoStatusOf(est.meta?.hatchuOrder || {}).kind === 'mitei') return [2, 0];
+      return [3, 0];
+    };
+    orderedRows = [...visibleRows].sort((a, b) => {
+      const ra = rankOf(a), rb = rankOf(b);
+      return (ra[0] - rb[0]) || (ra[1] - rb[1]);
+    });
+  }
+  tbody.innerHTML = orderedRows.map(est => ganttRowHtml(est, rangeStart, rangeEnd, totalDays, cellWidth)).join('');
+  // 行クリック → モーダル
+  tbody.querySelectorAll('tr.gantt-row').forEach(tr => {
+    tr.addEventListener('click', () => openDetailModal(tr.dataset.id));
+  });
+  // v1.4.972: 🔑鍵残しチップのクリック=連絡済⇄未トグル(行クリックの詳細モーダルは開かせない)
+  tbody.querySelectorAll('.key-renraku-chip').forEach(c => c.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    toggleKagiRenraku(c.dataset.id);
+  }));
+  // 業者稼働集計 + 凡例エリア(ガント下部)
+  renderVendorWorkload(rangeRows);
+  renderGanttLegend(rangeRows);
+}
+
+function renderVendorWorkload(rows) {
+  // 当日以降に工期がある業者をカウント(物件単位で重複排除)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const counts = {};
+  rows.forEach(est => {
+    const seen = new Set();
+    suppliersFor(est).forEach(s => {
+      const sd = mdToDateOf(s.periodStart);
+      const ed = mdToDateOf(s.periodEnd);
+      let future = false;
+      if (ed && ed >= today) future = true;
+      else if (!ed && sd && sd >= today) future = true;
+      if (future && !seen.has(s.supplier)) {
+        counts[s.supplier] = (counts[s.supplier] || 0) + 1;
+        seen.add(s.supplier);
+      }
+    });
+  });
+  const ordered = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const el = document.getElementById('vendor-workload');
+  if (!el) return;
+  if (!ordered.length) {
+    el.innerHTML = '<span style="color:#9ca3af; font-size:11px;">(当日以降の業者稼働なし)</span>';
+    return;
+  }
+  const cells = ordered.map(([name, count]) => {
+    const c = supplierColor(name);
+    const active = (_vendorFilter === name);
+    return `<span class="vendor-badge" data-vendor="${escapeHtml(name)}" title="クリックでこの業者の物件だけ表示 / 再クリックで解除" style="display:inline-flex; gap:6px; padding:2px 8px; border-radius:4px; background:${c.bg}; color:${c.color}; font-size:11px; font-weight:600; cursor:pointer; ${active ? 'outline:2px solid #1e3a8a; outline-offset:1px;' : ''}">
+      ${escapeHtml(name)} <b>${count}件</b>
+    </span>`;
+  }).join('');
+  const clearChip = _vendorFilter
+    ? `<span id="vendor-filter-clear" title="絞込を解除" style="cursor:pointer; padding:2px 8px; border-radius:4px; background:#1e3a8a; color:#fff; font-size:11px; font-weight:700;">✕ 「${escapeHtml(_vendorFilter)}」で絞込中 → 解除</span>`
+    : '';
+  el.innerHTML = `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+    <span style="font-weight:700; color:#0f172a;">🏗 業者稼働(当日以降):</span>
+    ${cells}
+    ${clearChip}
+  </div>`;
+  // クリックでガントを業者絞込(再クリックで解除) v1.4.552
+  el.querySelectorAll('.vendor-badge').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.vendor;
+    _vendorFilter = (_vendorFilter === v) ? null : v;
+    renderGantt(_lastGanttRows);
+  }));
+  const clr = document.getElementById('vendor-filter-clear');
+  if (clr) clr.addEventListener('click', () => { _vendorFilter = null; renderGantt(_lastGanttRows); });
+}
+
+function renderGanttLegend(visibleRows) {
+  const legendEl = document.getElementById('gantt-legend');
+  if (!legendEl) return;
+  // 表示中の業者一覧(ガントバー対象のみ)
+  const visibleSuppliers = new Set();
+  visibleRows.forEach(est => {
+    suppliersFor(est).forEach(s => { if (s.periodStart || s.periodEnd) visibleSuppliers.add(s.supplier); });
+  });
+  // 既知パレット業者(常に表示) + 表示中の未登録業者
+  const knownNames = VENDOR_COLORS.map(v => v.match);
+  const allNames = [...new Set([...knownNames, ...visibleSuppliers])].filter(Boolean);
+  const supChips = allNames.map(name => {
+    const c = supplierColor(name);
+    const usedMark = visibleSuppliers.has(name) ? '' : '<small style="opacity:0.5;">未稼働</small>';
+    return `<span class="supplier-tag" style="background:${c.bg}; color:${c.color};">${escapeHtml(name)}${usedMark}</span>`;
+  }).join('');
+  const markers = [
+    { label:'▼完了', bg:'#16a34a', color:'#fff' },
+    { label:'▼入居', bg:'#0ea5e9', color:'#fff' },
+    { label:'🔑鍵', bg:'#f59e0b', color:'#fff' },
+    { label:'▽確認', bg:'#374151', color:'#fff' },
+    { label:'💊除菌', bg:'#E1BEE7', color:'#4A148C' },
+    { label:'🔧対応', bg:'#0d9488', color:'#fff' },
+  ].map(mk => `<span style="display:inline-block; padding:1px 6px; border-radius:3px; font-size:11px; font-weight:700; background:${mk.bg}; color:${mk.color};">${mk.label}</span>`).join(' ');
+  // 行の状態の見方(背景色: 未発注=ピンク / 発注済=黄 / ⚠=赤 / 完了=緑・✏作成中=黄太枠・入居確定は赤文字で区別)
+  const _stChipCss = 'display:inline-block; padding:1px 6px; border-radius:3px; font-size:11px; font-weight:700; white-space:nowrap;';
+  const stateChips = [
+    `<span style="${_stChipCss} background:#fce7f3; color:#9d174d;">未発注=ピンク</span>`,
+    `<span style="${_stChipCss} background:#fef9c3; color:#713f12;">発注済=黄</span>`,
+    `<span style="${_stChipCss} background:#fee2e2; color:#b91c1c;">⚠間に合わない=赤</span>`,
+    `<span style="${_stChipCss} background:#dcfce7; color:#166534;">完了=緑</span>`,
+    `<span style="${_stChipCss} background:#fffbeb; color:#713f12; box-shadow:inset 0 0 0 2px #eab308;">✏作成中=黄枠</span>`,
+    `<span style="${_stChipCss} background:#0d9488; color:#fff;">🔧修繕=種別が修繕</span>`,
+    `<span style="${_stChipCss} background:#b45309; color:#fff;">🔑鍵残し 連絡未=茶(クリックで済に)</span>`,
+    `<span style="${_stChipCss} background:#16a34a; color:#fff;">🔑連絡済✓=緑</span>`,
+  ].join(' ');
+  legendEl.innerHTML = `
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <span style="font-weight:700; color:#0f172a;">凡例:</span>
+      <span style="color:#475569;">業者</span> ${supChips}
+      <span style="margin-left:auto; color:#475569;">行</span> ${stateChips}
+      <span style="color:#475569;">マーカー</span> ${markers}
+    </div>
+  `;
+}
+
+function hasGanttItemsInRange(est, rangeStart, rangeEnd) {
+  const sups = suppliersFor(est);
+  for (const s of sups) {
+    if (ganttBarRangeByDates(s.periodStart, s.periodEnd, rangeStart, rangeEnd)) return true;
+  }
+  // v1.4.972: 日程の定義は _estScheduleDates に集約(修繕の対応予定日もここに含まれる)
+  for (const d of _estScheduleDates(est)) {
+    if (d >= rangeStart && d <= rangeEnd) return true;
+  }
+  return false;
+}
+
+function ganttRowHtml(est, rangeStart, rangeEnd, totalDays, cellWidth) {
+  const sups = suppliersFor(est).filter(s => s.periodStart || s.periodEnd);
+  // レーン分割: 重ならない複数業者は同じレーン、重なる業者は下のレーンに自動配置
+  // 重なりが無ければ 1工事1行(従来通り) / 重なりがあれば必要なレーン数だけ縦に積む
+  const placed = [];
+  for (const s of sups) {
+    const r = ganttBarRangeByDates(s.periodStart, s.periodEnd, rangeStart, rangeEnd);
+    if (!r) continue;
+    placed.push({ s, ...r });
+  }
+  // 開始日昇順 → Greedy interval scheduling でレーン割当
+  placed.sort((a, b) => (a.sd - b.sd) || (a.ed - b.ed));
+  const laneEnd = []; // laneEnd[i] = レーン i の最後のバーの終端日
+  placed.forEach(p => {
+    let lane = -1;
+    for (let i = 0; i < laneEnd.length; i++) {
+      if (laneEnd[i] < p.sd) { lane = i; laneEnd[i] = p.ed; break; }
+    }
+    if (lane < 0) { lane = laneEnd.length; laneEnd.push(p.ed); }
+    p.lane = lane;
+  });
+  const numLanes = Math.max(1, laneEnd.length);
+  const BAR_HEIGHT = 20;
+  const LANE_GAP = 2;
+  const VPADDING = 4;
+  // マーカー(完了日 / 入居予定 / 鍵交換 / 完了予定 / 除菌) — 先に配置決定して行高に反映
+  const ho = est.meta?.hatchuOrder || {};
+  const nyk = nyukyoStatusOf(ho);
+  // v1.4.972: 🔑鍵残し判定をガントに表示(山田要望)。既存 autoDetectKeyHandling(詳細モーダルと同じ判定)を
+  //   再利用=判定を二重に書かない。鍵交換日が無ければ {collector:''} が返り何も出ない。
+  const _keyH = (typeof autoDetectKeyHandling === 'function') ? autoDetectKeyHandling(est) : { collector:'', nokoshi:'' };
+  const _keyInfo = _keyH.collector ? `回収: ${_keyH.collector}${_keyH.nokoshi ? ' / 🔑鍵残し・後続業者へ要連絡' : ' / 残し不要'}` : '';
+  const markerDefs = [
+    { d: mdToDateOf(ho.completeDate), label:'▼完了', color:'#16a34a' },
+    { d: nyk.d, label: (nyk.kind === 'kari') ? '▼入居?' : '▼入居', color:'#0ea5e9' },
+    { d: mdToDateOf(ho.keyChangeDate), label:'🔑鍵', color:'#f59e0b', info: _keyInfo },
+    { d: mdToDateOf(ho.finalCheckDate), label:'▽確認', color:'#374151' },
+    { d: mdToDateOf(ho.jokinDate), label:'💊除菌', color:'#a21caf' },
+    // v1.4.972: 修繕の対応予定日(=修繕の主役の日付)。工期がある修繕はバー、対応予定日だけの修繕はこの点で出る
+    { d: (workflowOf(est) === 'repair') ? mdToDateOf(est.meta?.responseDate) : null, label:'🔧対応', color:'#0d9488' },
+  ].filter(mk => mk.d && mk.d >= rangeStart && mk.d <= rangeEnd);
+  // マーカーもバーチャート風のチップで表示(1セル幅・バーに重ねる)
+  markerDefs.sort((a, b) => a.d - b.d);
+  const markerPlaces = markerDefs.map(mk => {
+    const offset = dayDiff(mk.d, rangeStart);
+    const left = offset * cellWidth + 1;            // セル左端
+    const width = Math.max(2, cellWidth - 2);        // 1セル分
+    return { ...mk, left, width };
+  });
+  // 1行で完結 — マーカー段組みは廃止、バーの上に重ねる
+  const TOP_MARGIN = VPADDING;
+  const FIXED_ROW_HEIGHT = TOP_MARGIN + numLanes * BAR_HEIGHT + (numLanes - 1) * LANE_GAP + VPADDING;
+  const rowHeight = FIXED_ROW_HEIGHT;
+  // 業者バー(レーン別配置・マーカー領域の下に配置)
+  const barsHtml = placed.map((p) => {
+    const c = supplierColor(p.s.supplier);
+    const left = p.sd * cellWidth;
+    const width = Math.max(2, (p.ed - p.sd + 1) * cellWidth - 2);
+    const top = TOP_MARGIN + p.lane * (BAR_HEIGHT + LANE_GAP);
+    const clipCls = (p.clipL ? ' bar-clipped-left' : '') + (p.clipR ? ' bar-clipped-right' : '');
+    const clipPrefix = p.clipL ? '◀' : '';
+    const clipSuffix = p.clipR ? '▶' : '';
+    return `<div class="gantt-bar${clipCls}" style="left:${left}px; width:${width}px; top:${top}px; height:${BAR_HEIGHT}px; line-height:${BAR_HEIGHT}px; background:${c.bg}; color:${c.color};" title="${escapeHtml(p.s.supplier)} / ¥${fmtNum(p.s.amount)}\n工期: ${escapeHtml(p.s.periodStart||'-')}〜${escapeHtml(p.s.periodEnd||'-')}">${clipPrefix}${escapeHtml(p.s.supplier)}${clipSuffix}</div>`;
+  }).join('');
+  // マーカーをチップ(塗りつぶしバー)として描画 — 1セル幅・バー上に重ねる
+  // 同日に複数マーカーがある場合は z-index を上げて最後に描画したものが見える
+  const markersHtml = markerPlaces.map((mk, i) => {
+    const dateLabel = `${mk.d.getMonth()+1}/${mk.d.getDate()}`;
+    // v1.4.972: 🔑鍵マーカーは info(回収者/鍵残し) をホバーに追加
+    const extraInfo = mk.info ? `\n${escapeHtml(mk.info)}` : '';
+    return `<div class="gantt-bar gantt-marker-chip" style="left:${mk.left}px; width:${mk.width}px; top:${TOP_MARGIN}px; height:${BAR_HEIGHT}px; line-height:${BAR_HEIGHT}px; background:${mk.color}; color:#fff; z-index:${100 + i}; text-align:center; font-size:10px; padding:0 2px;" title="${mk.label} ${dateLabel}${extraInfo}">${mk.label}</div>`;
+  }).join('');
+  // メタセル
+  const m_ = est.meta || {};
+  // 入居ステータス: 確定=物件名赤字+赤チップ / 予定・希望=橙チップ(?付き) / 未定=灰チップ
+  const _nykMd = nyk.d ? `${nyk.d.getMonth()+1}/${nyk.d.getDate()}` : '';
+  const chipCss = 'display:inline-block; padding:0 4px; border-radius:3px; font-size:10px; font-weight:700; white-space:nowrap; vertical-align:1px;';
+  // 入居カウントダウン: (あとN日)/(今日!)/(N日前)。7日以内の確定はチップを濃赤に
+  const _today0 = new Date();
+  _today0.setHours(0,0,0,0);
+  const _dd = nyk.d ? dayDiff(nyk.d, _today0) : null;
+  const _cd = (_dd === null) ? '' : (_dd === 0 ? '(今日!)' : (_dd > 0 ? `(あと${_dd}日)` : `(${-_dd}日前)`));
+  const _kakuteiBg = (_dd !== null && _dd >= 0 && _dd <= 7) ? '#b91c1c' : '#dc2626';
+  let nykChip = '';
+  if (nyk.kind === 'kakutei')   nykChip = ` <span style="${chipCss} background:${_kakuteiBg}; color:#fff;" title="入居日確定: ${escapeHtml(nyk.raw)}">入居${_nykMd}${_cd}</span>`;
+  else if (nyk.kind === 'kari') nykChip = ` <span style="${chipCss} background:#fed7aa; color:#9a3412;" title="入居 予定/希望(未確定): ${escapeHtml(nyk.raw)}">入居${_nykMd}?${_cd}</span>`;
+  else if (nyk.kind === 'mitei') nykChip = ` <span style="${chipCss} background:#e5e7eb; color:#6b7280;" title="入居未定">入居未定</span>`;
+  // ⚠入居に間に合わない警告: 入居日より後に工期/確認/鍵/除菌 → チップ+確定なら行を赤帯(完了案件には出さない)
+  const _risk = (m_.status === '完了') ? null : nyukyoRiskOf(est, nyk);
+  let riskChip = '';
+  if (_risk) {
+    const rc = (nyk.kind === 'kakutei') ? 'background:#b91c1c; color:#fff;' : 'background:#ffedd5; color:#9a3412; border:1px solid #fb923c;';
+    riskChip = ` <span style="${chipCss} ${rc}" title="入居${_nykMd}より後に予定があります:\n${escapeHtml(_risk.join(' / '))}">⚠間に合わない?</span>`;
+  }
+  // 行背景の色分け(2026-07-16 山田・やばい順マトリクス 改3):
+  //   未発注=ピンク(入居確定/未定とも) / 発注済=黄(入居確定は赤文字/赤チップで区別)
+  //   ⚠間に合わない(確定)=赤 / 完了=緑 が上書き。✏編集中は背景でなく黄太枠+チップ(発注済黄と被るため)。
+  //   完了のグレースケールはバー側だけに適用(背景の緑を活かす)。左帯: 発注確定=緑 / 受注未発注=橙
+  const _status = m_.status || '';
+  const _isDone = (_status === '完了');
+  const _isEditing = (est.id === localStorage.getItem('mitsumori_current_id_v1'));
+  const _confirmed = _isOrderConfirmedP(m_);
+  const _isJuchu = ['受注', '受注（工事指示有）', '施工指示あり'].includes(_status);
+  let _stripe = '';
+  if (_confirmed) _stripe = 'border-left:4px solid #16a34a;';
+  else if (_isJuchu) _stripe = 'border-left:4px solid #f59e0b;';
+  const _kakutei = (nyk.kind === 'kakutei');
+  let _rowBg;
+  if (_confirmed) _rowBg = ' background-color:#fef9c3;';   // 発注済=黄(確定/未定とも)
+  else            _rowBg = ' background-color:#fce7f3;';   // 未発注=ピンク(確定/未定とも)
+  if (_risk && _kakutei) _rowBg = ' background-color:#fee2e2;';                    // 間に合わない=赤(発注済でも)
+  if (_isDone) _rowBg = ' background-color:#dcfce7;';                              // 完了=緑
+  const _editFrame = (_isEditing && !_isDone) ? ' box-shadow:inset 0 0 0 3px #eab308;' : '';        // ✏編集中=黄太枠
+  let stateChip = '';
+  if (_isEditing && !_isDone) stateChip = ` <span style="${chipCss} background:#fde047; color:#713f12; border:1px solid #eab308;" title="いま見積作成タブで開いている(発注書を作っている)案件">✏作成中</span>`;
+  else if (!_isDone && _isJuchu && !_confirmed) stateChip = ` <span style="${chipCss} background:#fff7ed; color:#9a3412; border:1px solid #f59e0b;" title="受注済ですが業者発注が未確定です">⏳未発注</span>`;
+  const bukkenStyle = (nyk.kind === 'kakutei') ? ' style="color:#dc2626;"' : '';
+  // v1.4.972: 原状回復タブ/すべてタブに混ざる修繕を一目で見分けられるように(山田要望)。
+  //   🔧対応マーカーと同じteal。ホバーで実際の工事種別(修繕工事/追加提案工事/リフォーム工事…)を出す。
+  //   修繕タブでは全部修繕なので出さない(全行に付くとただのノイズ)。
+  const kojiChip = (workflowOf(est) === 'repair' && currentMode !== 'repair')
+    ? ` <span style="${chipCss} background:#0d9488; color:#fff;" title="工事種別: ${escapeHtml(m_.kojiName || '(未設定)')}\n(原状回復の日付が入っているため原状回復タブにも表示されています)">🔧修繕</span>`
+    : '';
+  // v1.4.972: 🔑鍵残しが必要なケース(鍵交換の後に現場作業が残る)だけチップで警告。
+  //   全行に回収者を出すとノイズなので注意が要る行だけ。回収者は🔑鍵マーカーのホバーで全ケース見られる。
+  //   完了案件には出さない(終わった現場の鍵はもう動かない)。
+  //   連絡の済/未を2状態で表示(山田要望)=チップクリックでトグル(kagiRenrakuDone・全PC共有)。
+  let keyChip = '';
+  if (_keyH.nokoshi === '要連絡' && (m_.status || '') !== '完了') {
+    const _rd = m_.kagiRenrakuDone;
+    if (_rd) {
+      const _rdWhen = String(_rd.at || '').replace('T', ' ').slice(0, 16);
+      keyChip = ` <span class="key-renraku-chip" data-id="${escapeHtml(est.id)}" style="${chipCss} background:#16a34a; color:#fff; cursor:pointer;" title="🔑鍵残し: 後続業者へ連絡済 ✓\n${escapeHtml(_rdWhen)} ${escapeHtml(_rd.by || '')}\n(クリックで「未」に戻す)">🔑連絡済✓</span>`;
+    } else {
+      keyChip = ` <span class="key-renraku-chip" data-id="${escapeHtml(est.id)}" style="${chipCss} background:#b45309; color:#fff; cursor:pointer;" title="🔑鍵残しが必要: 鍵交換日の後に現場作業が残っています\n回収: ${escapeHtml(_keyH.collector)} / 後続の業者へ鍵の置き場所を要連絡\n(連絡したらクリックで「連絡済」に)">🔑鍵残し 連絡未</span>`;
+    }
+  }
+  const metaCellHtml = `${motoukeTagHtml(getMotoukeName(est))} <b${bukkenStyle}>${escapeHtml(m_.bukken||'')}</b>${kojiChip}${stateChip}${nykChip}${riskChip}${keyChip}<br>
+    <small style="color:#6b7280;">${escapeHtml(m_.roomNo||'')} ${escapeHtml(m_.kojiName||'')}</small>`;
+  // 完了行はバー/マーカーだけグレースケール(背景の緑・今日線は色を残す)
+  const _trackInner = _isDone
+    ? `<div style="position:absolute; inset:0; filter:grayscale(1); opacity:.55;">${barsHtml}${markersHtml}</div>`
+    : `${barsHtml}${markersHtml}`;
+  return `<tr class="gantt-row" data-id="${escapeHtml(est.id)}" style="height:${rowHeight}px;">
+    <td class="gantt-meta-cell" style="${_stripe}${_rowBg}${_editFrame}">${metaCellHtml}</td>
+    <td colspan="${totalDays}" class="gantt-track" style="height:${rowHeight}px;${_rowBg}${_editFrame}">
+      ${_trackInner}
+      ${ganttTodayLineHtml(rangeStart, rangeEnd, cellWidth)}
+    </td>
+  </tr>`;
+}
+
+function computeStats(rows) {
+  let totalAmount = 0, juchu = 0, notJuchu = 0, kanryou = 0, invoiceUnpaid = 0, paymentUnpaid = 0;
+  rows.forEach(e => {
+    totalAmount += estimateTotal(e);
+    const st = e.meta?.status || '下書き';
+    // v1.4.122: 新旧両ステータスを受注扱い
+    if (['受注', '受注（工事指示有）', '施工指示あり'].includes(st)) juchu++; else notJuchu++;
+    if (st === '完了') kanryou++;
+    if ((e.meta?.invoiceStatus||'未') === '未') invoiceUnpaid++;
+    if ((e.meta?.paymentStatus||'未') === '未') paymentUnpaid++;
+  });
+  return { totalAmount, juchu, notJuchu, kanryou, invoiceUnpaid, paymentUnpaid };
+}
+
+// 業者①〜⑥ × 4列(業者名/発注金額/開始工期/終了工期)のヘッダ HTML を生成
+function supplierHeaderHtml() {
+  let h = '';
+  for (let i = 1; i <= 6; i++) {
+    const startCls = (i === 1) ? ' sup-section-start' : '';
+    h += `
+      <th class="sup-col${startCls}" style="width:90px;">業者${'①②③④⑤⑥'[i-1]}</th>
+      <th class="sup-col num" style="width:80px;">発注金額</th>
+      <th class="sup-col" style="width:60px;">開始工期</th>
+      <th class="sup-col" style="width:60px;">終了工期</th>`;
+  }
+  return h;
+}
+
+function headerHtmlFor(mode) {
+  if (mode === 'repair') {
+    return `<tr>
+      <th style="width:40px;">No.</th>
+      <th style="width:120px; position:relative;">元請 <span class="prg-filter-btn" data-filter-key="motouke" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックで元請を絞り込み">▼</span></th>
+      <th style="width:135px;">ステータス <span class="prg-filter-btn" data-filter-key="status" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックでステータスを絞り込み">▼</span></th>
+      <th style="width:120px;">進行 <span class="prg-filter-btn" data-filter-key="workflow" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックで進行を絞り込み">▼</span></th>
+      <th>物件名</th>
+      <th style="width:60px;">号室</th>
+      <th class="prg-sortable" data-sort-key="requestDate" style="width:90px; cursor:pointer; user-select:none;" title="クリックでソート">依頼日 <span class="sort-arrow" data-for="requestDate"></span></th>
+      <th class="prg-sortable" data-sort-key="responseDate" style="width:90px; cursor:pointer; user-select:none;" title="クリックでソート">対応予定日 <span class="sort-arrow" data-for="responseDate"></span></th>
+      <th style="width:72px;">時間</th>
+      <th style="width:90px;" title="修繕の対応業者(例:思綺美装)。カレンダーの修繕予定に出ます">対応業者</th>
+      <th class="prg-sortable" data-sort-key="completeDate" style="width:90px; cursor:pointer; user-select:none;" title="クリックでソート">完了日 <span class="sort-arrow" data-for="completeDate"></span></th>
+      <th style="width:130px;">お客様</th>
+      <th style="width:110px;">TEL</th>
+      <th title="ショート版を表示。📋マークでhover→本文ままを確認できます">依頼内容 <small style="font-weight:normal; color:#94a3b8; font-size:10px;">📋=本文</small></th>
+      <th style="width:90px;">営業担当</th>
+      <th style="width:80px;">連絡者</th>
+      <th>進捗詳細</th>
+      <th class="num" style="width:90px;">売上(税別)</th>
+      ${supplierHeaderHtml()}
+      <th class="num" style="width:80px;">材料費</th>
+      <th style="width:90px;">請求/入金</th>
+    </tr>`;
+  }
+  // 原状回復 + すべて
+  return `<tr>
+    <th style="width:30px;">No.</th>
+    <th style="width:120px; position:relative;">元請 <span class="prg-filter-btn" data-filter-key="motouke" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックで元請を絞り込み">▼</span></th>
+    <th style="width:135px;">ステータス <span class="prg-filter-btn" data-filter-key="status" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックでステータスを絞り込み">▼</span></th>
+    <th style="width:120px;">進行 <span class="prg-filter-btn" data-filter-key="workflow" style="display:inline-block; padding:0 6px; margin-left:2px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:700; cursor:pointer; user-select:none; font-size:11px;" title="クリックで進行を絞り込み">▼</span></th>
+    <th>物件名</th>
+    <th style="width:60px;">号室</th>
+    <th style="width:80px;">工事指示</th>
+    <th style="width:80px;">入居予定</th>
+    <th class="prg-sortable" data-sort-key="finalCheckDate" style="width:90px; cursor:pointer; user-select:none; line-height:1.2;" title="クリックでソート">完了予定日<br><small style="font-weight:normal; color:#6b7280; font-size:10px;">(最終確認日)</small> <span class="sort-arrow" data-for="finalCheckDate"></span></th>
+    <th class="prg-sortable" data-sort-key="completeDate" style="width:80px; cursor:pointer; user-select:none;" title="クリックでソート">完了日 <span class="sort-arrow" data-for="completeDate"></span></th>
+    <th style="width:80px;">鍵交換日</th>
+    <th style="width:80px;">鍵回収</th>
+    <th style="width:80px;">鍵残し</th>
+    <th style="width:80px;">鍵業者</th>
+    <th style="width:50px;">除菌</th>
+    <th style="width:80px;">除菌日</th>
+    <th style="width:90px;">見積担当</th>
+    <th style="width:80px;">発注担当</th>
+    <th style="width:50px;">手配</th>
+    <th style="width:50px;">予定表</th>
+    <th style="width:50px;">水道</th>
+    <th class="num" style="width:90px;">売上(税別)</th>
+    ${supplierHeaderHtml()}
+    <th class="num" style="width:80px;">材料費</th>
+    <th style="width:90px;">請求/入金</th>
+  </tr>`;
+}
+
+// ステータス・進行ステータスを <select> で編集可能にするヘルパー
+// v1.4.122: STATUS_OPTIONS は上部(行872)で新体系に定義済み — ここの旧定義は削除
+function statusSelectHtml(val, w=115) {
+  const cur = val || '下書き';
+  const sb = STATUS_BADGES[cur] || STATUS_BADGES['下書き'];
+  const opts = STATUS_OPTIONS.map(s => {
+    const ss = STATUS_BADGES[s] || STATUS_BADGES['下書き'];
+    const label = (s === '提出済') ? '見積提出済' : s;
+    return `<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${ss.icon} ${escapeHtml(label)}</option>`;
+  }).join('');
+  return `<select class="prg-edit prg-status-sel" data-path="meta" data-f="status" style="font-size:10px; padding:1px 4px; border-radius:3px; font-weight:600; background:#fff; cursor:pointer; max-width:${w}px;" title="クリックでステータス変更">${opts}</select>`;
+}
+function workflowSelectHtml(val, isRepair, w=100) {
+  const options = isRepair ? WORKFLOW_OPTIONS_REPAIR : WORKFLOW_OPTIONS_RESTORATION;
+  const cur = val || '待機';
+  const opts = options.map(s => `<option value="${escapeHtml(s)}"${s===cur?' selected':''}>${escapeHtml(s)}</option>`).join('');
+  return `<select class="prg-edit prg-wf-sel" data-path="meta" data-f="workflowStatus" style="font-size:10px; padding:1px 4px; border-radius:3px; font-weight:600; background:#fff; cursor:pointer; max-width:${w}px;" title="クリックで進行ステータス変更">${opts}</select>`;
+}
+
+// 業者①〜⑥ の 4セル を行毎に生成(空き枠は淡いグレー)
+function supplierCellsHtml(est) {
+  const sups = suppliersFor(est);
+  let h = '';
+  for (let i = 0; i < 6; i++) {
+    const s = sups[i];
+    const startCls = (i === 0) ? ' sup-section-start' : '';
+    if (!s) {
+      h += `<td class="sup-col sup-empty${startCls}">-</td><td class="sup-col sup-empty num">-</td><td class="sup-col sup-empty">-</td><td class="sup-col sup-empty">-</td>`;
+    } else {
+      h += `
+        <td class="sup-col${startCls}">${supplierTagHtml(s.supplier)}</td>
+        <td class="sup-col num">¥${fmtNum(s.amount)}</td>
+        <td class="sup-col">${escapeHtml(s.periodStart||'')}</td>
+        <td class="sup-col">${escapeHtml(s.periodEnd||'')}</td>`;
+    }
+  }
+  return h;
+}
+
+function rowHtmlFor(mode, est, no) {
+  const m = est.meta || {};
+  const supplierCells = supplierCellsHtml(est);
+  const motoukeCell = motoukeTagHtml(getMotoukeName(est));
+  const statusKey = m.status || '下書き';
+  // ステータス・進行ステータス: select で編集可能(prg-edit ハンドラで autoPushFromProgress に乗る)
+  const statusCell = statusSelectHtml(statusKey);
+  const wfCell = workflowSelectHtml(m.workflowStatus, mode === 'repair');
+  const confirmedBadge = _isOrderConfirmedP(m) ? '<span class="badge badge-confirmed">✅発注済</span> ' : '';
+  const invoiceBadge = (m.invoiceStatus === '済') ? '<span class="badge badge-paid">請済</span>' : '<span class="badge badge-unpaid">請未</span>';
+  const paymentBadge = (m.paymentStatus === '済') ? '<span class="badge badge-paid">入済</span>' : '<span class="badge badge-unpaid">入未</span>';
+  // v1.4.127: workflowStatus による行背景色(修繕系のみ)
+  //   待機 → 青(wf-machi) / アポ・手配 未 → ピンク(wf-mihai) / アポ・手配 済 → 黄(wf-sumi)
+  // v1.4.630: 行色はプルダウン表示と一致させる。進行ステータスの値がそのモードの選択肢に無い場合
+  //   (例: 原状回復案件に修繕系の'-'/'完了'が残っている)、ドロップダウンは先頭'待機'を表示するので色も'待機'扱いに正規化。
+  //   → 「プルダウンは待機なのに行が赤」(泉ハイツ)のズレを解消。営業ステータス=完了は引き続き赤。
+  const _wfRaw = (m.workflowStatus || '').trim();
+  const _wfOpts = (mode === 'repair') ? WORKFLOW_OPTIONS_REPAIR : WORKFLOW_OPTIONS_RESTORATION;
+  const _wf = _wfOpts.includes(_wfRaw) ? _wfRaw : '待機';
+  let _wfClass = '';
+  if (_wf === '待機') _wfClass = ' wf-machi';
+  else if (_wf === 'アポ・手配 未') _wfClass = ' wf-mihai';
+  else if (_wf === 'アポ・手配 済') _wfClass = ' wf-sumi';
+  // 完了工事は赤(営業ステータス完了 or 進行ステータス クローズ/完了/-)。修繕/すべてタブ用に残す。
+  const _doneClass = ((m.status === '完了') || ['クローズ', '完了', '-'].includes(_wf)) ? ' row-done' : '';
+  // v1.4.632: 原状回復タブの行色(山田指定):
+  //   下書き/失注/キャンセル=白 / 見積作成中/提出済=青 / 受注+待機(発注前)=赤 / 着工以降(工事中)=黄 / 完了orクローズ=緑。
+  //   ※修繕・すべてタブは従来の配色(row-confirmed/wf色/row-done)を維持。
+  let trClass;
+  if (mode === 'restoration') {
+    const _st = m.status || '下書き';
+    const _juchu = ['受注（工事指示有）', '受注', '施工指示あり'];
+    const _kouji = ['着工', '完工', '鍵交換済', '入居済']; // 工事が動いている進行ステータス
+    let _rc = '';
+    if (_st === '完了' || _wf === 'クローズ') _rc = ' rcolor-green';        // 完了=緑
+    else if (['下書き', '失注', 'キャンセル'].includes(_st)) _rc = '';        // 白(無着色)
+    else if (['見積作成中', '提出済'].includes(_st)) _rc = ' rcolor-blue';    // 青
+    else if (_juchu.includes(_st)) _rc = _kouji.includes(_wf) ? ' rcolor-yellow' : ' rcolor-red'; // 着工以降=黄 / 待機=赤
+    trClass = 'row-clickable' + _rc;
+  } else {
+    trClass = (m.isConfirmed ? 'row-clickable row-confirmed' : 'row-clickable') + _wfClass + _doneClass;
+  }
+  const ho = m.hatchuOrder || {};
+  // v1.4.250: inp/chk を mode分岐の前に定義(修繕モードでもインライン編集を使えるように)
+  // インライン編集セル: data-f= でフィールド名 / path: meta | hatchuOrder | taikyo / tbody の delegated change で保存
+  const inp = (path, f, val, ph='', w=70, listId='') => `<input type="text" class="prg-edit" data-path="${path}" data-f="${f}" value="${escapeHtml(val||'')}" placeholder="${ph}"${listId?` list="${listId}"`:''} style="width:${w}px; font-size:11px; padding:1px 3px; border:1px solid #e5e7eb; background:transparent;">`;
+  const chk = (path, f, val) => `<input type="checkbox" class="prg-edit" data-path="${path}" data-f="${f}" ${val ? 'checked' : ''}>`;
+  if (mode === 'repair') {
+    const t = m.taikyo || {};
+    return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
+      <td class="num">${no}</td>
+      <td>${motoukeCell}</td>
+      <td>${statusCell}</td>
+      <td>${wfCell}</td>
+      <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b>${workloadBadgeHtml(est)}</td>
+      <td>${escapeHtml(m.roomNo||'')}</td>
+      <td>${escapeHtml(m.requestDate||'')}</td>
+      <td>${inp('meta','responseDate', m.responseDate, '例:6/3', 60)}</td>
+      <td>${inp('meta','responseTime', m.responseTime, '例:10:00/午前中', 64, 'dl-resp-time')}</td>
+      <td>${inp('meta','responseContractor', m.responseContractor, '例:思綺美装', 80)}</td>
+      <td>${inp('hatchuOrder','completeDate', ho.completeDate, '例:5/13', 70)}</td>
+      <td>${escapeHtml(t.contractorName||'')}</td>
+      <td>${escapeHtml(t.contractorTel||'')}</td>
+      <td title="${escapeHtml(m.requestDetailFull||m.requestDetail||'')}" style="max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.requestDetail||'')}${m.requestDetailFull ? ' <span style="color:#94a3b8; font-size:10px;" title="本文ママあり">📋</span>' : ''}</td>
+      <td>${escapeHtml(m.atenaTantou||'')}</td>
+      <td>${staffBadgeHtml(t.tachiaiPerson||m.creator||'')}</td>
+      <td title="${escapeHtml(m.creatorMemo||'')}">${escapeHtml(truncate(m.creatorMemo||'', 40))}</td>
+      <td class="num">¥${fmtNum(estimateTotal(est))}</td>
+      ${supplierCells}
+      <td class="num">¥${fmtNum(materialTotal(est))}</td>
+      <td>${invoiceBadge}<br>${paymentBadge}</td>
+    </tr>`;
+  }
+  // 原状回復・すべて
+  const t = m.taikyo || {};
+  // 鍵回収・鍵残し: 手動入力優先、無ければ自動判定 + (auto)バッジ表示
+  const auto = autoDetectKeyHandling(est);
+  // inp/chk は rowHtmlFor 冒頭(mode分岐前)で定義済み(v1.4.250〜)
+  const kagiKaishuVal = (m.kagiKaishu||'').trim();
+  const kagiNokoshiVal = (m.kagiNokoshi||'').trim();
+  const kagiKaishuPh = !kagiKaishuVal && auto.collector ? `${auto.collector}(自動)` : '';
+  const kagiNokoshiPh = !kagiNokoshiVal && auto.nokoshi ? `${auto.nokoshi}(自動)` : '';
+  return `<tr class="${trClass}" data-id="${escapeHtml(est.id)}">
+    <td class="num">${no}</td>
+    <td>${motoukeCell}</td>
+    <td>${statusCell}</td>
+    <td>${wfCell}</td>
+    <td>${confirmedBadge}<b>${escapeHtml(m.bukken||'')}</b>${workloadBadgeHtml(est)}</td>
+    <td>${escapeHtml(m.roomNo||'')}</td>
+    <td>${inp('meta','koujiSijiDate', m.koujiSijiDate, '例:5/4', 60)}</td>
+    <td>${inp('hatchuOrder','nyukyoDate', ho.nyukyoDate, '例:5/15', 60)}</td>
+    <td>${(() => {
+      const cur = stripYearForDisplay(ho.finalCheckDate);
+      const org = stripYearForDisplay(ho.originalFinalCheckDate);
+      const slip = finalCheckSlipLabel(cur, org);
+      const main = inp('hatchuOrder','finalCheckDate', cur, '例:5/14', 60);
+      if (!slip) return main;
+      const slipColor = slip.includes('遅延') ? '#991b1b' : '#065f46';
+      return `<div style="display:flex; flex-direction:column; gap:1px;">${main}<span style="font-size:9px; color:${slipColor}; line-height:1;" title="当初: ${escapeHtml(org)}">当初 ${escapeHtml(org)} (${slip})</span></div>`;
+    })()}</td>
+    <td>${inp('hatchuOrder','completeDate', ho.completeDate, '例:5/13', 60)}</td>
+    <td>${inp('hatchuOrder','keyChangeDate', ho.keyChangeDate, '例:5/13', 60)}</td>
+    <td>${inp('meta','kagiKaishu', kagiKaishuVal, kagiKaishuPh, 80)}</td>
+    <td>${inp('meta','kagiNokoshi', kagiNokoshiVal, kagiNokoshiPh, 80)}</td>
+    <td>${inp('hatchuOrder','keyBiz', ho.keyBiz, '', 80)}</td>
+    <td style="text-align:center;">${chk('meta','jokinDone', m.jokinDone)}</td>
+    <td>${inp('hatchuOrder','jokinDate', ho.jokinDate, '例:5/12', 60)}</td>
+    <td>${inp('meta','creator', t.tachiaiPerson||m.creator, '', 70)}</td>
+    <td>${inp('meta','orderTantou', m.orderTantou, '', 70, 'dl-order-tantou')}</td>
+    <td style="text-align:center;">${chk('meta','tehaiDone', m.tehaiDone)}</td>
+    <td style="text-align:center;">${chk('meta','scheduleStatus', m.scheduleStatus)}</td>
+    <td style="text-align:center;">${chk('meta','suidoStatus', m.suidoStatus)}</td>
+    <td class="num">¥${fmtNum(estimateTotal(est))}</td>
+    ${supplierCells}
+    <td class="num">¥${fmtNum(materialTotal(est))}</td>
+    <td>${invoiceBadge}<br>${paymentBadge}</td>
+  </tr>`;
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+// ============================================================
+// 詳細編集モーダル
+// ============================================================
+function openDetailModal(id) {
+  const est = allEstimates[id];
+  if (!est) return;
+  editingId = id;
+  document.getElementById('detail-title').textContent = `${est.meta?.bukken||'(無題)'} ${est.meta?.roomNo||''}`.trim();
+  const koji = est.meta?.kojiName || '';
+  const kojiBadge = document.getElementById('detail-koji');
+  kojiBadge.textContent = koji || '工事種別未設定';
+  kojiBadge.style.background = (koji === '修繕工事') ? '#fed7aa' : '#bfdbfe';
+  kojiBadge.style.color = (koji === '修繕工事') ? '#7c2d12' : '#1e3a8a';
+  // body 構築
+  document.getElementById('detail-body').innerHTML = detailBodyHtml(est);
+  bindDetailFields(est);
+  setupRespDateCalPicker(); // v1.4.662: 対応予定日のカレンダー入力配線(初回のみ実バインド)
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetailModal() {
+  document.getElementById('detail-overlay').classList.remove('open');
+  editingId = null;
+}
+
+// v1.4.662: 対応予定日のカレンダー入力。
+//   responseDate は「ASAP/未定」等の自由文字も入るため type=date には置換せず、
+//   📅ボタン→ネイティブ日付ピッカー→選んだ日を M/D 形式でテキスト欄に書き戻す(既存フォーマット維持)。
+function _isoToMD(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${+m[2]}/${+m[3]}` : (iso || '');
+}
+function _respTextToISO(s) {
+  s = String(s || '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // 既にISO
+  if (m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})/);                       // M/D(曜) → 今年と仮定
+  if (m) { const y = new Date().getFullYear(); return `${y}-${String(+m[1]).padStart(2,'0')}-${String(+m[2]).padStart(2,'0')}`; }
+  return '';                                                  // 非日付(ASAP/未定 等)は空から
+}
+let _respCalBound = false;
+function setupRespDateCalPicker() {
+  const body = document.getElementById('detail-body');
+  if (!body || _respCalBound) return;
+  _respCalBound = true;
+  // 📅ボタン → 日付ピッカーを開く(現在のテキストを初期値に)
+  body.addEventListener('click', (e) => {
+    const btn = e.target.closest('.resp-date-cal');
+    if (!btn) return;
+    const wrap = btn.closest('span');
+    const txt = wrap && wrap.querySelector('input[data-field="responseDate"]');
+    const picker = wrap && wrap.querySelector('.resp-date-picker');
+    if (!txt || !picker) return;
+    picker.value = _respTextToISO(txt.value);
+    if (typeof picker.showPicker === 'function') { try { picker.showPicker(); return; } catch (_) {} }
+    picker.focus(); picker.click();
+  });
+  // ピッカーで選択 → M/D でテキスト欄に反映
+  body.addEventListener('change', (e) => {
+    const picker = e.target.closest('.resp-date-picker');
+    if (!picker || !picker.value) return;
+    const wrap = picker.closest('span');
+    const txt = wrap && wrap.querySelector('input[data-field="responseDate"]');
+    if (!txt) return;
+    txt.value = _isoToMD(picker.value);
+    txt.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+// === 契約ノート取込(progress版・index.htmlのfindKeiyakuRowForEstimateを移植)。v1.4.486 ===
+//   契約ノートは index.html と同じ localStorage キー keiyaku_state_v1 を共有
+const KEIYAKU_STORAGE_KEY = 'keiyaku_state_v1';
+function loadKeiyakuStateP(){
+  try { const raw = localStorage.getItem(KEIYAKU_STORAGE_KEY); if (raw) return JSON.parse(raw); } catch(e){}
+  return { rows: [] };
+}
+function _romanValueP(r){ const map={I:1,V:5,X:10}; let total=0,prev=0; for(let i=r.length-1;i>=0;i--){ const v=map[String(r[i]).toUpperCase()]; if(!v) return 0; if(v<prev) total-=v; else { total+=v; prev=v; } } return (total>=1 && total<=39)?total:0; }
+function _kNormBukkenP(s){
+  let v = String(s||'').trim(); if(!v) return '';
+  v = v.normalize('NFKC').replace(/[\s　・･]/g,'').replace(/(マンション|アパート|ハイツ|コーポ|ビル)$/,'');
+  v = v.replace(/(?<![A-Za-z])([IVXivx]{1,4})$/, m => { const n=_romanValueP(m); return n?String(n):m; });
+  return v.toLowerCase();
+}
+function _kNormRoomP(s){ return String(s||'').normalize('NFKC').replace(/[\s　]/g,'').replace(/号室?$/,'').replace(/^0+/,'').toLowerCase(); }
+function findKeiyakuRowForEstimateP(est){
+  const m = est?.meta || {};
+  const nb = _kNormBukkenP(m.bukken || m.taikyo?.apartmentName), nh = _kNormRoomP(m.roomNo || m.taikyo?.roomNo);
+  if (!nb) return null;
+  const rows = (loadKeiyakuStateP().rows) || [];
+  const cand = rows.filter(r => _kNormBukkenP(r.bukken) === nb && (!nh || _kNormRoomP(r.heya) === nh));
+  return cand[0] || null;
+}
+function importKeiyakuToDetail(){
+  const est = editingId ? allEstimates[editingId] : null;
+  if (!est?.meta) { _showSaveToast('対象見積がありません','error'); return; }
+  if (!est.meta.hatchuOrder) est.meta.hatchuOrder = {};
+  const ho = est.meta.hatchuOrder;
+  const nowIso = new Date().toISOString();
+  let by=''; try{ by = (JSON.parse(localStorage.getItem('mitsumori_settings_v1')||'{}').userName||''); }catch(e){}
+  const row = findKeiyakuRowForEstimateP(est);
+  if (!row) { ho.keiyakuImport = { at: nowIso, by, result:'notfound', detail:'' }; _showSaveToast('📋 契約ノートに該当物件号室なし（保存で記録）','error'); return; }
+  const filled = [];
+  if (row.nyukyobi) { ho.nyukyoDate = row.nyukyobi; filled.push('入居日'); }
+  if (row.kagiDate) { ho.keyChangeDate = row.kagiDate; filled.push('鍵交換日'); }
+  if (row.kagikoukanGyosha) { ho.keyBiz = row.kagikoukanGyosha; filled.push('鍵業者'); }
+  if (row.jokin && /\d/.test(String(row.jokin)) && /[\/\-年月]/.test(String(row.jokin))) { ho.jokinDate = row.jokin; filled.push('除菌日'); }
+  ho.keiyakuImport = { at: nowIso, by, result: filled.length?'imported':'empty', detail: filled.join('・'), bukken: row.bukken, heya: row.heya };
+  const setF = (field,val)=>{ const el=document.querySelector(`#detail-body [data-field="${field}"]`); if(el) el.value = val||''; };
+  setF('hatchuOrder.nyukyoDate', ho.nyukyoDate);
+  setF('hatchuOrder.keyChangeDate', ho.keyChangeDate);
+  setF('hatchuOrder.keyBiz', ho.keyBiz);
+  setF('hatchuOrder.jokinDate', ho.jokinDate);
+  _showSaveToast(filled.length ? `📋 契約ノートから取込: ${filled.join('・')}（💾保存で確定）` : '📋 該当行あり（取込項目は空）', filled.length?'success':'error');
+}
+
+function detailBodyHtml(est) {
+  const m = est.meta || {};
+  const ho = m.hatchuOrder || {};
+  const t = m.taikyo || {};
+  const isRepair = workflowOf(est) === 'repair';
+  // 進行ステータス選択肢
+  const wfOpts = isRepair ? WORKFLOW_OPTIONS_REPAIR : WORKFLOW_OPTIONS_RESTORATION;
+  const wfCur = m.workflowStatus || '待機';
+  const wfOptHtml = wfOpts.map(o => `<option value="${escapeHtml(o)}" ${o===wfCur?'selected':''}>${escapeHtml(o)}</option>`).join('');
+  // 営業ステータス
+  const STATUSES = ['下書き','対応中','アポ済','提出済','受注','施工指示あり','完了','失注','キャンセル'];
+  // 表示ラベル(値は同じ・「提出済」だけ「見積提出済」表示)
+  const STATUS_LABEL = (s) => s === '提出済' ? '見積提出済' : s;
+  const stCur = m.status || '下書き';
+  const stOptHtml = STATUSES.map(o => `<option value="${escapeHtml(o)}" ${o===stCur?'selected':''}>${escapeHtml(STATUS_LABEL(o))}</option>`).join('');
+
+  // 共通: 営業/進行ステータス + 請求/入金
+  const commonFs = `<fieldset>
+    <legend>📋 ステータス・請求入金</legend>
+    <div class="grid">
+      <label>営業ステータス</label>
+      <select data-field="status">${stOptHtml}</select>
+      <label>進行ステータス</label>
+      <select data-field="workflowStatus">${wfOptHtml}</select>
+      <label>請求</label>
+      <select data-field="invoiceStatus">
+        <option value="未" ${m.invoiceStatus==='未'?'selected':''}>🟡 未</option>
+        <option value="済" ${m.invoiceStatus==='済'?'selected':''}>✅ 済</option>
+      </select>
+      <label>入金</label>
+      <select data-field="paymentStatus">
+        <option value="未" ${m.paymentStatus==='未'?'selected':''}>🟡 未</option>
+        <option value="済" ${m.paymentStatus==='済'?'selected':''}>✅ 済</option>
+      </select>
+    </div>
+  </fieldset>`;
+
+  // 業者集計 — 工期セルは編集可能(変更すると同業者の全行に反映)
+  const sups = suppliersFor(est);
+  const supTable = sups.length ? `<table style="width:100%; font-size:11px; border:1px solid #e5e7eb;">
+    <thead><tr><th>業者名</th><th class="num">発注金額</th><th>開始工期</th><th>終了工期</th></tr></thead>
+    <tbody>${sups.map(s => `<tr>
+      <td>${escapeHtml(s.supplier)}</td>
+      <td class="num">¥${fmtNum(s.amount)}</td>
+      <td><input type="text" class="sup-period-edit" data-supplier="${escapeHtml(s.supplier)}" data-period="start" value="${escapeHtml(s.periodStart||'')}" placeholder="例:5/7" style="width:80px; font-size:11px; padding:2px 4px;"></td>
+      <td><input type="text" class="sup-period-edit" data-supplier="${escapeHtml(s.supplier)}" data-period="end" value="${escapeHtml(s.periodEnd||'')}" placeholder="例:5/13" style="width:80px; font-size:11px; padding:2px 4px;"></td>
+    </tr>`).join('')}</tbody>
+  </table>` : '<div style="color:#9ca3af;">(業者発注なし)</div>';
+  const supplierFs = `<fieldset>
+    <legend>🔧 業者発注集計 <small style="color:#6b7280; font-weight:normal;">(発注金額は見積タブで編集 / 工期は ↓ で編集可・同業者の全行に反映)</small></legend>
+    ${supTable}
+    <div style="margin-top:6px; font-size:11px; color:#6b7280;">
+      💰 売上(税別): <b>¥${fmtNum(estimateTotal(est))}</b> / 🧱 材料費: <b>¥${fmtNum(materialTotal(est))}</b>
+    </div>
+  </fieldset>`;
+
+  // v1.4.462: 退去立会日(現場情報のtaikyoStart/Timeと同じデータ)+ Googleカレンダー追加
+  const taikyoBlock = `<fieldset>
+    <legend>📅 退去立会</legend>
+    <div class="grid">
+      <label>退去立会日</label><input type="date" data-field="taikyo.taikyoStart" value="${escapeHtml((t.taikyoStart||'').slice(0,10))}">
+      <label>時刻</label><input type="text" data-field="taikyo.taikyoStartTime" value="${escapeHtml(t.taikyoStartTime||'')}" placeholder="例: 10:00 / 午前中">
+      <div style="grid-column:1/-1; font-size:10px; color:#16a34a;">📅 立会日を入れて保存すると、自動でスケジュール管理アプリ(カレンダー)に送られます</div>
+    </div>
+  </fieldset>`;
+  if (isRepair) {
+    // 修繕用フォーム
+    return commonFs + taikyoBlock + `<fieldset>
+      <legend>🛠 修繕情報</legend>
+      <div class="grid">
+        <label class="span2" style="grid-column:1/-1;">住所</label>
+        <input type="text" data-field="shozaichi" value="${escapeHtml(m.shozaichi||t.address||'')}" placeholder="例: 仙台市泉区八乙女2-7-4-101" style="grid-column:1/-1;">
+        <label>依頼日</label><input type="text" data-field="requestDate" value="${escapeHtml(m.requestDate||'')}" placeholder="例: 4/17(金)">
+        <label>完了日</label><input type="text" data-field="hatchuOrder.completeDate" value="${escapeHtml(ho.completeDate||'')}">
+        <label>対応予定日</label><span style="display:flex; gap:4px; align-items:center; min-width:0; position:relative;"><input type="text" data-field="responseDate" value="${escapeHtml(m.responseDate||'')}" placeholder="例: 4/22" style="flex:1; min-width:0;"><button type="button" class="resp-date-cal" title="カレンダーから日付を選択" style="flex:none; padding:2px 7px; cursor:pointer; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc;">📅</button><input type="date" class="resp-date-picker" tabindex="-1" aria-hidden="true" style="position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none;"></span>
+        <label>対応予定時間</label><input type="text" data-field="responseTime" value="${escapeHtml(m.responseTime||'')}" list="dl-resp-time" placeholder="例: 10:00 / 午前中 / 10時〜">
+        <label>対応業者</label><input type="text" data-field="responseContractor" value="${escapeHtml(m.responseContractor||'')}" placeholder="例: 思綺美装(カレンダー修繕予定に表示)">
+        <label>営業担当(元請)</label><input type="text" data-field="atenaTantou" value="${escapeHtml(m.atenaTantou||'')}" placeholder="例: 水上 直樹">
+        <label>連絡者(自社)</label><input type="text" data-field="taikyo.tachiaiPerson" value="${escapeHtml(t.tachiaiPerson||'')}" list="dl-staff" placeholder="例: 山田 裕貴">
+        <label>修繕補助タグ</label>
+        <select data-field="salesStage">
+          <option value="" ${!m.salesStage?'selected':''}>(未設定)</option>
+          <option value="未対応" ${m.salesStage==='未対応'?'selected':''}>未対応</option>
+          <option value="アポ済" ${m.salesStage==='アポ済'?'selected':''}>アポ済</option>
+          <option value="対応中" ${m.salesStage==='対応中'?'selected':''}>対応中</option>
+          <option value="長期連絡なし" ${m.salesStage==='長期連絡なし'?'selected':''}>長期連絡なし</option>
+        </select>
+        <label>お客様氏名</label><input type="text" data-field="taikyo.contractorName" value="${escapeHtml(t.contractorName||'')}">
+        <label>お客様TEL</label><input type="text" data-field="taikyo.contractorTel" value="${escapeHtml(t.contractorTel||'')}">
+        <label style="grid-column: 1;">依頼内容<br><small style="font-weight:normal; color:#6b7280;">(ショート)</small></label>
+        <input type="text" data-field="requestDetail" maxlength="30" style="grid-column: 2; font-size:12px;" value="${escapeHtml(m.requestDetail||'')}" placeholder="例: トイレ詰まり修理">
+        <label class="span2" style="grid-column: 1 / -1;">依頼内容(本文ママ) <small style="font-weight:normal; color:#6b7280;">— ホバーtitleにも反映</small></label>
+        <textarea data-field="requestDetailFull" rows="3" style="grid-column: 1 / -1; font-size:12px;">${escapeHtml(m.requestDetailFull||'')}</textarea>
+        <label class="span2" style="grid-column: 1 / -1;">進捗詳細(連絡履歴メモ)</label>
+        <textarea data-field="creatorMemo" rows="3" style="grid-column: 1 / -1; font-size:12px;">${escapeHtml(m.creatorMemo||'')}</textarea>
+      </div>
+    </fieldset>` + supplierFs;
+  }
+
+  // 原状回復用フォーム + 鍵自動判定ヒント
+  const auto = autoDetectKeyHandling(est);
+  const autoHint = (auto.collector || auto.nokoshi)
+    ? `<div style="margin-top:8px; padding:6px 10px; background:#fef9c3; border:1px solid #fcd34d; border-radius:4px; font-size:11px; color:#78350f;">
+        💡 自動判定(鍵交換日 vs 業者最終日 vs 除菌日 から):
+        <b>鍵回収</b> = ${escapeHtml(auto.collector||'-')} /
+        <b>鍵残し</b> = ${escapeHtml(auto.nokoshi||'-')}
+        ${(m.kagiKaishu||m.kagiNokoshi) ? '<br><small style="color:#9ca3af;">※ 手動入力が空の場合は自動判定値が一覧表示されます</small>' : ''}
+      </div>`
+    : '';
+  return commonFs + taikyoBlock + `<fieldset>
+    <legend>🔑 原状回復情報 <button type="button" onclick="importKeiyakuToDetail()" title="契約ノートから 入居日・鍵交換日・鍵業者・除菌日 を取込みます" style="font-size:11px; padding:1px 8px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; border-radius:4px; cursor:pointer; font-weight:normal; margin-left:6px;">📋契約ノート取込</button></legend>
+    <div class="grid">
+      <label class="span2" style="grid-column:1/-1;">住所</label>
+      <input type="text" data-field="shozaichi" value="${escapeHtml(m.shozaichi||t.address||'')}" placeholder="例: 仙台市泉区八乙女2-7-4-101" style="grid-column:1/-1;">
+      <label>工事指示日</label><input type="text" data-field="koujiSijiDate" value="${escapeHtml(m.koujiSijiDate||'')}" placeholder="例: 4/4">
+      <label>入居予定</label><input type="text" data-field="hatchuOrder.nyukyoDate" value="${escapeHtml(ho.nyukyoDate||'')}" placeholder="例: 4/30">
+      <label>完了予定日（最終確認日）</label><input type="text" data-field="hatchuOrder.finalCheckDate" value="${escapeHtml(stripYearForDisplay(ho.finalCheckDate))}" placeholder="例: 4/20(月)">
+      <label style="color:#6b7280;">当初最終確認日</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" data-field="hatchuOrder.originalFinalCheckDate" value="${escapeHtml(stripYearForDisplay(ho.originalFinalCheckDate))}" placeholder="自動キャプチャ" style="flex:1; background:#f8fafc; color:#475569;">
+        ${(() => {
+          const slip = finalCheckSlipLabel(stripYearForDisplay(ho.finalCheckDate), stripYearForDisplay(ho.originalFinalCheckDate));
+          if (!slip) return '';
+          const c = slip.includes('遅延') ? '#fee2e2;color:#991b1b;border:1px solid #fca5a5' : '#dcfce7;color:#065f46;border:1px solid #86efac';
+          return `<span style="font-size:11px; padding:2px 6px; border-radius:3px; background:${c}; white-space:nowrap;">${slip}</span>`;
+        })()}
+      </div>
+      <label>完了日</label><input type="text" data-field="hatchuOrder.completeDate" value="${escapeHtml(ho.completeDate||'')}" placeholder="例: 4/19">
+      <label>鍵交換日</label><input type="text" data-field="hatchuOrder.keyChangeDate" value="${escapeHtml(ho.keyChangeDate||'')}">
+      <label>鍵業者</label><input type="text" data-field="hatchuOrder.keyBiz" value="${escapeHtml(ho.keyBiz||'')}" placeholder="例: カギハシ">
+      <label>鍵残し</label><input type="text" data-field="kagiNokoshi" value="${escapeHtml(m.kagiNokoshi||'')}" placeholder="例: 弊社 / 鍵業者 / 要連絡">
+      <label>鍵回収</label><input type="text" data-field="kagiKaishu" value="${escapeHtml(m.kagiKaishu||'')}" placeholder="例: 弊社 / 鍵業者">
+      <label>除菌日</label><input type="text" data-field="hatchuOrder.jokinDate" value="${escapeHtml(ho.jokinDate||'')}">
+      <label>水道(欄)</label><input type="text" data-field="hatchuOrder.suidoDenki" value="${escapeHtml(ho.suidoDenki||'')}">
+      <label>見積担当者</label><input type="text" data-field="taikyo.tachiaiPerson" value="${escapeHtml(t.tachiaiPerson||'')}">
+      <label>発注担当者</label><input type="text" data-field="orderTantou" value="${escapeHtml(m.orderTantou||'')}" placeholder="例: 大村(事務)">
+    </div>
+    ${autoHint}
+    <div class="checkrow" style="margin-top:10px; padding-top:8px; border-top:1px dashed #e5e7eb;">
+      <label><input type="checkbox" data-field="jokinDone" ${m.jokinDone?'checked':''}> 除菌実施済</label>
+      <label><input type="checkbox" data-field="scheduleStatus" ${m.scheduleStatus?'checked':''}> 予定表記入済</label>
+      <label><input type="checkbox" data-field="suidoStatus" ${m.suidoStatus?'checked':''}> 水道手配済</label>
+    </div>
+  </fieldset>` + supplierFs;
+}
+
+function bindDetailFields(est) {
+  // 入力に応じて即時 est オブジェクトに反映 → 保存ボタンで localStorage コミット
+  document.querySelectorAll('#detail-body [data-field]').forEach(el => {
+    el.addEventListener('change', () => writeFieldToEst(est, el));
+    el.addEventListener('input', () => writeFieldToEst(est, el));
+  });
+  // 業者集計の工期インライン編集 → 同業者の全行に反映
+  document.querySelectorAll('#detail-body .sup-period-edit').forEach(el => {
+    el.addEventListener('change', () => {
+      const supplier = el.dataset.supplier;
+      const period = el.dataset.period; // 'start' | 'end'
+      const val = el.value.trim();
+      if (!supplier || !Array.isArray(est.lines)) return;
+      let touched = 0;
+      est.lines.forEach(l => {
+        if (!l.item || l.reduced) return;
+        if ((l.supplier || '') !== supplier) return;
+        if (period === 'start') l.hatchuPeriodStart = val;
+        else l.hatchuPeriodEnd = val;
+        touched++;
+      });
+      if (touched > 0) {
+        // 保存ボタンを押すまでは est オブジェクトに反映するだけ
+        // (modal 保存ボタン押下時に saveEstimates が走る)
+        console.log(`[業者工期編集] ${supplier} ${period}=${val} → ${touched}行に反映`);
+      }
+    });
+  });
+}
+function writeFieldToEst(est, el) {
+  const path = el.dataset.field;
+  const val = (el.type === 'checkbox') ? !!el.checked : el.value;
+  const parts = path.split('.');
+  let target = est.meta;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (target[parts[i]] == null || typeof target[parts[i]] !== 'object') target[parts[i]] = {};
+    target = target[parts[i]];
+  }
+  target[parts[parts.length - 1]] = val;
+  // 住所の双方向同期: meta.shozaichi 編集 → meta.taikyo.address にもコピー(逆も同様)
+  //   見積タブ・現場情報タブ・進捗タブ どこから編集しても両方更新される
+  if (path === 'shozaichi') {
+    if (!est.meta.taikyo) est.meta.taikyo = {};
+    est.meta.taikyo.address = String(val||'');
+  } else if (path === 'taikyo.address') {
+    est.meta.shozaichi = String(val||'');
+  }
+  // 自動ステータス遷移: 完了日(hatchuOrder.completeDate) が入力された瞬間 → status='完了'
+  //   未入力 → 入力 へ変化したときだけ遷移(空欄に戻しても status は維持)
+  if (path === 'hatchuOrder.completeDate') {
+    const v = String(val||'').trim();
+    if (v && est.meta.status !== '完了') {
+      est.meta.status = '完了';
+      if (!est.meta.completedAt) {
+        // 完了日が ISO形式(YYYY-MM-DD) ならそれを使う、それ以外(例 5/13) は今日
+        const isoMatch = v.match(/^\d{4}-\d{2}-\d{2}/);
+        est.meta.completedAt = isoMatch ? v.slice(0,10) : new Date().toISOString().slice(0,10);
+      }
+      // モーダル内のステータス select があれば UI も追従更新
+      const statusSel = document.querySelector('#detail-body [data-field="status"]');
+      if (statusSel) statusSel.value = '完了';
+      // v1.4.676: 原状回復は進行ステータスも 着工→完工 に進める(鈴木要望)
+      if (typeof advanceRestorationWorkflowOnComplete === 'function' && advanceRestorationWorkflowOnComplete(est.meta)) {
+        const wfSel = document.querySelector('#detail-body [data-field="workflowStatus"]');
+        if (wfSel) wfSel.value = est.meta.workflowStatus;
+      }
+    }
+  }
+}
+
+document.getElementById('btn-detail-close').addEventListener('click', closeDetailModal);
+document.getElementById('btn-detail-cancel').addEventListener('click', () => {
+  // 変更を破棄するためデータを再読込
+  reload();
+  closeDetailModal();
+});
+document.getElementById('btn-detail-save').addEventListener('click', () => {
+  if (!editingId || !allEstimates[editingId]) return;
+  allEstimates[editingId].updatedAt = new Date().toISOString();
+  if (saveEstimates(allEstimates)) {
+    const id = editingId;
+    const estForSched = allEstimates[id];
+    closeDetailModal();
+    renderProgress();
+    // Drive 台帳に自動 push(進捗管理フィールド変更を他PCに反映)
+    autoPushFromProgress(id);
+    // v1.4.462: 退去立会日があればスケジュール管理アプリへ自動送信
+    pushTaikyoScheduleProgress(estForSched);
+  }
+});
+document.getElementById('btn-detail-open-est').addEventListener('click', () => {
+  if (!editingId) return;
+  // 見積作成タブに移動して、その見積を開く
+  // localStorage 経由で「次に開く id」を伝達 (mitsumori_open_id_v1)
+  localStorage.setItem('mitsumori_open_id_v1', editingId);
+  window.location.href = 'index.html';
+});
+// v1.4.415: ⚡簡易見積 — 台帳の簡易見積モーダルを開く(id を localStorage で伝達)。鈴木悠平要望
+document.getElementById('btn-detail-open-kani')?.addEventListener('click', () => {
+  if (!editingId) return;
+  localStorage.setItem('mitsumori_open_kani_id_v1', editingId);
+  window.location.href = 'index.html#ledger';
+});
+// v1.4.462: 退去立会日 → スケジュール管理アプリへ自動共有(master_sync shared-config)
+const TAIKYO_SCHEDULE_KEY = 'taikyo_tachiai_schedule';
+async function _gasSharedConfig(mode, key, value) {
+  const settings = loadSettings();
+  const url = (settings.gasSyncUrl || '').trim(), token = (settings.gasSyncToken || '').trim();
+  if (!url || !token || !window.bcApi?.fetchUrl) return null;
+  const body = JSON.stringify(mode === 'save' ? { token, action: 'save-shared-config', key, value } : { token, action: 'get-shared-config', key });
+  const r = await window.bcApi.fetchUrl({ url, method: 'POST', body, headers: { 'Content-Type': 'text/plain' } });
+  if (!r?.ok || r.status !== 200) throw new Error(r?.error || ('HTTP ' + (r?.status || '?')));
+  const data = JSON.parse(r.text); if (!data.ok) throw new Error(data.error || 'failed'); return data;
+}
+async function pushTaikyoScheduleProgress(est) {
+  if (!est || !est.meta || !est.id) return;
+  const m = est.meta, t = m.taikyo || {};
+  const date = (t.taikyoStart || '').slice(0, 10);
+  const rec = { id: est.id, bukken: m.bukken || t.apartmentName || '', room: m.roomNo || t.roomNo || '', date, time: t.taikyoStartTime || '', staff: t.tachiaiPerson || '', address: m.shozaichi || t.address || '', koji: m.kojiName || '', updatedAt: new Date().toISOString() };
+  try {
+    const data = await _gasSharedConfig('get', TAIKYO_SCHEDULE_KEY);
+    if (data === null) return;
+    let arr = (data && data.value) ? JSON.parse(data.value) : []; if (!Array.isArray(arr)) arr = [];
+    arr = arr.filter(r => r && r.id !== est.id);
+    if (date) arr.push(rec);
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 2);
+    arr = arr.filter(r => { const d = new Date(r.date); return isNaN(d.getTime()) || d >= cutoff; });
+    await _gasSharedConfig('save', TAIKYO_SCHEDULE_KEY, JSON.stringify(arr));
+  } catch (e) { console.warn('[taikyo_schedule progress push]', e); }
+}
+document.getElementById('detail-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'detail-overlay') closeDetailModal();
+});
+
+// ============================================================
+// イベント結線
+// ============================================================
+document.querySelectorAll('.mode-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentMode = t.dataset.mode;
+    renderProgress();
+  });
+});
+document.querySelectorAll('.view-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentView = t.dataset.view;
+    renderProgress();
+  });
+});
+document.getElementById('btn-gantt-prev').addEventListener('click', () => {
+  if (!currentGanttYM) currentGanttYM = { y: new Date().getFullYear(), m: new Date().getMonth()+1 };
+  currentGanttYM = shiftMonth(currentGanttYM.y, currentGanttYM.m, -1);
+  renderProgress();
+});
+document.getElementById('btn-gantt-next').addEventListener('click', () => {
+  if (!currentGanttYM) currentGanttYM = { y: new Date().getFullYear(), m: new Date().getMonth()+1 };
+  currentGanttYM = shiftMonth(currentGanttYM.y, currentGanttYM.m, 1);
+  renderProgress();
+});
+document.getElementById('btn-gantt-today').addEventListener('click', () => {
+  const t = new Date();
+  currentGanttYM = { y: t.getFullYear(), m: t.getMonth()+1 };
+  renderProgress();
+});
+document.getElementById('gantt-range-mode').addEventListener('change', (e) => {
+  currentGanttRangeMode = e.target.value;
+  renderProgress();
+});
+document.getElementById('gantt-sort-mode').addEventListener('change', (e) => {
+  currentGanttSort = e.target.value;
+  renderProgress();
+});
+document.getElementById('gantt-axis-mode').addEventListener('change', (e) => {
+  currentGanttAxis = e.target.value;
+  renderProgress();
+});
+['search-input','motouke-filter','status-filter','workflow-filter','invoice-filter','show-completed','show-all-statuses'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', renderProgress);
+  el.addEventListener('change', renderProgress);
+});
+document.getElementById('btn-clear-filters').addEventListener('click', () => {
+  ['search-input','motouke-filter','status-filter','workflow-filter','invoice-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderProgress();
+});
+document.getElementById('btn-reload').addEventListener('click', (e) => {
+  if (e.shiftKey) {
+    if (!confirm('強制全件同期: Drive台帳の全データを取込みます。時間がかかりますが続行しますか?')) return;
+    localStorage.removeItem(_SYNC_KEY);
+    fetchAllFromDrive(true);
+  } else {
+    fetchAllFromDrive();
+  }
+});
+
+// === v1.4.666: キントーン要反映トラッカー(山田指示・場所=工事進捗) =====================
+//   修繕: 対応予定日(responseDate)+完了日 / 原状回復: 完了日 を追跡。
+//   meta.kintoneSnap = {resp,comp} に「前回キントーンに反映した値」を保存(Drive同期=全PC共有)。
+//   現在値≠スナップ なら「要反映」。✓反映済で現在値をスナップ→一覧から消える。
+//   対応予定日はアポ→工事で更新される運用＝変わるたびに再浮上(訪問→施工の2回入力に自然対応)。
+//   施工予定日はキントーン専用なのでアプリでは追跡しない。
+let _kintoneShowAll = false; // v1.4.668: 既定=山一のみ。トグルOFFで全元請け表示(他元請けも一応進捗トラッキング)
+function _kintoneCompDate(m){
+  const ho = m.hatchuOrder||{};
+  return String(ho.completeDate || (m.status==='完了'?m.completedAt:'') || '').trim();
+}
+function _kintonePending(est){
+  if(!est||!est.meta||est.deleted||est.meta.isTemplate) return null;
+  const m = est.meta;
+  // v1.4.667: キントーン入力が必要なのは基本 山一地所だけ(他元請けはメール/LINE等)。
+  //   v1.4.668: ただし「山一のみ」トグルOFF(=_kintoneShowAll)で全元請けも表示=一応の進捗トラッキング。
+  const _motouke = (typeof getMotoukeName==='function') ? (getMotoukeName(est)||'') : (m.atena||'');
+  if(!_kintoneShowAll && !/山一/.test(_motouke)) return null;
+  const isResto = (m.kojiName||'')==='原状回復工事';
+  const snap = m.kintoneSnap||{};
+  const comp = _kintoneCompDate(m);
+  const resp = String(m.responseDate||'').trim();
+  const diffs = [];
+  if(!isResto && resp && resp!==(snap.resp||'')) diffs.push('resp');
+  if(comp && comp!==(snap.comp||'')) diffs.push('comp');
+  return diffs.length ? {est, isResto, resp, comp, diffs} : null;
+}
+function _kintonePendingAll(){
+  return Object.values(allEstimates||{}).map(_kintonePending).filter(Boolean)
+    .sort((a,b)=> (a.isResto?1:0)-(b.isResto?1:0) || String(a.est.meta.bukken||'').localeCompare(String(b.est.meta.bukken||'')));
+}
+function _updateKintonePendingCount(){
+  const el = document.getElementById('kintone-pending-count');
+  if(el) el.textContent = _kintonePendingAll().length;
+}
+function _markKintoneReflected(id){
+  const est = allEstimates[id]; if(!est||!est.meta) return;
+  const m = est.meta;
+  const isResto = (m.kojiName||'')==='原状回復工事';
+  m.kintoneSnap = isResto ? { comp: _kintoneCompDate(m) }
+                          : { resp: String(m.responseDate||'').trim(), comp: _kintoneCompDate(m) };
+  est.updatedAt = new Date().toISOString();
+  if(!window._recentlyEditedIds) window._recentlyEditedIds = new Set();
+  window._recentlyEditedIds.add(id);
+  if(typeof saveEstimates==='function') saveEstimates(allEstimates);
+  if(typeof autoPushFromProgress==='function') autoPushFromProgress(id);
+  renderKintonePending();
+  _updateKintonePendingCount();
+}
+function _ensureKintoneModal(){
+  let ov = document.getElementById('kintone-overlay');
+  if(ov) return ov;
+  ov = document.createElement('div');
+  ov.id='kintone-overlay';
+  ov.style.cssText='position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:10000; display:none; align-items:flex-start; justify-content:center; padding:4vh 2vw;';
+  ov.innerHTML = `<div style="background:#fff; border-radius:10px; max-width:1000px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid #e5e7eb; flex-wrap:wrap;">
+      <span style="font-weight:700; font-size:15px;">📋 キントーン要反映</span>
+      <span style="font-size:11px; color:#6b7280;">前回反映から「対応予定日/完了日」が変わった案件。反映したら「✓反映済」を押す(全PC共有)。黄=要反映 / 灰=反映済。施工予定日はキントーン専用。<b>山一=キントーン</b> / 他元請け=メール/LINE等で個別対応。</span>
+      <span style="flex:1;"></span>
+      <label style="font-size:12px; display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;" title="既定は山一のみ(キントーン用)。外すと全元請けの進捗も表示"><input type="checkbox" id="kintone-yamaichi-only" checked style="width:auto;"> 山一のみ</label>
+      <button id="kintone-mark-all" title="表示中の全件を反映済みにします(初回の基準合わせ用)。反映済みであることを確認してから押してください" style="font-size:11px; padding:4px 10px; cursor:pointer; background:#e9d5ff; border:1px solid #a855f7; border-radius:4px;">✓ 全件 反映済</button>
+      <button id="kintone-close" style="font-size:13px; padding:4px 12px; cursor:pointer;">✖ 閉じる</button>
+    </div>
+    <div id="kintone-body" style="overflow:auto; padding:8px 12px;"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.style.display='none'; });
+  ov.querySelector('#kintone-close').onclick = ()=>{ ov.style.display='none'; };
+  ov.querySelector('#kintone-yamaichi-only').onchange = (e)=>{ _kintoneShowAll = !e.target.checked; renderKintonePending(); _updateKintonePendingCount(); };
+  ov.querySelector('#kintone-mark-all').onclick = ()=>{
+    const list = _kintonePendingAll();
+    if(!list.length) return;
+    if(!confirm(`表示中の ${list.length}件 を「反映済」にします。\nキントーンへの入力が済んでいる前提です(初回の基準合わせ等)。\n続行しますか?`)) return;
+    list.forEach(r=>{
+      const m = r.est.meta; const isResto = (m.kojiName||'')==='原状回復工事';
+      m.kintoneSnap = isResto ? { comp:_kintoneCompDate(m) } : { resp:String(m.responseDate||'').trim(), comp:_kintoneCompDate(m) };
+      r.est.updatedAt = new Date().toISOString();
+      if(typeof autoPushFromProgress==='function') autoPushFromProgress(r.est.id);
+    });
+    if(typeof saveEstimates==='function') saveEstimates(allEstimates);
+    renderKintonePending(); _updateKintonePendingCount();
+  };
+  return ov;
+}
+function renderKintonePending(){
+  const ov = _ensureKintoneModal();
+  const body = ov.querySelector('#kintone-body');
+  const rows = _kintonePendingAll();
+  if(!rows.length){ body.innerHTML = '<div style="padding:36px; text-align:center; color:#16a34a; font-weight:600;">✅ 要反映なし(すべてキントーンと一致)</div>'; return; }
+  const hl = on => on ? 'background:#fef9c3; font-weight:700;' : 'color:#9ca3af;';
+  body.innerHTML = `<table style="width:100%; border-collapse:collapse; font-size:12px;">
+    <thead><tr style="background:#f3f4f6; text-align:left;">
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">種別</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">物件 / 号室</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">元請</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">対応予定日</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">完了日</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;">担当</th>
+      <th style="padding:5px 8px; border-bottom:1px solid #ddd;"></th>
+    </tr></thead><tbody>` + rows.map(r=>{
+      const m = r.est.meta||{}; const t = m.taikyo||{};
+      const respDiff = r.diffs.includes('resp'); const compDiff = r.diffs.includes('comp');
+      return `<tr style="border-bottom:1px solid #eee;">
+        <td style="padding:5px 8px;">${r.isResto?'🔑原状回復':'🛠修繕'}</td>
+        <td style="padding:5px 8px;"><b>${escapeHtml(m.bukken||'')}</b> ${escapeHtml(m.roomNo||'')}</td>
+        <td style="padding:5px 8px;">${escapeHtml(getMotoukeName(r.est)||'')}</td>
+        <td style="padding:5px 8px; ${r.isResto?'color:#cbd5e1;':hl(respDiff)}">${r.isResto?'—':escapeHtml(r.resp||'(空)')}</td>
+        <td style="padding:5px 8px; ${hl(compDiff)}">${escapeHtml(r.comp||'(空)')}</td>
+        <td style="padding:5px 8px;">${escapeHtml(t.tachiaiPerson||m.creator||'')}</td>
+        <td style="padding:5px 8px; text-align:right;"><button class="kintone-done-btn" data-id="${escapeHtml(r.est.id)}" style="font-size:11px; padding:3px 10px; background:#16a34a; border:none; color:#fff; border-radius:4px; cursor:pointer; font-weight:600;">✓ 反映済</button></td>
+      </tr>`;
+    }).join('') + `</tbody></table>`;
+  body.querySelectorAll('.kintone-done-btn').forEach(b=> b.onclick = ()=> _markKintoneReflected(b.dataset.id));
+}
+function openKintonePending(){
+  _ensureKintoneModal().style.display = 'flex';
+  renderKintonePending();
+}
+(function(){
+  const b = document.getElementById('btn-kintone-pending');
+  if(b) b.addEventListener('click', openKintonePending);
+})();
+
+// URLパラメータで初期ビュー指定可(例: progress.html?mode=restoration&view=gantt&embed=1)
+//   業者発注書「ガント工期設定」モーダルから iframe で原状回復ガントを参照するため(v1.4.294)
+(function applyInitialViewFromUrl(){
+  try {
+    const p = new URLSearchParams(location.search);
+    const m = p.get('mode');
+    const v = p.get('view');
+    if (m && ['restoration','repair','all'].includes(m)) {
+      currentMode = m;
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    }
+    if (v && ['list','gantt'].includes(v)) {
+      currentView = v;
+      document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === v));
+    }
+    if (p.get('embed') === '1') document.body.classList.add('embed-mode');
+  } catch(e) {}
+})();
+// ============================================================
+// Web閲覧版の初期化
+//   ・カレンダー(同一オリジンgithub.io)がtankaモーダルと同じ方式でコピーする
+//     tanka_gas_url / tanka_gas_token を設定として自動採用(=スタッフは入力ゼロ)
+//   ・未設定なら上部バーにURL/トークン入力欄(tankaページの⚙と同思想)
+//   ・設定済みなら開いた瞬間に差分同期→常に最新を表示
+//   ・ビューはガント既定(URLパラメータ ?view= があればそちら優先)
+// ============================================================
+function initWebView() {
+  document.body.classList.add('web-view');
+  // 設定の自動採用(tanka方式の同一オリジンlocalStorage共有)
+  let s = loadSettings();
+  if (!(s.gasSyncUrl || '').trim()) {
+    const u = (localStorage.getItem('tanka_gas_url') || '').trim();
+    const t = (localStorage.getItem('tanka_gas_token') || '').trim();
+    if (u && t) {
+      s.gasSyncUrl = u; s.gasSyncToken = t;
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) {}
+    }
+  }
+  const hasSettings = !!((s.gasSyncUrl || '').trim() && (s.gasSyncToken || '').trim());
+  // 上部バー
+  const bar = document.createElement('div');
+  bar.id = 'webview-bar';
+  if (hasSettings) {
+    bar.innerHTML = '<span>📱 <b>Web閲覧版</b>(表示のみ) — 編集はPCアプリで。「☁ 全件同期」で最新化</span>';
+  } else {
+    bar.innerHTML = '<span>📱 <b>Web閲覧版</b> ⚙ 同期設定(PCアプリの設定タブと同じ値):</span>' +
+      '<input id="wv-url" type="text" placeholder="GAS同期URL" style="flex:1; min-width:180px;">' +
+      '<input id="wv-token" type="password" placeholder="トークン" style="width:110px;">' +
+      '<button id="wv-save">保存して同期</button>';
+  }
+  document.body.prepend(bar);
+  if (!hasSettings) {
+    document.getElementById('wv-save').addEventListener('click', () => {
+      const u = (document.getElementById('wv-url').value || '').trim();
+      const t = (document.getElementById('wv-token').value || '').trim();
+      if (!u || !t) { alert('URLとトークンを両方入れてください'); return; }
+      const cur = loadSettings(); cur.gasSyncUrl = u; cur.gasSyncToken = t;
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cur)); } catch (e) {}
+      location.reload();
+    });
+  }
+  // ビュー既定=ガント(?view=指定が無い時だけ)
+  try {
+    const p = new URLSearchParams(location.search);
+    if (!p.get('view')) {
+      currentView = 'gantt';
+      document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === 'gantt'));
+      renderProgress();
+    }
+  } catch (e) {}
+  // 開いた瞬間に差分同期(設定済みのみ・失敗してもローカルキャッシュで表示継続)
+  if (hasSettings) setTimeout(() => { try { fetchAllFromDrive(false); } catch (e) {} }, 300);
+}
+
+// 初期ロード
+reload();
+_updateSyncBtnTitle();
+if (IS_WEB_VIEW) initWebView();
+// 別タブで編集された localStorage の変化を反映
+window.addEventListener('storage', (e) => {
+  if (e.key === STORAGE_KEY) reload();
+});
+
+// Excel感覚 ▼フィルタポップアップ(台帳と同じ仕組み・progress用・motouke/status/workflow対応)
+// order: 指定順で並べる(リスト外の値はアルファベット順で後ろに追加)
+const PRG_FILTER_CONFIG = {
+  motouke:  { selectId: 'motouke-filter',  label: '元請',          valueFn: (est) => getMotoukeName(est) },
+  status:   { selectId: 'status-filter',   label: 'ステータス',    valueFn: (est) => (est.meta?.status || '下書き').trim(),
+              order: ['見積作成中','提出済','受注（工事指示有）','完了','下書き','失注','キャンセル'] },
+  workflow: { selectId: 'workflow-filter', label: '進行ステータス', valueFn: (est) => (est.meta?.workflowStatus || '待機').trim(),
+              order: ['アポ・手配 未','アポ・手配 済','着工','待機','長期連絡なし','工事指示済','完工','鍵交換済','入居済','クローズ','-'] },
+};
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.prg-filter-btn');
+  if (!btn) return;
+  e.stopPropagation();
+  const key = btn.dataset.filterKey;
+  const cfg = PRG_FILTER_CONFIG[key];
+  if (!cfg) return;
+  document.querySelector('.prg-filter-popup')?.remove();
+  const visible = Object.values(allEstimates || {}).filter(est => est && !est.deleted && !est.meta?.isTemplate);
+  const rawValues = [...new Set(visible.map(cfg.valueFn).filter(Boolean))];
+  // order が指定されていれば指定順、なければアイウエオ順
+  const allValues = cfg.order
+    ? [...cfg.order.filter(v => rawValues.includes(v)),
+       ...rawValues.filter(v => !cfg.order.includes(v)).sort((a,b) => a.localeCompare(b,'ja'))]
+    : rawValues.sort((a,b) => a.localeCompare(b,'ja'));
+  const sel = document.getElementById(cfg.selectId);
+  const cur = (sel?.value || '').trim();
+  const popup = document.createElement('div');
+  popup.className = 'prg-filter-popup';
+  const rect = btn.getBoundingClientRect();
+  popup.style.cssText = `position:fixed; top:${rect.bottom+4}px; left:${rect.left}px; background:#fff; border:1px solid #cbd5e1; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.18); padding:6px 0; max-height:360px; overflow-y:auto; z-index:9999; min-width:200px; font-size:12px;`;
+  const opts = [{ v:'', label:`(全${cfg.label})` }, ...allValues.map(m => ({ v:m, label:m }))];
+  const radioName = `prg-filter-radio-${key}`;
+  popup.innerHTML = `
+    <div style="padding:4px 10px 6px; border-bottom:1px solid #e5e7eb; font-weight:600; color:#1e40af;">▼ ${escapeHtml(cfg.label)}で絞り込み</div>
+    ${opts.map(o => `
+      <label style="display:block; padding:5px 12px; cursor:pointer; ${o.v===cur?'background:#dbeafe; font-weight:600;':''}">
+        <input type="radio" name="${radioName}" value="${escapeHtml(o.v)}" ${o.v===cur?'checked':''} style="width:auto; margin-right:8px; vertical-align:middle;">
+        ${escapeHtml(o.label)}
+      </label>
+    `).join('')}
+  `;
+  document.body.appendChild(popup);
+  popup.querySelectorAll('input[type="radio"]').forEach(r => {
+    r.addEventListener('change', () => {
+      if (sel) {
+        if (!sel.querySelector(`option[value="${CSS.escape(r.value)}"]`) && r.value !== '') {
+          const opt = document.createElement('option');
+          opt.value = r.value; opt.textContent = r.value;
+          sel.appendChild(opt);
+        }
+        sel.value = r.value;
+        sel.dispatchEvent(new Event('change'));
+      }
+      popup.remove();
+    });
+  });
+  setTimeout(() => {
+    const closeHandler = (ev) => {
+      if (!popup.contains(ev.target)) {
+        popup.remove();
+        document.removeEventListener('click', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+  }, 0);
+});
+
+// Excel感覚 列ヘッダークリックソート(依頼日 / 対応予定日 / 完了日 / 完了予定日)
+window._prgSort = window._prgSort || { key: 'workflow', dir: 'asc' };
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('.prg-sortable');
+  if (!th) return;
+  if (e.target.closest('.prg-filter-btn')) return; // ▼ クリックは別処理
+  const key = th.dataset.sortKey;
+  if (!key) return;
+  // 同じ列を再クリック → 昇順/降順トグル、別列クリック → 降順スタート
+  if (window._prgSort.key === key) {
+    window._prgSort.dir = window._prgSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    window._prgSort.key = key;
+    window._prgSort.dir = 'desc';
+  }
+  if (typeof renderProgress === 'function') renderProgress();
+  // 矢印更新
+  document.querySelectorAll('.sort-arrow').forEach(span => {
+    const k = span.dataset.for;
+    if (k === window._prgSort.key) span.textContent = window._prgSort.dir === 'desc' ? '↓' : '↑';
+    else span.textContent = '';
+  });
+  // ハイライト
+  document.querySelectorAll('.prg-sortable').forEach(t => {
+    t.style.background = t.dataset.sortKey === window._prgSort.key ? '#dbeafe' : '';
+    t.style.color = t.dataset.sortKey === window._prgSort.key ? '#1e40af' : '';
+  });
+});
+
+// F5 / Ctrl+R で画面リロード(Ctrl+Shift+R はキャッシュ無視・F12 で DevTools)
+// capture phase で登録 → input にフォーカスあっても確実に拾える
+function _progressKeydownHandler(e) {
+  const k = (e.key || '').toLowerCase();
+  if (k === 'f5' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    location.reload();
+  } else if (e.ctrlKey && k === 'r' && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    location.reload();
+  } else if (e.ctrlKey && e.shiftKey && k === 'r') {
+    e.preventDefault();
+    e.stopPropagation();
+    location.reload();
+  }
+  // F12 / Ctrl+Shift+I は Electron 側の before-input-event で処理(main.js)
+}
+// 両方の phase で登録 → input/textarea にフォーカスあっても確実に動作
+window.addEventListener('keydown', _progressKeydownHandler, true);  // capture
+document.addEventListener('keydown', _progressKeydownHandler, true); // capture
+</script>
+</body>
+</html>
