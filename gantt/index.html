@@ -504,6 +504,8 @@ function loadSettings() {
 //   読み取り(GAS同期)は既存のfetchフォールバックで動く。書き込みはここで遮断。
 // ============================================================
 const IS_WEB_VIEW = !window.bcApi;
+// 📌 Web閲覧版の版印: gantt公開のたびに上げる(バーに表示=端末がどの版を読んでいるか一目で検証できる)
+const WEBVIEW_REV = 'r4 (7/19 フル再同期版)';
 
 // GAS Web App 経由で見積を Drive 台帳に push
 async function gasSaveLedgerFromProgress(est) {
@@ -3255,9 +3257,9 @@ function initWebView() {
   const bar = document.createElement('div');
   bar.id = 'webview-bar';
   if (hasSettings) {
-    bar.innerHTML = '<span>📱 <b>Web閲覧版</b>(表示のみ) — 編集はPCアプリで。「☁ 全件同期」で最新化</span>';
+    bar.innerHTML = '<span>📱 <b>Web閲覧版</b>(表示のみ) — 編集はPCアプリで。「☁ 全件同期」で最新化 <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span></span>';
   } else {
-    bar.innerHTML = '<span>📱 <b>Web閲覧版</b> ⚙ 同期設定(PCアプリの設定タブと同じ値):</span>' +
+    bar.innerHTML = '<span>📱 <b>Web閲覧版</b> <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span> ⚙ 同期設定(PCアプリの設定タブと同じ値):</span>' +
       '<input id="wv-url" type="text" placeholder="GAS同期URL" style="flex:1; min-width:180px;">' +
       '<input id="wv-token" type="password" placeholder="トークン" style="width:110px;">' +
       '<button id="wv-save">保存して同期</button>';
