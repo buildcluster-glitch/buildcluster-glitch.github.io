@@ -424,6 +424,10 @@ const STORAGE_KEY = 'mitsumori_estimates_v1';
 const SETTINGS_KEY = 'mitsumori_settings_v1';
 
 function loadEstimates() {
+  // 🗄 Web閲覧版: メモリが正本(裏でIndexedDBへ永続化)。localStorageはカレンダー/単価表と
+  //    同一オリジンの5MB枠を共有しており、全件同期で quota exceeded になる(2026-07-19山田実機)
+  //    ＋カレンダー本体の保存まで巻き添えの恐れ → localStorageには書かない(既存キーは起動時にIDBへ移行後削除)。
+  if (typeof IS_WEB_VIEW !== 'undefined' && IS_WEB_VIEW) return (__wvEstimates = __wvEstimates || {});
   try {
     const s = localStorage.getItem(STORAGE_KEY);
     if (!s) return {};
@@ -434,6 +438,11 @@ function loadEstimates() {
   }
 }
 function saveEstimates(estimates) {
+  if (typeof IS_WEB_VIEW !== 'undefined' && IS_WEB_VIEW) {
+    __wvEstimates = estimates;
+    __ganttIdbSave(estimates);   // debounce付き非同期(失敗しても表示は継続=メモリ正本)
+    return true;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(estimates));
     return true;
@@ -442,6 +451,43 @@ function saveEstimates(estimates) {
     alert('保存失敗: ' + e.message);
     return false;
   }
+}
+// ---- Web閲覧版専用 IndexedDB キャッシュ (bc-gantt/kv/'estimates') ----
+let __wvEstimates = null;
+let __ganttIdbTimer = null;
+function __ganttIdbOpen() {
+  return new Promise((ok, ng) => {
+    const q = indexedDB.open('bc-gantt', 1);
+    q.onupgradeneeded = () => { q.result.createObjectStore('kv'); };
+    q.onsuccess = () => ok(q.result);
+    q.onerror = () => ng(q.error);
+  });
+}
+async function __ganttIdbGet() {
+  const db = await __ganttIdbOpen();
+  try {
+    return await new Promise((ok, ng) => {
+      const r = db.transaction('kv').objectStore('kv').get('estimates');
+      r.onsuccess = () => ok(r.result || null);
+      r.onerror = () => ng(r.error);
+    });
+  } finally { db.close(); }
+}
+function __ganttIdbSave(est) {
+  // 同期ループ中は月ごとに呼ばれるためdebounce。IDB不可(プライベートモード等)でも表示は継続
+  clearTimeout(__ganttIdbTimer);
+  __ganttIdbTimer = setTimeout(async () => {
+    try {
+      const db = await __ganttIdbOpen();
+      await new Promise((ok, ng) => {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(est, 'estimates');
+        tx.oncomplete = ok;
+        tx.onerror = () => ng(tx.error);
+      });
+      db.close();
+    } catch (e) { console.warn('[gantt-idb] save失敗(表示は継続)', e); }
+  }, 500);
 }
 function loadSettings() {
   try {
@@ -3164,6 +3210,26 @@ function openKintonePending(){
 // ============================================================
 function initWebView() {
   document.body.classList.add('web-view');
+  // 🗄 台帳キャッシュをIDBから復元＋旧localStorageキャッシュはIDBへ移行して削除(共有5MB枠の解放)。
+  //    自動差分同期(300ms後)と競合しないよう、置換ではなく「無いidだけ埋める」(同期が取った方が常に新しい)
+  (async () => {
+    try {
+      let seed = null;
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) seed = JSON.parse(raw) || null; } catch (e) {}
+      let stored = null;
+      try { stored = await __ganttIdbGet(); } catch (e) { console.warn('[gantt-idb] 読込不可(メモリのみで継続)', e); }
+      const base = Object.assign({}, seed || {}, stored || {});
+      let added = 0;
+      for (const k in base) { if (!allEstimates[k]) { allEstimates[k] = base[k]; added++; } }
+      __wvEstimates = allEstimates;
+      if (seed) {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        __ganttIdbSave(allEstimates);   // 移行分を含めてIDBへ
+        console.log('[gantt-idb] localStorage→IDB移行完了(共有枠を解放)');
+      }
+      if (added) renderProgress();
+    } catch (e) { console.warn('[gantt-idb] boot', e); }
+  })();
   // 設定の自動採用(tanka方式の同一オリジンlocalStorage共有)
   let s = loadSettings();
   if (!(s.gasSyncUrl || '').trim()) {
