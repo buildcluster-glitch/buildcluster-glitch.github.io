@@ -29,6 +29,7 @@
   .prow b{ font-variant-numeric:tabular-nums; }
   .sec{ font-size:11px; color:var(--accent); font-weight:700; margin:8px 0 2px; }
   .kyaku{ background:#fffbeb; }
+  .hatchu{ background:#eff6ff; }
   .empty{ text-align:center; color:var(--muted); padding:40px 12px; }
   /* カテゴリ絞り込みチップ */
   .cats{ display:flex; gap:6px; overflow-x:auto; padding:6px 10px 8px; background:var(--bg); -webkit-overflow-scrolling:touch; border-bottom:1px solid var(--line); }
@@ -124,7 +125,9 @@ async function load(){
 function buildMotoSelect(){
   const sel = $('#moto'); const cols = (DATA.motoCols||[]);
   const saved = localStorage.getItem(LS.moto);
-  sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(c)}単価</option>`).join('') + '<option value="__tenant__">入居者単価</option><option value="__owner__">家主単価</option>';
+  // 🛠 発注先(業者)への発注単価も選択肢に(2026-08-03 山田要望)。データはPC側 v1.4.1007+ の共有に含まれる
+  const hatchuOpts = (DATA.hatchuCols||[]).map(c => `<option value="__h__${esc(c)}">🛠 ${esc(c)} 発注</option>`).join('');
+  sel.innerHTML = cols.map(c => `<option value="${esc(c)}">${esc(c)}単価</option>`).join('') + '<option value="__tenant__">入居者単価</option><option value="__owner__">家主単価</option>' + hatchuOpts;
   if(saved && [...sel.options].some(o=>o.value===saved)) sel.value = saved;
   sel.onchange = () => { localStorage.setItem(LS.moto, sel.value); render(); };
 }
@@ -149,6 +152,7 @@ function buildCats(){
 function priceForRow(it, motoKey){
   if(motoKey==='__tenant__') return it.tenant;
   if(motoKey==='__owner__') return it.owner;
+  if(motoKey && motoKey.startsWith('__h__')) return (it.hatchu||{})[motoKey.slice(5)] || 0;   // 🛠 発注先(業者)
   return (it.prices||{})[motoKey] || 0;
 }
 function render(){
@@ -173,6 +177,8 @@ function render(){
     if(showGroups && c!==lastCat){ html += `<div class="gh">${esc(c)}</div>`; lastCat = c; }
     const p = priceForRow(it, motoKey);
     const motoRows = (DATA.motoCols||[]).filter(col => (it.prices||{})[col]).map(col => `<div class="prow"><span>${esc(col)}</span><b>${fmt(it.prices[col])}</b></div>`).join('');
+    // 🛠 発注先(業者)への発注金額(2026-08-03 山田要望)。旧データ(hatchu無し)はセクションごと非表示
+    const hatchuRows = (DATA.hatchuCols||[]).filter(col => (it.hatchu||{})[col]).map(col => `<div class="prow hatchu"><span>${esc(col)}</span><b>${fmt(it.hatchu[col])}</b></div>`).join('');
     html += `<div class="card">
       <div class="card-head" data-i="${i}">
         <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div></div>
@@ -184,6 +190,7 @@ function render(){
         <div class="sec">🧹 客出し単価</div>
         <div class="prow kyaku"><span>入居者単価</span><b>${fmt(it.tenant)}</b></div>
         <div class="prow kyaku"><span>家主単価</span><b>${fmt(it.owner)}</b></div>
+        ${hatchuRows?`<div class="sec">🛠 発注単価(業者への発注金額)</div>${hatchuRows}`:''}
         ${it.material?`<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
       </div>
     </div>`;
