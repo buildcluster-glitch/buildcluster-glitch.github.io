@@ -121,6 +121,72 @@ const SB = {
   key: 'sb_publishable__CEhKynIR-v9uGW_cBg_1g_wHyN-k8n',
   timeout: 6000
 };
+// 🆕 段1(2026-09-13): 品目1行の `tanka_items` から直読みする。**段0(migration026)が入るまでは 404 → 従来経路**なので、
+//   このまま公開しておけば**入った瞬間に自動で切り替わる**(配布の段取りが要らない)。
+//   狙い= いまの `tanka_public` は朝便の日次コピー=**当日の変更が翌朝反映**。行を直読みすれば**即時**になる。
+//   ⚠安全側の作り(3つ): ①表が無い/0件 → 従来経路 ②**件数が手元の8割未満なら信用しない**(段0の流し込み途中を掴まない)
+//     ③行が読めた時は **GAS追いかけをしない**(行が正本なので、古い price_master で上書きしてはいけない)
+//   認証= ログイン済みなら `bc_sb_session` のJWT、無ければ anon。どちらも駄目なら従来経路へ。
+const SB_ROWS = {
+  base: 'https://grbqpsunbuduvvgdntzc.supabase.co/rest/v1/',
+  timeout: 6000,
+  page: 1000,
+};
+function sbRowsAuth_(){
+  try{
+    const o = JSON.parse(localStorage.getItem('bc_sb_session')||'null');
+    if(o && o.access_token) return o.access_token;
+  }catch(_){}
+  return SB.key;   // 未ログインでも anon で読めるならそれで(読み権限はDB側の設定次第)
+}
+async function fetchRowsFromDb_(){
+  const tok = sbRowsAuth_();
+  const hdr = { apikey: SB.key, Authorization: 'Bearer ' + tok, Accept: 'application/json' };
+  const ac = new AbortController();
+  const to = setTimeout(()=>ac.abort(), SB_ROWS.timeout);
+  try{
+    // 列(元請け/業者)
+    const rc = await fetch(SB_ROWS.base + 'tanka_cols?select=kind,name,sort&order=sort.asc', { headers: hdr, signal: ac.signal });
+    if(rc.status === 404 || rc.status === 400) return null;          // 表がまだ無い=段0前
+    if(!rc.ok) throw new Error('cols HTTP ' + rc.status);
+    const cols = await rc.json();
+    if(!Array.isArray(cols)) throw new Error('cols 形が違う');
+    // 品目(1000件ずつ・総件数と受信数の一致を必ず確かめる)
+    const sel = 'item_no,cat,item,unit,prices,hatchu,tenant,owner,material,part_no,updated_at,actor';
+    const all = []; let from = 0, total = null;
+    for(;;){
+      const r = await fetch(SB_ROWS.base + 'tanka_items?select=' + sel + '&is_deleted=eq.false&order=item_no.asc',
+        { headers: Object.assign({ Range: from + '-' + (from + SB_ROWS.page - 1), 'Range-Unit':'items', Prefer:'count=exact' }, hdr), signal: ac.signal });
+      if(r.status === 404 || r.status === 400) return null;
+      if(!(r.status === 200 || r.status === 206)) throw new Error('items HTTP ' + r.status);
+      const rows = await r.json();
+      if(!Array.isArray(rows)) throw new Error('items 形が違う');
+      all.push(...rows);
+      const cr = r.headers.get('content-range') || '';
+      const m = cr.match(/\/(\d+|\*)\s*$/); if(m && m[1] !== '*') total = parseInt(m[1], 10);
+      if(rows.length < SB_ROWS.page || (total != null && all.length >= total)) break;
+      from += SB_ROWS.page;
+    }
+    if(total != null && all.length !== total) throw new Error('件数が合わない ' + all.length + '/' + total);
+    if(!all.length) return null;                                     // 0件=流し込み前
+    // ②流し込み途中を掴まない: 手元(表示中/キャッシュ)の8割を下回るなら信用しない
+    const known = (DATA && Array.isArray(DATA.items) && DATA.items.length) ? DATA.items.length
+                : ((loadCache()||{}).data && (loadCache().data.items||[]).length) || 0;
+    if(known && all.length < known * 0.8) throw new Error('件数が少なすぎる ' + all.length + '/' + known);
+    // 従来と同じ doc の形に組み直す(表示側は無改修で通る)
+    let newest = '';
+    const items = all.map(r=>{
+      if(r.updated_at && String(r.updated_at) > newest) newest = String(r.updated_at);
+      return { no:r.item_no, cat:r.cat||'', item:r.item||'', unit:r.unit||'',
+               prices:r.prices||{}, hatchu:r.hatchu||{},
+               tenant:r.tenant, owner:r.owner, material:r.material, partNo:r.part_no||'',
+               _updatedAt:r.updated_at||'', _actor:r.actor||'' };
+    });
+    const pick = k => cols.filter(c=>c.kind===k).map(c=>c.name);
+    return { updatedAt: newest || new Date().toISOString(),
+             motoCols: pick('moto'), hatchuCols: pick('hatchu'), items, _rows:true };
+  } finally { clearTimeout(to); }
+}
 async function fetchFromDb_(){
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), SB.timeout);
@@ -187,6 +253,19 @@ async function load(){
     }catch(_){ showedCache = false; }
   }
   if(!showedCache) $('#list').innerHTML = '<div class="empty">読み込み中…</div>';
+
+  // ②-0 品目1行の tanka_items(段1・2026-09-13)。**段0が入るまでは null → 従来の②へ素通り**
+  const tR = Date.now();
+  try{
+    const rows = await fetchRowsFromDb_();
+    if(rows){
+      saveCache(rows); applyData(rows);
+      noteRefresh(`⚡DB行 ${((Date.now()-tR)/1000).toFixed(1)}s (${rows.items.length}品目・即時反映)`);
+      return;   // ⚠行が正本=GAS追いかけはしない(古い price_master で上書きしてはいけない)
+    }
+  }catch(e){
+    console.warn('[tanka] 行直読みを見送り→従来経路へ:', (e && e.message) || e);
+  }
 
   // ② Supabaseを直読み(実測0.2〜0.9秒)
   const t0 = Date.now();
