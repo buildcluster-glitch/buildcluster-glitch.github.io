@@ -51,6 +51,31 @@
   .setbox .save{ background:var(--accent); color:#fff; font-weight:600; }
   .setbox .cancel{ background:#e2e8f0; color:#334155; }
   .setbox .hint{ font-size:11px; color:var(--muted); margin-top:8px; line-height:1.5; }
+  /* ===== ✏編集(段3・2026-09-21) ===== */
+  .card-head .edit{margin-left:6px;border:1px solid #e2e8f0;background:#fff;border-radius:8px;padding:4px 8px;font-size:13px;cursor:pointer;color:#7c3aed}
+  .card-head .edit:active{background:#f1f5f9}
+  #edit{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;z-index:50;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #edit.open{display:block}
+  .edbox{background:#fff;margin:0 auto;max-width:640px;min-height:100%;padding:14px 14px 90px}
+  .edhead{position:sticky;top:0;background:#fff;padding:10px 0;border-bottom:1px solid #e2e8f0;z-index:2}
+  .edhead h2{margin:0;font-size:16px}
+  .edhead .sub{color:#64748b;font-size:12px;margin-top:2px}
+  .edsec{margin:16px 0 6px;font-size:12px;font-weight:700;color:#475569;border-left:3px solid #7c3aed;padding-left:6px}
+  .edrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9}
+  .edrow label{flex:1;font-size:13px;color:#334155;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .edrow input{width:118px;flex:none;padding:7px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;text-align:right}
+  .edrow input.txt{width:190px;text-align:left}
+  .edrow input.ch{border-color:#7c3aed;background:#faf5ff}
+  .edrow .was{font-size:11px;color:#94a3b8;width:64px;flex:none;text-align:right}
+  .edfoot{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #e2e8f0;padding:10px 14px;display:flex;gap:8px;max-width:640px;margin:0 auto}
+  .edfoot button{flex:1;padding:12px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-size:15px}
+  .edfoot .save{background:#7c3aed;color:#fff;border-color:#7c3aed;font-weight:700}
+  .edfoot button:disabled{opacity:.5}
+  .ednote{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:12px;color:#92400e;margin:8px 0;line-height:1.6}
+  .ederr{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;font-size:13px;color:#b91c1c;margin:8px 0;line-height:1.6;white-space:pre-wrap}
+  .hist{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:12px}
+  .hist b{font-size:13px}
+  .hist .hb{margin-top:6px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12px}
 </style>
 </head>
 <body>
@@ -66,6 +91,20 @@
 <div class="cats" id="cats"></div>
 <div class="meta" id="meta"></div>
 <main id="list"><div class="empty">⚙設定でGAS URL・トークンを入れて「更新」を押してください</div></main>
+
+
+<div id="edit"><div class="edbox">
+  <div class="edhead">
+    <h2 id="ed-title">単価を直す</h2>
+    <div class="sub" id="ed-sub"></div>
+  </div>
+  <div id="ed-body"></div>
+  <div class="edfoot">
+    <button id="ed-cancel">閉じる</button>
+    <button id="ed-hist">📜 履歴</button>
+    <button id="ed-save" class="save">保存</button>
+  </div>
+</div></div>
 
 <div id="settings">
   <div class="setbox">
@@ -155,7 +194,7 @@ async function fetchRowsFromDb_(){
     const cols = await rc.json();
     if(!Array.isArray(cols)) throw new Error('cols 形が違う');
     // 品目(1000件ずつ・総件数と受信数の一致を必ず確かめる)
-    const sel = 'item_no,cat,item,unit,prices,hatchu,tenant,owner,material,part_no,updated_at,actor';
+    const sel = 'item_no,cat,item,unit,prices,hatchu,tenant,owner,material,part_no,updated_at,actor,version';   // version=編集の楽観ロックに要る(段3)
     const all = []; let from = 0, total = null;
     for(;;){
       const r = await fetch(SB_ROWS.base + 'tanka_items?select=' + sel + '&is_deleted=eq.false&order=item_no.asc',
@@ -183,7 +222,7 @@ async function fetchRowsFromDb_(){
       return { no:r.item_no, cat:r.cat||'', item:r.item||'', unit:r.unit||'',
                prices:r.prices||{}, hatchu:r.hatchu||{},
                tenant:r.tenant, owner:r.owner, material:r.material, partNo:r.part_no||'',
-               _updatedAt:r.updated_at||'', _actor:r.actor||'' };
+               _updatedAt:r.updated_at||'', _actor:r.actor||'', _version:r.version };
     });
     const pick = k => cols.filter(c=>c.kind===k).map(c=>c.name);
     return { updatedAt: newest || new Date().toISOString(),
@@ -355,6 +394,7 @@ function render(){
   if(!items.length){ $('#list').innerHTML = '<div class="empty">該当なし<br><small>カテゴリ「すべて」や別の語で試してください</small></div>'; return; }
   // カテゴリ見出しでグルーピング(全件表示時に区切りを出す)
   const showGroups = !curCat;
+  const canEd = (typeof edCanEdit_==='function') && edCanEdit_();   // ✏はDB直読み＋ログイン時だけ
   let html = '', lastCat = null;
   items.forEach((it,i) => {
     const c = it.cat||'(未分類)';
@@ -367,6 +407,7 @@ function render(){
       <div class="card-head" data-i="${i}">
         <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div></div>
         <div class="price">${fmt(p)}<small>${esc(motoLabel)}</small></div>
+        ${canEd ? `<button class="edit" data-no="${esc(it.no)}" title="この単価を直す">✏</button>` : ''}
       </div>
       <div class="detail" id="d${i}">
         <div class="sec">🏢 元請別単価</div>
@@ -383,7 +424,251 @@ function render(){
   document.querySelectorAll('.card-head').forEach(h => h.onclick = () => {
     $('#d'+h.dataset.i).classList.toggle('open');
   });
+  document.querySelectorAll('.card-head .edit').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();                                  // カードの開閉を巻き込まない
+    edOpen_(b.dataset.no);
+  });
 }
+
+// ============================================================================
+// ✏ 単価の編集(段3・2026-09-21) — 山田「単価変更とか編集できるようにできる?」
+//   ★3役(admin/jimu/genba)すべて編集可(山田判断 2026-09-13)。対で2つ入れる:
+//     ①履歴からの「戻す」… 誰でも直せる=誰でも間違えられる。気づいた人がその場で戻せることが効く
+//     ②桁違いの警告      … 止めない。**確認を1枚挟むだけ**(正当な改定があるため)
+//   🔴送り方の約束(migration046):
+//     ・p_doc は**日本語キーの部分doc**(変えたキーだけ)
+//     ・キー単位のマージ。**null=そのキーを消す(空欄に戻す)** / **0は「0という値」**
+//     ・行が無い時は作らない(新規は tanka_add_item)
+//     ・金額が整数でないと**例外**(黙って丸めない)
+//   ⚠ここで0を落とすと「0円で出す運用の単価」が消える(処分系は実際に¥0で請求している)
+// ============================================================================
+const ED_FIX = [
+  { key:'入居者単価', sec:'客出し' }, { key:'家主単価', sec:'客出し' }, { key:'材料費', sec:'材料' },
+];
+let ED = null;   // {item_no, version, doc, before}
+
+function edLoggedIn_(){
+  try{ const o = JSON.parse(localStorage.getItem('bc_sb_session')||'null'); return !!(o && o.access_token); }catch(_){ return false; }
+}
+function edToken_(){
+  try{ const o = JSON.parse(localStorage.getItem('bc_sb_session')||'null'); return (o && o.access_token) || ''; }catch(_){ return ''; }
+}
+// 誰が直したかは**JWTから**刻む(自己申告にしない)
+function edActor_(){
+  try{
+    const t = edToken_(); if(!t) return '';
+    const p = JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));
+    return (p.user_metadata && (p.user_metadata.name || p.user_metadata.full_name)) || p.email || p.sub || '';
+  }catch(_){ return ''; }
+}
+function edCanEdit_(){ return !!(DATA && DATA._rows && edLoggedIn_()); }
+// 8〜64文字の英数と _- (tanka_guard_ の仕様)
+function edOpId_(){ return 'tk' + Date.now().toString(36) + Math.random().toString(36).slice(2,10); }
+// 全角・カンマ・空白を吸収して数にする。空欄は null(=キーを消す)
+function edNum_(s){
+  const t = String(s==null?'':s).normalize('NFKC').replace(/[,\s]/g,'').trim();
+  if(t === '') return null;
+  if(!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
+  return Number(t);
+}
+function edMoneyKeys_(){
+  return (DATA.motoCols||[]).concat(['入居者単価','家主単価','材料費']).concat(DATA.hatchuCols||[]);
+}
+
+async function edOpen_(item_no){
+  const box = document.getElementById('ed-body');
+  document.getElementById('edit').classList.add('open');
+  document.getElementById('ed-sub').textContent = '読み込み中…';
+  box.innerHTML = '';
+  try{
+    // ⚠一覧の写しではなく**その場で取り直す**(古い版の上に書かないため)
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + edToken_(), Accept: 'application/json' };
+    const r = await fetch(SB_ROWS.base + 'tanka_items?select=item_no,doc,version,cat,item,unit&item_no=eq.' + encodeURIComponent(item_no), { headers: hdr });
+    if(!r.ok) throw new Error('取り直しに失敗 HTTP ' + r.status);
+    const rows = await r.json();
+    if(!Array.isArray(rows) || !rows.length) throw new Error('この品目がDBにありません(No.' + item_no + ')');
+    const row = rows[0];
+    ED = { item_no: row.item_no, version: row.version, doc: row.doc || {}, before: JSON.parse(JSON.stringify(row.doc || {})) };
+    document.getElementById('ed-title').textContent = (row.item || '(無題)');
+    document.getElementById('ed-sub').textContent = 'No.' + row.item_no + ' / ' + (row.cat||'') + (row.unit?' / '+row.unit:'') + ' ／ 版' + row.version;
+    edRender_();
+  }catch(e){
+    box.innerHTML = '<div class="ederr">' + esc(e.message) + '</div>';
+    document.getElementById('ed-sub').textContent = '';
+  }
+}
+function edRender_(){
+  const d = ED.doc;
+  const row = (key, cls) => {
+    const v = d[key];
+    const shown = (v === null || v === undefined) ? '' : String(v);
+    return '<div class="edrow"><label title="'+esc(key)+'">'+esc(key)+'</label>'
+         + '<input data-k="'+esc(key)+'" class="'+(cls||'')+'" inputmode="'+(cls==='txt'?'text':'decimal')+'" value="'+esc(shown)+'">'
+         + '</div>';
+  };
+  let h = '<div class="ednote">空欄にすると<b>その欄を消します</b>（未設定に戻る）。<b>0 は「0円」として残ります</b>。<br>'
+        + '金額は<b>整数</b>のみ。小数を入れると保存できません。</div>';
+  h += '<div class="edsec">基本</div>' + ['カテゴリー','項目','単位'].map(k=>row(k,'txt')).join('');
+  h += '<div class="edsec">🏢 元請別単価</div>' + (DATA.motoCols||[]).map(k=>row(k)).join('');
+  h += '<div class="edsec">🧹 客出し単価</div>' + ['入居者単価','家主単価'].map(k=>row(k)).join('');
+  h += '<div class="edsec">🧱 材料費</div>' + row('材料費');
+  h += '<div class="edsec">🛠 発注単価(業者への発注金額)</div>' + (DATA.hatchuCols||[]).map(k=>row(k)).join('');
+  document.getElementById('ed-body').innerHTML = h;
+  document.querySelectorAll('#ed-body input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      // ⚠色の付き方は**実際に送るかどうか**と揃える。
+      //   「２８，６００」のように見た目だけ違う入力で色が付くと、
+      //   保存しても何も起きず「変えたのに保存されない」に見える。
+      const k = inp.dataset.k, was = ED.before[k];
+      const wasN = (was === undefined) ? null : was;
+      const raw = inp.value.trim();
+      let val;
+      if(inp.classList.contains('txt')){ val = raw === '' ? null : raw; }
+      else { const n = edNum_(raw); val = Number.isNaN(n) ? '__bad__' : n; }
+      inp.classList.toggle('ch', JSON.stringify(val) !== JSON.stringify(wasN));
+    });
+  });
+}
+// 変えたキーだけ集める。空欄→null(消す) / 数字→数(0も値)
+function edDiff_(){
+  const out = {}, bad = [];
+  document.querySelectorAll('#ed-body input').forEach(inp => {
+    const k = inp.dataset.k, was = ED.before[k];
+    const isTxt = inp.classList.contains('txt');
+    const raw = inp.value.trim();
+    let val;
+    if(isTxt){ val = raw === '' ? null : raw; }
+    else {
+      const n = edNum_(raw);
+      if(Number.isNaN(n)){ bad.push(k + ' に数字でないものが入っています「' + raw + '」'); return; }
+      if(n !== null && !Number.isInteger(n)){ bad.push(k + ' は整数にしてください（' + n + '）'); return; }
+      val = n;
+    }
+    const wasN = (was === undefined) ? null : was;
+    if(JSON.stringify(val) !== JSON.stringify(wasN)) out[k] = val;
+  });
+  return { doc: out, bad };
+}
+// 🔴桁違いの警告 — **止めない。確認を1枚挟むだけ**
+//   ・非0 → 0     金額が消える向き(7/3に3品目が0にされた事故がこれ)
+//   ・0 → 非0     警告しない(都度見積に値を入れる正常な操作)
+//   ・5倍以上 / 5分の1以下 / マイナス
+function edWarn_(diff){
+  const money = new Set(edMoneyKeys_());
+  const w = [];
+  for(const k of Object.keys(diff)){
+    if(!money.has(k)) continue;
+    const a = ED.before[k], b = diff[k];
+    const an = (typeof a === 'number') ? a : null;
+    const bn = (typeof b === 'number') ? b : null;
+    if(bn !== null && bn < 0){ w.push(k + ' がマイナスです（' + bn + '）'); continue; }
+    if(an !== null && an !== 0 && bn === 0){ w.push(k + ' を ' + an.toLocaleString() + ' → 0円 にします（金額が消えます）'); continue; }
+    if(an !== null && an > 0 && bn !== null && bn > 0){
+      if(bn >= an * 5) w.push(k + ' を ' + an.toLocaleString() + ' → ' + bn.toLocaleString() + ' にします（5倍以上）');
+      else if(bn * 5 <= an) w.push(k + ' を ' + an.toLocaleString() + ' → ' + bn.toLocaleString() + ' にします（5分の1以下）');
+    }
+    if(an !== null && an !== 0 && bn === null) w.push(k + ' の ' + an.toLocaleString() + ' を空欄に戻します（未設定になります）');
+  }
+  return w;
+}
+function edErr_(msg){ document.getElementById('ed-body').insertAdjacentHTML('afterbegin', '<div class="ederr">'+esc(msg)+'</div>'); }
+
+async function edSave_(){
+  const btn = document.getElementById('ed-save');
+  const { doc, bad } = edDiff_();
+  if(bad.length){ edErr_('保存できません:\n・' + bad.join('\n・')); return; }
+  const keys = Object.keys(doc);
+  if(!keys.length){ edErr_('変えたところがありません'); return; }
+  const w = edWarn_(doc);
+  if(w.length && !confirm('次の変更をします。よろしいですか？\n\n・' + w.join('\n・') + '\n\n（合計 ' + keys.length + '項目）')) return;
+  btn.disabled = true; btn.textContent = '保存中…';
+  try{
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + edToken_(), 'Content-Type':'application/json', Accept:'application/json' };
+    const r = await fetch(SB_ROWS.base + 'rpc/tanka_set_item', { method:'POST', headers: hdr,
+      body: JSON.stringify({ p_op_id: edOpId_(), p_item_no: ED.item_no, p_doc: doc, p_version: ED.version, p_actor: edActor_() }) });
+    const txt = await r.text();
+    if(!r.ok){
+      // 整数チェックなどは**例外**で返る。黙って握りつぶさない
+      let m = txt; try{ const j = JSON.parse(txt); m = j.message || j.hint || txt; }catch(_){}
+      throw new Error('保存できませんでした:\n' + m);
+    }
+    let res = txt; try{ res = JSON.parse(txt); }catch(_){}
+    const s = String(res);
+    if(s === 'applied' || s === 'already_processed'){
+      document.getElementById('edit').classList.remove('open');
+      await load();                                  // 一覧を取り直す
+      noteRefresh('✏ No.' + ED.item_no + ' を ' + keys.length + '項目 直しました');
+      return;
+    }
+    if(s === 'stale_version'){ throw new Error('他の人が先に直しました。\n最新を読み直すので、もう一度確認してください。'); }
+    if(s === 'not_loaded'){ throw new Error('この品目はまだDBに中身が入っていません（not_loaded）。\n台帳DB側の流し込みが済んでいない可能性があります。'); }
+    if(s === 'item_no_mismatch'){ throw new Error('品目番号が食い違っています（item_no_mismatch）。\n画面を開き直してください。'); }
+    if(s === 'no_such_item'){ throw new Error('この品目が見つかりません（no_such_item）。\n他の人が消したのかもしれません。'); }
+    if(s === 'forbidden'){ throw new Error('編集の権限がありません（forbidden）。'); }
+    throw new Error('知らない答えが返りました: ' + s);
+  }catch(e){
+    edErr_(e.message);
+    if(/stale_version|他の人が先に/.test(e.message)) edOpen_(ED.item_no);   // 最新を読み直す
+  }finally{ btn.disabled = false; btn.textContent = '保存'; }
+}
+
+// 📜 履歴からの「戻す」
+async function edHist_(){
+  const box = document.getElementById('ed-body');
+  try{
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + edToken_(), Accept:'application/json' };
+    const r = await fetch(SB_ROWS.base + 'tanka_items_history?select=version,doc,actor,replaced_at&item_no=eq.' + encodeURIComponent(ED.item_no) + '&order=version.desc&limit=30', { headers: hdr });
+    if(!r.ok) throw new Error('履歴が読めません HTTP ' + r.status);
+    const rows = await r.json();
+    if(!rows.length){ box.insertAdjacentHTML('afterbegin', '<div class="ednote">この品目の履歴はまだありません。</div>'); return; }
+    const money = (DATA.motoCols||[]).concat(['入居者単価','家主単価','材料費']);
+    let h = '<div class="edsec">📜 履歴（新しい順・最大30件）</div>';
+    h += '<div class="ednote">「この版に戻す」を押すと、<b>その時の中身をそのまま書き戻します</b>。戻したこと自体も履歴に残ります。</div>';
+    for(const x of rows){
+      const d = (x.doc && x.doc.doc) || {};
+      const sum = money.filter(k=>d[k]!=null).slice(0,4).map(k=>k+' '+Number(d[k]).toLocaleString()).join(' / ');
+      h += '<div class="hist"><b>版' + x.version + '</b> ' + esc(new Date(x.replaced_at).toLocaleString('ja-JP'))
+         + (x.actor?' ／ '+esc(x.actor):'') + '<br>' + esc(sum || '(単価なし)')
+         + '<br><button class="hb" data-v="' + x.version + '">この版に戻す</button></div>';
+    }
+    box.innerHTML = h;
+    box.querySelectorAll('.hb').forEach(b => b.onclick = () => edRestore_(rows.find(x=>String(x.version)===b.dataset.v)));
+  }catch(e){ edErr_(e.message); }
+}
+async function edRestore_(hrow){
+  if(!hrow) return;
+  const old = (hrow.doc && hrow.doc.doc) || {};
+  // いまの doc に対する差分を作る(消えたキーは null で消す)
+  const diff = {};
+  for(const k of new Set(Object.keys(old).concat(Object.keys(ED.doc)))){
+    const a = ED.doc[k], b = old[k];
+    if(JSON.stringify(a) !== JSON.stringify(b)) diff[k] = (b === undefined) ? null : b;
+  }
+  const keys = Object.keys(diff);
+  if(!keys.length){ edErr_('いまの中身と同じです（戻す必要がありません）'); return; }
+  if(!confirm('版' + hrow.version + ' の中身に戻します。\n' + keys.length + '項目が変わります。よろしいですか？')) return;
+  try{
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + edToken_(), 'Content-Type':'application/json', Accept:'application/json' };
+    const r = await fetch(SB_ROWS.base + 'rpc/tanka_set_item', { method:'POST', headers: hdr,
+      body: JSON.stringify({ p_op_id: edOpId_(), p_item_no: ED.item_no, p_doc: diff, p_version: ED.version, p_actor: edActor_() + '(版'+hrow.version+'へ戻す)' }) });
+    const txt = await r.text();
+    if(!r.ok){ let m=txt; try{ const j=JSON.parse(txt); m=j.message||txt; }catch(_){} throw new Error('戻せませんでした:\n'+m); }
+    let res = txt; try{ res = JSON.parse(txt); }catch(_){}
+    if(String(res) === 'applied' || String(res) === 'already_processed'){
+      document.getElementById('edit').classList.remove('open');
+      await load();
+      noteRefresh('📜 No.' + ED.item_no + ' を 版' + hrow.version + ' に戻しました');
+      return;
+    }
+    throw new Error('戻せませんでした: ' + res);
+  }catch(e){ edErr_(e.message); }
+}
+
+document.getElementById('ed-cancel').onclick = () => document.getElementById('edit').classList.remove('open');
+document.getElementById('ed-save').onclick = edSave_;
+document.getElementById('ed-hist').onclick = edHist_;
+document.getElementById('edit').addEventListener('click', e => { if(e.target.id === 'edit') document.getElementById('edit').classList.remove('open'); });
+
 $('#search').addEventListener('input', render);
 $('#btn-reload').onclick = load;
 // 起動
