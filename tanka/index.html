@@ -87,7 +87,10 @@ const LS = { url:'tanka_gas_url', token:'tanka_gas_token', moto:'tanka_moto' };
 let DATA = null; // {updatedAt, motoCols, items}
 let curCat = ''; // 選択中カテゴリ('' = すべて)
 const $ = s => document.querySelector(s);
-const fmt = n => n ? '¥'+Number(n).toLocaleString() : '—';
+// 🔴2026-09-21: **0は「値が無い」ではなく「0という値」**。migration046でDBが0を保つようになるので、
+//   ここで落とすと「0円で出す運用の単価」が画面から消える(処分系は先週も¥0で請求している)。
+//   ⇒ 未設定(null/undefined/空文字)だけ '—'。**0は ¥0 と出す**。
+const fmt = n => (n === null || n === undefined || n === '') ? '—' : '¥'+Number(n).toLocaleString();
 
 function openSettings(){
   $('#set-url').value = localStorage.getItem(LS.url)||'';
@@ -357,9 +360,9 @@ function render(){
     const c = it.cat||'(未分類)';
     if(showGroups && c!==lastCat){ html += `<div class="gh">${esc(c)}</div>`; lastCat = c; }
     const p = priceForRow(it, motoKey);
-    const motoRows = (DATA.motoCols||[]).filter(col => (it.prices||{})[col]).map(col => `<div class="prow"><span>${esc(col)}</span><b>${fmt(it.prices[col])}</b></div>`).join('');
+    const motoRows = (DATA.motoCols||[]).filter(col => (it.prices||{})[col] != null).map(col => `<div class="prow"><span>${esc(col)}</span><b>${fmt(it.prices[col])}</b></div>`).join('');
     // 🛠 発注先(業者)への発注金額(2026-08-03 山田要望)。旧データ(hatchu無し)はセクションごと非表示
-    const hatchuRows = (DATA.hatchuCols||[]).filter(col => (it.hatchu||{})[col]).map(col => `<div class="prow hatchu"><span>${esc(col)}</span><b>${fmt(it.hatchu[col])}</b></div>`).join('');
+    const hatchuRows = (DATA.hatchuCols||[]).filter(col => (it.hatchu||{})[col] != null).map(col => `<div class="prow hatchu"><span>${esc(col)}</span><b>${fmt(it.hatchu[col])}</b></div>`).join('');
     html += `<div class="card">
       <div class="card-head" data-i="${i}">
         <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div></div>
@@ -372,7 +375,7 @@ function render(){
         <div class="prow kyaku"><span>入居者単価</span><b>${fmt(it.tenant)}</b></div>
         <div class="prow kyaku"><span>家主単価</span><b>${fmt(it.owner)}</b></div>
         ${hatchuRows?`<div class="sec">🛠 発注単価(業者への発注金額)</div>${hatchuRows}`:''}
-        ${it.material?`<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
+        ${it.material != null ? `<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
       </div>
     </div>`;
   });
