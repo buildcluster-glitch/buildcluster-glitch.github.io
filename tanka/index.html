@@ -106,6 +106,7 @@
   <div class="edfoot">
     <button id="ed-cancel">閉じる</button>
     <button id="ed-hist">📜 履歴</button>
+    <button id="ed-dup" title="この品目をもとに新しい品目を作る">📄 複製</button>
     <button id="ed-save" class="save">保存</button>
   </div>
 </div></div>
@@ -537,6 +538,7 @@ function edOpenNew_(){
   document.getElementById('ed-title').textContent = '新しい品目を追加';
   document.getElementById('ed-sub').textContent = '番号は保存した時に自動で付きます';
   document.getElementById('ed-hist').style.display = 'none';
+  document.getElementById('ed-dup').style.display = 'none';
   edRender_();
   // カテゴリーは既存から選べるように(打ってもよい)
   const cin = document.querySelector('#ed-body input[data-k="カテゴリー"]');
@@ -550,6 +552,7 @@ async function edOpen_(item_no){
   document.getElementById('edit').classList.add('open');
   document.getElementById('ed-sub').textContent = '読み込み中…';
   document.getElementById('ed-hist').style.display = '';
+  document.getElementById('ed-dup').style.display = '';
   box.innerHTML = '';
   try{
     // ⚠一覧の写しではなく**その場で取り直す**(古い版の上に書かないため)
@@ -703,9 +706,34 @@ async function edSave_(){
   }finally{ btn.disabled = false; btn.textContent = '保存'; }
 }
 
+// 📄 複製(2026-10-02 山田「複製みたいな機能」): 開いている品目の**画面の中身**(打ち直し中の数字も含む)を写して＋新規の画面を開く。
+//   元の品目は変えない。項目名に「（複製）」を付ける=うっかり同名で保存しないため(直してから保存)。番号は保存時にDBが採番
+function edDuplicate_(){
+  if(!ED || ED.isNew) return;
+  const { doc: diff, bad } = edDiff_();
+  if(bad.length){ edErr_('複製できません(入力に誤りがあります):\n・' + bad.join('\n・')); return; }
+  const src = Object.assign({}, ED.doc);
+  Object.keys(diff).forEach(k=>{ if(diff[k] === null) delete src[k]; else src[k] = diff[k]; });
+  delete src['項目番号'];
+  const fromNo = ED.item_no;
+  src['項目'] = String(src['項目']||'') + '（複製）';
+  ED = { item_no: null, version: null, doc: src, before: {}, isNew: true, opId: edOpId_() };
+  document.getElementById('ed-title').textContent = '新しい品目を追加（No.' + fromNo + 'から複製）';
+  document.getElementById('ed-sub').textContent = '番号は保存した時に自動で付きます。項目名を直してから保存してください';
+  document.getElementById('ed-hist').style.display = 'none';
+  document.getElementById('ed-dup').style.display = 'none';
+  edRender_();
+  document.querySelectorAll('#ed-body input').forEach(i=>i.dispatchEvent(new Event('input')));   // 入っている欄に色(=保存される欄)
+  const iin = document.querySelector('#ed-body input[data-k="項目"]'); if(iin) setTimeout(()=>{ iin.focus(); iin.select(); }, 50);
+  document.getElementById('ed-body').scrollTop = 0;
+}
 async function edSaveNew_(diff){
   const btn = document.getElementById('ed-save');
-  const doc = {}; Object.keys(diff).forEach(k=>{ if(diff[k] !== null) doc[k] = diff[k]; });   // 新規は空欄を送らない
+  const doc = {};
+  // 📄 複製の時: 画面に出していない欄(産廃品目・室名など)も元の品目から引き継ぐ。画面にある欄は画面の値が正
+  const onScreen = new Set([...document.querySelectorAll('#ed-body input')].map(i=>i.dataset.k));
+  Object.keys(ED.doc||{}).forEach(k=>{ if(k !== '項目番号' && !onScreen.has(k) && ED.doc[k] !== null && ED.doc[k] !== undefined) doc[k] = ED.doc[k]; });
+  Object.keys(diff).forEach(k=>{ if(diff[k] !== null) doc[k] = diff[k]; });   // 新規は空欄を送らない
   const miss = ['カテゴリー','項目'].filter(k=>!doc[k]);
   if(miss.length){ edErr_(miss.join('・') + ' を入れてください'); return; }
   const dup = (DATA.items||[]).find(i=>i.item===doc['項目'] && (i.cat||'')===doc['カテゴリー']);
@@ -782,6 +810,7 @@ async function edRestore_(hrow){
 document.getElementById('ed-cancel').onclick = () => document.getElementById('edit').classList.remove('open');
 document.getElementById('ed-save').onclick = edSave_;
 document.getElementById('btn-new').onclick = edOpenNew_;
+document.getElementById('ed-dup').onclick = edDuplicate_;
 document.getElementById('ed-hist').onclick = edHist_;
 document.getElementById('edit').addEventListener('click', e => { if(e.target.id === 'edit') document.getElementById('edit').classList.remove('open'); });
 
