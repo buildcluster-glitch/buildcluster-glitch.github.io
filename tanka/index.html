@@ -509,11 +509,16 @@ function edRender_(){
   let h = '<div class="ednote">空欄にすると<b>その欄を消します</b>（未設定に戻る）。<b>0 は「0円」として残ります</b>。<br>'
         + '金額は<b>整数</b>のみ。小数を入れると保存できません。</div>';
   h += '<div class="edsec">基本</div>' + ['カテゴリー','項目','単位'].map(k=>row(k,'txt')).join('');
-  h += '<div class="edsec">🏢 元請別単価</div>' + (DATA.motoCols||[]).map(k=>row(k)).join('');
-  h += '<div class="edsec">🧹 客出し単価</div>' + ['入居者単価','家主単価'].map(k=>row(k)).join('');
+  // 🧮 2026-10-02 山田「元請単価=山一の×1.2に設定ボタン／入居者・オーナー単価=山一の×1.2に設定ボタン」
+  //   押すと欄に数字が入るだけ(保存は従来どおり「保存」)。山一の列が空なら何もしない。
+  //   ⚠「山一Dクレ」「山一VIP」は山一の別枠なので×1.2の対象にしない(山一と同じ値のまま)
+  const yb = (id, label) => '<button type="button" class="edcalc" data-calc="'+id+'" style="margin-left:8px;font-size:11px;padding:2px 8px;border:1px solid #93c5fd;background:#eff6ff;color:#1d4ed8;border-radius:6px;cursor:pointer">'+label+'</button>';
+  h += '<div class="edsec">🏢 元請別単価' + yb('moto','山一以外 = 山一×1.2') + '</div>' + (DATA.motoCols||[]).map(k=>row(k)).join('');
+  h += '<div class="edsec">🧹 客出し単価' + yb('kyaku','入居者・家主 = 山一×1.2') + '</div>' + ['入居者単価','家主単価'].map(k=>row(k)).join('');
   h += '<div class="edsec">🧱 材料費</div>' + row('材料費');
   h += '<div class="edsec">🛠 発注単価(業者への発注金額)</div>' + (DATA.hatchuCols||[]).map(k=>row(k)).join('');
   document.getElementById('ed-body').innerHTML = h;
+  document.querySelectorAll('#ed-body .edcalc').forEach(btn => btn.addEventListener('click', () => edCalcYamaichi_(btn.dataset.calc)));
   document.querySelectorAll('#ed-body input').forEach(inp => {
     inp.addEventListener('input', () => {
       // ⚠色の付き方は**実際に送るかどうか**と揃える。
@@ -528,6 +533,20 @@ function edRender_(){
       inp.classList.toggle('ch', JSON.stringify(val) !== JSON.stringify(wasN));
     });
   });
+}
+// 🧮 山一×1.2 を欄に入れる(保存はしない)。基準は**いま画面の山一欄に入っている値**(打ち直した直後でもそれを使う)
+const ED_YAMAICHI = '山一地所';
+const ED_RATE = 1.2;
+function edCalcYamaichi_(which){
+  const inp = k => document.querySelector('#ed-body input[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
+  const base = edNum_((inp(ED_YAMAICHI) || {}).value);
+  if(base === null || Number.isNaN(base)){ alert('山一地所の単価が空か数字でないため、計算できません。先に山一地所の欄を入れてください。'); return; }
+  const v = Math.round(base * ED_RATE);   // 金額は整数のみ(保存の約束)
+  const keys = which === 'moto'
+    ? (DATA.motoCols||[]).filter(k => k !== ED_YAMAICHI && !/^山一/.test(k))
+    : ['入居者単価','家主単価'];
+  keys.forEach(k => { const el = inp(k); if(!el) return; el.value = String(v); el.dispatchEvent(new Event('input')); });
+  if(typeof noteRefresh === 'function') noteRefresh('🧮 ' + keys.length + '欄に ' + v.toLocaleString() + '円(山一 ' + base.toLocaleString() + '円×1.2)を入れました。確認して「保存」を押してください');
 }
 // 変えたキーだけ集める。空欄→null(消す) / 数字→数(0も値)
 function edDiff_(){
