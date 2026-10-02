@@ -21,6 +21,9 @@
   .card-head .nm{ flex:1; min-width:0; }
   .card-head .item{ font-weight:600; font-size:15px; line-height:1.3; }
   .card-head .cat{ font-size:11px; color:var(--muted); }
+  .card-head .chg{ font-size:11px; color:#b45309; margin-top:2px; }
+  .hrow{ font-size:12px; padding:3px 0; border-bottom:1px dashed #e2e8f0; }
+  .hrow small{ color:var(--muted); }
   .card-head .price{ font-size:18px; font-weight:700; color:#7c2d12; white-space:nowrap; text-align:right; }
   .card-head .price small{ font-size:10px; color:var(--muted); font-weight:normal; display:block; }
   .detail{ display:none; padding:6px 12px 12px; border-top:1px dashed var(--line); background:#fafafa; }
@@ -151,7 +154,48 @@ $('#set-save').onclick = () => {
 const CACHE_KEY = 'tanka_cache_v1';
 function loadCache(){ try{ const o=JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); return (o&&o.data)?o:null; }catch(_){ return null; } }
 function saveCache(data){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({data, at:new Date().toISOString()})); }catch(_){} }
-function applyData(data){ DATA = data; buildMotoSelect(); buildCats(); render(); }
+function applyData(data){ DATA = data; buildMotoSelect(); buildCats(); render(); if(data && data._rows) loadChangeHist_(); }
+// 📜 2026-10-02 山田「変更履歴も行に表示させたい」: 品目ごとの「いつ・誰が・何を」を一覧の行と詳細に出す。
+//   取るのは**最初の流し込み(9/21)より後の変更だけ**(それ以前は全品目が取り込みで1回変わっているだけ=雑音)。
+//   tanka_items_history は「置き換えられた古い版」を持つ→古い版と次の版を並べて差分を作る。最新の版は tanka_items から。
+//   ⚠読めるのはログインした3役だけ(RLS)。ログインしていない時は何も出さない(今までどおり)
+const HIST_SINCE = '2026-09-21T09:00:00Z';
+let HIST = {};   // item_no -> [{at, actor, changes:[[キー, 前, 後]]}] 新しい順
+async function loadChangeHist_(){
+  try{
+    const tok = (typeof edToken_==='function') ? edToken_() : ''; if(!tok) return;
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + tok, Accept: 'application/json' };
+    const r = await fetch(SB_ROWS.base + 'tanka_items_history?select=item_no,version,doc,actor,replaced_at&replaced_at=gt.' + encodeURIComponent(HIST_SINCE) + '&order=item_no.asc,version.asc&limit=2000', { headers: hdr, cache:'no-store' });
+    if(!r.ok) return;
+    const hs = await r.json(); if(!Array.isArray(hs) || !hs.length){ HIST = {}; return; }
+    const nos = [...new Set(hs.map(h=>h.item_no))];
+    const rc = await fetch(SB_ROWS.base + 'tanka_items?select=item_no,version,doc,actor,updated_at&item_no=in.(' + nos.join(',') + ')', { headers: hdr, cache:'no-store' });
+    if(!rc.ok) return;
+    const cur = await rc.json(); const curBy = new Map((cur||[]).map(c=>[c.item_no, c]));
+    const docOf = x => (x && x.doc && typeof x.doc === 'object' && x.doc.doc && typeof x.doc.doc === 'object') ? x.doc.doc : ((x && x.doc) || {});
+    const SKIP = new Set(['項目番号','数量','粗利','大分類','室名','産廃品目','産廃数量']);   // 単価表に出していない欄は差分に出さない
+    const who = a => !a ? '' : (/^sheet:load/.test(a) ? 'シートから取込' : (/^import:/.test(a) ? '取込' : a));
+    const out = {};
+    nos.forEach(no=>{
+      const vers = hs.filter(h=>h.item_no===no).map(h=>({ v:h.version, doc:docOf(h), actor:h.actor, replacedAt:h.replaced_at }));
+      const c = curBy.get(no); if(c) vers.push({ v:c.version, doc:docOf(c), actor:c.actor, replacedAt:null, at:c.updated_at });
+      vers.sort((a,b)=>a.v-b.v);
+      const list = [];
+      for(let i=1;i<vers.length;i++){
+        const a = vers[i-1].doc, b = vers[i].doc, ch = [];
+        new Set(Object.keys(a).concat(Object.keys(b))).forEach(k=>{ if(SKIP.has(k)) return; if(JSON.stringify(a[k]) !== JSON.stringify(b[k])) ch.push([k, a[k], b[k]]); });
+        if(!ch.length) continue;
+        list.push({ at: vers[i-1].replacedAt || vers[i].at, actor: who(vers[i].actor), changes: ch });
+      }
+      if(list.length) out[no] = list.reverse();
+    });
+    HIST = out;
+    render();
+  }catch(e){ console.warn('[変更履歴]', e && e.message); }
+}
+function histVal_(v){ return (v === null || v === undefined || v === '') ? '空欄' : (typeof v === 'number' ? '¥' + v.toLocaleString() : String(v)); }
+function histWhen_(at){ const d = new Date(at); return isNaN(d) ? '' : `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function histLine_(h, max){ const parts = h.changes.slice(0, max).map(([k,a,b])=>`${k} ${histVal_(a)}→${histVal_(b)}`); return parts.join(' / ') + (h.changes.length > max ? ` ほか${h.changes.length-max}項目` : ''); }
 function noteRefresh(msg){ const el=$('#meta'); if(el && msg) el.textContent = (el.textContent||'') + ' ／ ' + msg; }
 
 // 🧪 DB移行 先行パイロット第1号(2026-08-06・社長GO)= Supabaseから直読みする。
@@ -405,7 +449,7 @@ function render(){
     const hatchuRows = (DATA.hatchuCols||[]).filter(col => (it.hatchu||{})[col] != null).map(col => `<div class="prow hatchu"><span>${esc(col)}</span><b>${fmt(it.hatchu[col])}</b></div>`).join('');
     html += `<div class="card">
       <div class="card-head" data-i="${i}">
-        <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div></div>
+        <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div>${(HIST[it.no]&&HIST[it.no][0]) ? `<div class="chg">✏ ${esc(histWhen_(HIST[it.no][0].at))} ${esc(HIST[it.no][0].actor)}：${esc(histLine_(HIST[it.no][0], 2))}</div>` : ''}</div>
         <div class="price">${fmt(p)}<small>${esc(motoLabel)}</small></div>
         ${canEd ? `<button class="edit" data-no="${esc(it.no)}" title="この単価を直す">✏</button>` : ''}
       </div>
@@ -417,6 +461,7 @@ function render(){
         <div class="prow kyaku"><span>家主単価</span><b>${fmt(it.owner)}</b></div>
         ${hatchuRows?`<div class="sec">🛠 発注単価(業者への発注金額)</div>${hatchuRows}`:''}
         ${it.material != null ? `<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
+        ${HIST[it.no] ? `<div class="sec">📜 変更履歴</div>${HIST[it.no].map(h=>`<div class="hrow"><small>${esc(histWhen_(h.at))} ${esc(h.actor)}</small><br>${esc(histLine_(h, 99))}</div>`).join('')}` : ''}
       </div>
     </div>`;
   });
