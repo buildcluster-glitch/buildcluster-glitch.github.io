@@ -84,6 +84,7 @@
 <body>
 <header>
   <h1>📋 単価表</h1>
+  <button id="btn-new" style="display:none" title="新しい品目を追加">＋新規</button>
   <button id="btn-reload">🔄 更新</button>
   <button id="btn-settings">⚙</button>
 </header>
@@ -167,7 +168,12 @@ async function loadChangeHist_(){
     const hdr = { apikey: SB.key, Authorization: 'Bearer ' + tok, Accept: 'application/json' };
     const r = await fetch(SB_ROWS.base + 'tanka_items_history?select=item_no,version,doc,actor,replaced_at&replaced_at=gt.' + encodeURIComponent(HIST_SINCE) + '&order=item_no.asc,version.asc&limit=2000', { headers: hdr, cache:'no-store' });
     if(!r.ok) return;
-    const hs = await r.json(); if(!Array.isArray(hs) || !hs.length){ HIST = {}; return; }
+    let hs = await r.json(); if(!Array.isArray(hs)) hs = [];
+    // ＋新規で作った品目(版1のまま・取込以外)は history に行が無いので、作成として足す
+    let created = [];
+    try{ const rn = await fetch(SB_ROWS.base + 'tanka_items?select=item_no,actor,updated_at&version=eq.1&updated_at=gt.' + encodeURIComponent(HIST_SINCE), { headers: hdr, cache:'no-store' });
+      if(rn.ok){ const a = await rn.json(); if(Array.isArray(a)) created = a.filter(x=>x && x.actor && !/^sheet:load|^import:/.test(x.actor)); } }catch(_){}
+    if(!hs.length && !created.length){ HIST = {}; render(); return; }
     const nos = [...new Set(hs.map(h=>h.item_no))];
     const rc = await fetch(SB_ROWS.base + 'tanka_items?select=item_no,version,doc,actor,updated_at&item_no=in.(' + nos.join(',') + ')', { headers: hdr, cache:'no-store' });
     if(!rc.ok) return;
@@ -189,13 +195,14 @@ async function loadChangeHist_(){
       }
       if(list.length) out[no] = list.reverse();
     });
+    created.forEach(c=>{ (out[c.item_no] = out[c.item_no] || []).push({ at:c.updated_at, actor:who(c.actor), changes:[], created:true }); });
     HIST = out;
     render();
   }catch(e){ console.warn('[変更履歴]', e && e.message); }
 }
 function histVal_(v){ return (v === null || v === undefined || v === '') ? '空欄' : (typeof v === 'number' ? '¥' + v.toLocaleString() : String(v)); }
 function histWhen_(at){ const d = new Date(at); return isNaN(d) ? '' : `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
-function histLine_(h, max){ const parts = h.changes.slice(0, max).map(([k,a,b])=>`${k} ${histVal_(a)}→${histVal_(b)}`); return parts.join(' / ') + (h.changes.length > max ? ` ほか${h.changes.length-max}項目` : ''); }
+function histLine_(h, max){ if(h.created && !h.changes.length) return '＋新規作成'; const parts = h.changes.slice(0, max).map(([k,a,b])=>`${k} ${histVal_(a)}→${histVal_(b)}`); return parts.join(' / ') + (h.changes.length > max ? ` ほか${h.changes.length-max}項目` : ''); }
 function noteRefresh(msg){ const el=$('#meta'); if(el && msg) el.textContent = (el.textContent||'') + ' ／ ' + msg; }
 
 // 🧪 DB移行 先行パイロット第1号(2026-08-06・社長GO)= Supabaseから直読みする。
@@ -439,6 +446,7 @@ function render(){
   // カテゴリ見出しでグルーピング(全件表示時に区切りを出す)
   const showGroups = !curCat;
   const canEd = (typeof edCanEdit_==='function') && edCanEdit_();   // ✏はDB直読み＋ログイン時だけ
+  { const nb = document.getElementById('btn-new'); if(nb) nb.style.display = canEd ? '' : 'none'; }   // ＋新規も✏と同じ条件(2026-10-02)
   let html = '', lastCat = null;
   items.forEach((it,i) => {
     const c = it.cat||'(未分類)';
@@ -520,10 +528,28 @@ function edMoneyKeys_(){
   return (DATA.motoCols||[]).concat(['入居者単価','家主単価','材料費']).concat(DATA.hatchuCols||[]);
 }
 
+// ＋ 新しい品目(2026-10-02 山田「カレンダーから新規単価追加」)。番号はDBが採番(tanka_add_item・見積アプリ1108も同じ口)。
+//   ⚠op_id は画面を開いた時に1つ=保存の二度押し・応答落ちの再送でも同じ番号が返る(二重に作らない)
+function edOpenNew_(){
+  document.getElementById('edit').classList.add('open');
+  ED = { item_no: null, version: null, doc: {}, before: {}, isNew: true, opId: edOpId_() };
+  if(typeof curCat !== 'undefined' && curCat) ED.doc['カテゴリー'] = curCat;   // 今見ているカテゴリを最初から入れておく
+  document.getElementById('ed-title').textContent = '新しい品目を追加';
+  document.getElementById('ed-sub').textContent = '番号は保存した時に自動で付きます';
+  document.getElementById('ed-hist').style.display = 'none';
+  edRender_();
+  // カテゴリーは既存から選べるように(打ってもよい)
+  const cin = document.querySelector('#ed-body input[data-k="カテゴリー"]');
+  if(cin){ const cats = [...new Set((DATA.items||[]).map(i=>i.cat).filter(Boolean))].sort();
+    cin.setAttribute('list','ed-cat-dl'); cin.insertAdjacentHTML('afterend', '<datalist id="ed-cat-dl">' + cats.map(c=>'<option value="'+esc(c)+'">').join('') + '</datalist>');
+    if(ED.doc['カテゴリー']) cin.dispatchEvent(new Event('input')); }
+  const iin = document.querySelector('#ed-body input[data-k="項目"]'); if(iin) setTimeout(()=>iin.focus(), 50);
+}
 async function edOpen_(item_no){
   const box = document.getElementById('ed-body');
   document.getElementById('edit').classList.add('open');
   document.getElementById('ed-sub').textContent = '読み込み中…';
+  document.getElementById('ed-hist').style.display = '';
   box.innerHTML = '';
   try{
     // ⚠一覧の写しではなく**その場で取り直す**(古い版の上に書かないため)
@@ -643,6 +669,7 @@ async function edSave_(){
   if(bad.length){ edErr_('保存できません:\n・' + bad.join('\n・')); return; }
   const keys = Object.keys(doc);
   if(!keys.length){ edErr_('変えたところがありません'); return; }
+  if(ED && ED.isNew) return edSaveNew_(doc);
   const w = edWarn_(doc);
   if(w.length && !confirm('次の変更をします。よろしいですか？\n\n・' + w.join('\n・') + '\n\n（合計 ' + keys.length + '項目）')) return;
   btn.disabled = true; btn.textContent = '保存中…';
@@ -674,6 +701,30 @@ async function edSave_(){
     edErr_(e.message);
     if(/stale_version|他の人が先に/.test(e.message)) edOpen_(ED.item_no);   // 最新を読み直す
   }finally{ btn.disabled = false; btn.textContent = '保存'; }
+}
+
+async function edSaveNew_(diff){
+  const btn = document.getElementById('ed-save');
+  const doc = {}; Object.keys(diff).forEach(k=>{ if(diff[k] !== null) doc[k] = diff[k]; });   // 新規は空欄を送らない
+  const miss = ['カテゴリー','項目'].filter(k=>!doc[k]);
+  if(miss.length){ edErr_(miss.join('・') + ' を入れてください'); return; }
+  const dup = (DATA.items||[]).find(i=>i.item===doc['項目'] && (i.cat||'')===doc['カテゴリー']);
+  if(dup && !confirm('同じカテゴリーに「' + doc['項目'] + '」が既にあります(No.' + dup.no + ')。それでも新しく追加しますか？')) return;
+  btn.disabled = true; btn.textContent = '追加中…';
+  try{
+    const hdr = { apikey: SB.key, Authorization: 'Bearer ' + edToken_(), 'Content-Type':'application/json', Accept:'application/json' };
+    const r = await fetch(SB_ROWS.base + 'rpc/tanka_add_item', { method:'POST', headers: hdr,
+      body: JSON.stringify({ p_op_id: ED.opId, p_doc: doc, p_actor: edActor_() }) });
+    const txt = await r.text();
+    if(!r.ok){ let m = txt; try{ const j = JSON.parse(txt); m = j.message || j.hint || txt; }catch(_){} throw new Error('追加できませんでした:\n' + m); }
+    let no = null; try{ no = JSON.parse(txt); }catch(_){ no = txt; }
+    if(no === null || no === '' || !Number.isFinite(Number(no))) throw new Error('番号が返りませんでした(' + txt + ')');
+    document.getElementById('edit').classList.remove('open');
+    await load();
+    noteRefresh('＋ No.' + no + '「' + doc['項目'] + '」を追加しました');
+    alert('No.' + no + '「' + doc['項目'] + '」を追加しました');
+  }catch(e){ edErr_(e.message); }
+  finally{ btn.disabled = false; btn.textContent = '保存'; }
 }
 
 // 📜 履歴からの「戻す」
@@ -730,6 +781,7 @@ async function edRestore_(hrow){
 
 document.getElementById('ed-cancel').onclick = () => document.getElementById('edit').classList.remove('open');
 document.getElementById('ed-save').onclick = edSave_;
+document.getElementById('btn-new').onclick = edOpenNew_;
 document.getElementById('ed-hist').onclick = edHist_;
 document.getElementById('edit').addEventListener('click', e => { if(e.target.id === 'edit') document.getElementById('edit').classList.remove('open'); });
 
