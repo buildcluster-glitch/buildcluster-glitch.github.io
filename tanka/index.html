@@ -86,6 +86,7 @@
   <h1>📋 単価表</h1>
   <button id="btn-new" style="display:none" title="新しい品目を追加">＋新規</button>
   <button id="btn-reload">🔄 更新</button>
+  <button id="btn-login" title="ログイン(カレンダーと共通)">🔑</button>
   <button id="btn-settings">⚙</button>
 </header>
 <div class="toolbar">
@@ -111,6 +112,22 @@
   </div>
 </div></div>
 
+<div id="loginbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:21;align-items:flex-start;justify-content:center;padding:20px">
+  <div class="setbox">
+    <h2>🔑 ログイン</h2>
+    <div class="hint" style="margin-top:0">カレンダーと同じメールアドレス・パスワードです。一度ログインすれば、カレンダーと単価表の両方で使えます。</div>
+    <label>メールアドレス</label>
+    <input id="lg-email" type="email" autocomplete="username" placeholder="you@build-cluster.co.jp">
+    <label>パスワード</label>
+    <input id="lg-pass" type="password" autocomplete="current-password" placeholder="パスワード">
+    <div id="lg-err" style="color:#dc2626;font-size:12px;margin-top:6px;white-space:pre-wrap"></div>
+    <div class="btns">
+      <button class="cancel" id="lg-cancel">閉じる</button>
+      <button class="save" id="lg-go">ログイン</button>
+    </div>
+  </div>
+</div>
+
 <div id="settings">
   <div class="setbox">
     <h2>⚙ 接続設定</h2>
@@ -128,6 +145,73 @@
 
 <script>
 const LS = { url:'tanka_gas_url', token:'tanka_gas_token', moto:'tanka_moto' };
+// 🔑 2026-10-04(セキュリティ点検🟠7・山田「Bでログイン画面つけて」): 単価表にもログイン画面。
+//   保存先はカレンダーと同じ 'bc_sb_session'(同じサイト=どちらでログインしても両方で効く)。形もカレンダーの sbStoreToken_ と同じ。
+//   ⚠iPhoneのホーム画面に置いた単価表は保存場所が別なので、そこで一度ログインが要る。
+//   期限(1時間)が近ければ自動で延長する。⚠延長の直前にもう一度読み直す=カレンダーが先に延長していれば、その新しい方を使う
+//   (古い延長券で延長すると、相手側のログインが切れることがあるため)
+const TK_AUTH = { url:'https://grbqpsunbuduvvgdntzc.supabase.co', key:'sb_publishable__CEhKynIR-v9uGW_cBg_1g_wHyN-k8n', ls:'bc_sb_session' };
+function tkSession_(){ try{ const o = JSON.parse(localStorage.getItem(TK_AUTH.ls)||'null'); return (o && o.access_token) ? o : null; }catch(_){ return null; } }
+async function tkAuthFetch_(path, body){
+  const r = await fetch(TK_AUTH.url + '/auth/v1/' + path, { method:'POST',
+    headers:{ 'Content-Type':'application/json', apikey:TK_AUTH.key, Authorization:'Bearer '+TK_AUTH.key }, body: JSON.stringify(body||{}) });
+  let d = null; try{ d = await r.json(); }catch(_){}
+  if(!r.ok){ const e = new Error((d && (d.error_description || d.msg || d.error || d.message)) || ('HTTP '+r.status)); e.status = r.status; throw e; }
+  return d;
+}
+function tkStore_(d){
+  if(!d || !d.access_token) throw new Error('応答にトークンがありません');
+  const s = { access_token:d.access_token, refresh_token:d.refresh_token||'',
+    expires_at: d.expires_at || (Math.floor(Date.now()/1000) + (d.expires_in||3600)),
+    email: (d.user && d.user.email) || '', role: (d.user && d.user.app_metadata && d.user.app_metadata.bc_role) || '' };
+  try{ localStorage.setItem(TK_AUTH.ls, JSON.stringify(s)); }catch(_){}
+  tkRenderAuth_();
+  return s;
+}
+async function tkEnsureFresh_(){
+  let s = tkSession_(); if(!s || !s.expires_at) return s;
+  if(s.expires_at*1000 - Date.now() > 90000) return s;           // まだ1分半以上ある
+  s = tkSession_(); if(!s || !s.refresh_token) return s;           // 読み直す(カレンダーが先に延長したかもしれない)
+  if(s.expires_at*1000 - Date.now() > 90000) return s;
+  try{ return tkStore_(await tkAuthFetch_('token?grant_type=refresh_token', { refresh_token: s.refresh_token })); }
+  catch(e){
+    const now = tkSession_();                                      // 失敗しても、その間に他が延長していればそれで良い
+    if(now && now.access_token !== s.access_token) return now;
+    if(e && (e.status === 400 || e.status === 401)){ try{ localStorage.removeItem(TK_AUTH.ls); }catch(_){} tkRenderAuth_(); return null; }
+    return s;
+  }
+}
+function tkRenderAuth_(){
+  const b = document.getElementById('btn-login'); if(!b) return;
+  const s = tkSession_();
+  b.textContent = s ? '👤' : '🔑';
+  b.title = s ? ('ログイン中: ' + (s.email||'') + '(押すとログアウト)') : 'ログイン(カレンダーと共通)';
+}
+function tkOpenLogin_(){
+  const s = tkSession_();
+  if(s){ if(confirm('ログイン中: ' + (s.email||'') + '\nログアウトしますか？\n(カレンダーも同じログインなので、同じ端末のカレンダーもログアウトになります)')){
+      try{ fetch(TK_AUTH.url + '/auth/v1/logout', { method:'POST', headers:{ apikey:TK_AUTH.key, Authorization:'Bearer '+s.access_token } }).catch(()=>{}); }catch(_){}
+      try{ localStorage.removeItem(TK_AUTH.ls); }catch(_){} tkRenderAuth_(); load(); }
+    return; }
+  document.getElementById('lg-err').textContent = '';
+  document.getElementById('loginbox').style.display = 'flex';
+  setTimeout(()=>document.getElementById('lg-email').focus(), 50);
+}
+async function tkDoLogin_(){
+  const em = document.getElementById('lg-email').value.trim(), pw = document.getElementById('lg-pass').value;
+  const err = document.getElementById('lg-err'), btn = document.getElementById('lg-go');
+  if(!em || !pw){ err.textContent = 'メールアドレスとパスワードを入れてください'; return; }
+  btn.disabled = true; btn.textContent = 'ログイン中…'; err.textContent = '';
+  try{
+    tkStore_(await tkAuthFetch_('token?grant_type=password', { email: em, password: pw }));
+    document.getElementById('lg-pass').value = '';
+    document.getElementById('loginbox').style.display = 'none';
+    load();
+  }catch(e){
+    err.textContent = (e && e.status === 400) ? 'メールアドレスかパスワードが違います' : ('ログインできませんでした: ' + ((e && e.message) || e));
+  }finally{ btn.disabled = false; btn.textContent = 'ログイン'; }
+}
+
 let DATA = null; // {updatedAt, motoCols, items}
 let curCat = ''; // 選択中カテゴリ('' = すべて)
 const $ = s => document.querySelector(s);
@@ -143,6 +227,11 @@ function openSettings(){
 }
 function closeSettings(){ $('#settings').classList.remove('open'); }
 $('#btn-settings').onclick = openSettings;
+$('#btn-login').onclick = tkOpenLogin_;
+$('#lg-cancel').onclick = ()=>{ document.getElementById('loginbox').style.display = 'none'; };
+$('#lg-go').onclick = tkDoLogin_;
+$('#lg-pass').addEventListener('keydown', e=>{ if(e.key === 'Enter') tkDoLogin_(); });
+tkRenderAuth_();
 $('#set-cancel').onclick = closeSettings;
 $('#set-save').onclick = () => {
   localStorage.setItem(LS.url, $('#set-url').value.trim());
@@ -349,6 +438,7 @@ async function load(){
   if(!showedCache) $('#list').innerHTML = '<div class="empty">読み込み中…</div>';
 
   // ②-0 品目1行の tanka_items(段1・2026-09-13)。**段0が入るまでは null → 従来の②へ素通り**
+  try{ await tkEnsureFresh_(); }catch(_){}   // 🔑 期限が近ければ延長してから読む(期限切れの券で401→ログインなしの道へ落ちないように)
   const tR = Date.now();
   try{
     const rows = await fetchRowsFromDb_();
@@ -361,6 +451,7 @@ async function load(){
     console.warn('[tanka] 行直読みを見送り→従来経路へ:', (e && e.message) || e);
   }
 
+  if(!tkSession_()) noteRefresh('🔑 右上の🔑からログインすると、最新の単価が見られます');   // 2026-10-04: ログインなしの道は閉じる予定
   // ② Supabaseを直読み(実測0.2〜0.9秒)
   const t0 = Date.now();
   try{
@@ -442,7 +533,7 @@ function render(){
     return terms.every(t => hay.includes(t));
   });
   const up = DATA.updatedAt ? new Date(DATA.updatedAt) : null;
-  $('#meta').textContent = `${items.length}件${(curCat||terms.length)?` / 全${(DATA.items||[]).length}`:''}${up?` ／ 更新 ${up.getMonth()+1}/${up.getDate()} ${String(up.getHours()).padStart(2,'0')}:${String(up.getMinutes()).padStart(2,'0')}`:''} ／ 単価: ${motoLabel}`;
+  $('#meta').textContent = `${items.length}件${(curCat||terms.length)?` / 全${(DATA.items||[]).length}`:''}${up?` ／ 更新 ${up.getMonth()+1}/${up.getDate()} ${String(up.getHours()).padStart(2,'0')}:${String(up.getMinutes()).padStart(2,'0')}`:''} ／ 単価: ${motoLabel}${(typeof tkSession_==='function' && !tkSession_()) ? ' ／ 🔑未ログイン(右上の🔑から)' : ''}`;
   if(!items.length){ $('#list').innerHTML = '<div class="empty">該当なし<br><small>カテゴリ「すべて」や別の語で試してください</small></div>'; return; }
   // カテゴリ見出しでグルーピング(全件表示時に区切りを出す)
   const showGroups = !curCat;
