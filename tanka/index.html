@@ -245,7 +245,44 @@ $('#set-save').onclick = () => {
 const CACHE_KEY = 'tanka_cache_v1';
 function loadCache(){ try{ const o=JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); return (o&&o.data)?o:null; }catch(_){ return null; } }
 function saveCache(data){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify({data, at:new Date().toISOString()})); }catch(_){} }
-function applyData(data){ DATA = data; buildMotoSelect(); buildCats(); render(); if(data && data._rows) loadChangeHist_(); }
+function applyData(data){ DATA = data; buildMotoSelect(); buildCats(); render(); if(data && data._rows){ loadChangeHist_(); loadInternalTpl_(); } }
+// 📋 2026-10-05 山田「フローリングは出るけど内訳が出ない」: 見積アプリの「内訳テンプレ」(templates kind=internal)を単価表にも出す。
+//   紐づけは見積アプリと同じ= カテゴリーが triggerCategory と同じ ＋ 項目名に triggerItem が含まれる(全角/半角・空白は揃えて比べる)。
+//   ⚠読めるのはログインした3役だけ(RLS)。ログインしていない時は何も出さない
+let INTERNAL = [];
+async function loadInternalTpl_(){
+  try{
+    const tok = (typeof edToken_==='function') ? edToken_() : ''; if(!tok) return;
+    const r = await fetch(SB_ROWS.base + 'templates?select=name,content_json&kind=eq.internal&is_deleted=eq.false&order=name.asc', { headers:{ apikey: SB.key, Authorization:'Bearer ' + tok, Accept:'application/json' }, cache:'no-store' });
+    if(!r.ok) return;
+    const a = await r.json(); if(!Array.isArray(a)) return;
+    INTERNAL = a.map(x=>{ const c = (x && x.content_json) || {}; return { name: x.name || c.name || '', ti: String(c.triggerItem||'').trim(), tc: String(c.triggerCategory||''), rows: Array.isArray(c.rows) ? c.rows : [], moto: String(c['元請け']||''), migrated: !!c.migratedFromBuiltin }; })
+                .filter(t=>t.ti && t.rows.length)
+                .sort((p,q)=> q.ti.length - p.ti.length);   // 見積アプリ findInternalTemplate と同じ=長いキーワードから(6畳1F+板間 を 6畳1F より先に)
+    render();
+  }catch(e){ console.warn('[内訳テンプレ]', e && e.message); }
+}
+// ⚠見積アプリ findInternalTemplate(src/index.html)と**同じ決まり**: カテゴリーが合う・内蔵から移したテンプレは元請けが合う時だけ・
+//   「項目名がキーワードを含む」か「キーワードが項目名を含む」・**最初に合った1つだけ**(見積で展開される内訳と同じものを出す)
+function internalFor_(it){
+  if(!INTERNAL.length || !it || !it.item) return [];
+  const nm = String(it.item), cat = String(it.cat||'');
+  const moto = (document.getElementById('moto')||{}).value || '';
+  for(const t of INTERNAL){
+    if(t.tc && cat && t.tc !== cat) continue;
+    if(t.migrated && t.moto && moto && t.moto !== moto) continue;
+    if(nm.includes(t.ti) || t.ti.includes(nm)) return [t];
+  }
+  return [];
+}
+function internalHtml_(list){
+  return list.map(t=>{
+    let total = 0;
+    const rows = t.rows.map(r=>{ const q = Number(r.qty)||0, u = Number(r.unitPrice)||0, amt = q*u; total += amt;
+      return `<div class="prow"><span>${esc(r.item||'')} <small style="color:#64748b">${q}${esc(r.unit||'')} × ${fmt(u)}</small></span><b>${fmt(amt)}</b></div>`; }).join('');
+    return `<div class="sec">📋 内訳「${esc(t.name)}」(見積アプリの内訳テンプレ)</div>${rows}<div class="prow"><span><b>内訳の合計</b></span><b>${fmt(total)}</b></div>`;
+  }).join('');
+}
 // 📜 2026-10-02 山田「変更履歴も行に表示させたい」: 品目ごとの「いつ・誰が・何を」を一覧の行と詳細に出す。
 //   取るのは**最初の流し込み(9/21)より後の変更だけ**(それ以前は全品目が取り込みで1回変わっているだけ=雑音)。
 //   tanka_items_history は「置き換えられた古い版」を持つ→古い版と次の版を並べて差分を作る。最新の版は tanka_items から。
@@ -549,7 +586,7 @@ function render(){
     const hatchuRows = (DATA.hatchuCols||[]).filter(col => (it.hatchu||{})[col] != null).map(col => `<div class="prow hatchu"><span>${esc(col)}</span><b>${fmt(it.hatchu[col])}</b></div>`).join('');
     html += `<div class="card">
       <div class="card-head" data-i="${i}">
-        <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div>${(HIST[it.no]&&HIST[it.no][0]) ? `<div class="chg">✏ ${esc(histWhen_(HIST[it.no][0].at))} ${esc(HIST[it.no][0].actor)}：${esc(histLine_(HIST[it.no][0], 2))}</div>` : ''}</div>
+        <div class="nm"><div class="item">${esc(it.item)}</div><div class="cat">${esc(it.cat)}${it.unit?' / '+esc(it.unit):''}${it.partNo?' / '+esc(it.partNo):''}</div>${internalFor_(it).length ? `<div class="chg" style="color:#0369a1">📋 内訳あり(タップで表示)</div>` : ''}${(HIST[it.no]&&HIST[it.no][0]) ? `<div class="chg">✏ ${esc(histWhen_(HIST[it.no][0].at))} ${esc(HIST[it.no][0].actor)}：${esc(histLine_(HIST[it.no][0], 2))}</div>` : ''}</div>
         <div class="price">${fmt(p)}<small>${esc(motoLabel)}</small></div>
         ${canEd ? `<button class="edit" data-no="${esc(it.no)}" title="この単価を直す">✏</button>` : ''}
       </div>
@@ -561,6 +598,7 @@ function render(){
         <div class="prow kyaku"><span>家主単価</span><b>${fmt(it.owner)}</b></div>
         ${hatchuRows?`<div class="sec">🛠 発注単価(業者への発注金額)</div>${hatchuRows}`:''}
         ${it.material != null ? `<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
+        ${(()=>{ const l = internalFor_(it); return l.length ? internalHtml_(l) : ''; })()}
         ${HIST[it.no] ? `<div class="sec">📜 変更履歴</div>${HIST[it.no].map(h=>`<div class="hrow"><small>${esc(histWhen_(h.at))} ${esc(h.actor)}</small><br>${esc(histLine_(h, 99))}</div>`).join('')}` : ''}
       </div>
     </div>`;
