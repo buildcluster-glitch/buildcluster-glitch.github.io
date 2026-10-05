@@ -372,7 +372,7 @@ async function fetchRowsFromDb_(){
     const cols = await rc.json();
     if(!Array.isArray(cols)) throw new Error('cols 形が違う');
     // 品目(1000件ずつ・総件数と受信数の一致を必ず確かめる)
-    const sel = 'item_no,cat,item,unit,prices,hatchu,tenant,owner,material,part_no,updated_at,actor,version';   // version=編集の楽観ロックに要る(段3)
+    const sel = 'item_no,cat,item,unit,prices,hatchu,tenant,owner,material,part_no,updated_at,actor,version,biko:doc->>' + encodeURIComponent('備考');   // 備考=検索と詳細に使う(2026-10-05)   // version=編集の楽観ロックに要る(段3)
     const all = []; let from = 0, total = null;
     for(;;){
       const r = await fetch(SB_ROWS.base + 'tanka_items?select=' + sel + '&is_deleted=eq.false&order=item_no.asc',
@@ -400,7 +400,7 @@ async function fetchRowsFromDb_(){
       return { no:r.item_no, cat:r.cat||'', item:r.item||'', unit:r.unit||'',
                prices:r.prices||{}, hatchu:r.hatchu||{},
                tenant:r.tenant, owner:r.owner, material:r.material, partNo:r.part_no||'',
-               _updatedAt:r.updated_at||'', _actor:r.actor||'', _version:r.version };
+               biko:r.biko||'', _updatedAt:r.updated_at||'', _actor:r.actor||'', _version:r.version };
     });
     const pick = k => cols.filter(c=>c.kind===k).map(c=>c.name);
     return { updatedAt: newest || new Date().toISOString(),
@@ -566,7 +566,9 @@ function render(){
   let items = (DATA.items||[]);
   if(curCat) items = items.filter(it => (it.cat||'(未分類)')===curCat);
   if(terms.length) items = items.filter(it => {
-    const hay = (it.item+' '+it.cat+' '+(it.partNo||'')).toLowerCase();
+    // 🔎 2026-10-05 山田「カーペットで検索してもヒットしない」: 備考と内訳テンプレの行名も検索の対象に(項目名に無い語でも引ける)
+    const __int = (typeof internalFor_==='function') ? internalFor_(it) : [];
+    const hay = (it.item+' '+it.cat+' '+(it.partNo||'')+' '+(it.biko||'')+' '+__int.map(t=>t.name+' '+t.rows.map(r=>r.item||'').join(' ')).join(' ')).toLowerCase();
     return terms.every(t => hay.includes(t));
   });
   const up = DATA.updatedAt ? new Date(DATA.updatedAt) : null;
@@ -598,6 +600,7 @@ function render(){
         <div class="prow kyaku"><span>家主単価</span><b>${fmt(it.owner)}</b></div>
         ${hatchuRows?`<div class="sec">🛠 発注単価(業者への発注金額)</div>${hatchuRows}`:''}
         ${it.material != null ? `<div class="sec">🧱 材料費</div><div class="prow"><span>材料費</span><b>${fmt(it.material)}</b></div>`:''}
+        ${it.biko ? `<div class="sec">📝 備考</div><div class="prow"><span style="white-space:pre-wrap">${esc(it.biko)}</span></div>` : ''}
         ${(()=>{ const l = internalFor_(it); return l.length ? internalHtml_(l) : ''; })()}
         ${HIST[it.no] ? `<div class="sec">📜 変更履歴</div>${HIST[it.no].map(h=>`<div class="hrow"><small>${esc(histWhen_(h.at))} ${esc(h.actor)}</small><br>${esc(histLine_(h, 99))}</div>`).join('')}` : ''}
       </div>
