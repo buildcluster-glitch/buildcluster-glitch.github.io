@@ -400,6 +400,8 @@
 
 <!-- 対応予定時刻 候補(カレンダーアプリと統一: 8:00〜18:00 15分刻み + フリー候補)。自由入力も可 -->
 <datalist id="dl-resp-time"></datalist>
+<script src="projection.js"></script>  <!-- v1.4.1119: 台帳DBへ直接保存する時に射影も作る -->
+<script src="db_direct.js"></script>   <!-- v1.4.1119: 進捗の編集を台帳DBへ直接(自分が変えた欄だけ) -->
 <script>
 (function(){
   var dl = document.getElementById('dl-resp-time');
@@ -505,9 +507,129 @@ function loadSettings() {
 // ============================================================
 const IS_WEB_VIEW = !window.bcApi;
 // 📌 Web閲覧版の版印: gantt公開のたびに上げる(バーに表示=端末がどの版を読んでいるか一目で検証できる)
-const WEBVIEW_REV = 'r4 (7/19 フル再同期版)';
+const WEBVIEW_REV = 'r5 (10/10 ログイン必須・台帳DB直読み)';
+// ===== 🔑 Web閲覧版のログイン(2026-10-10 山田「(工程表の公開ページは)ログイン必須にして」) =====
+//   旧: 公開ページは誰でも開け、データはGASの合言葉(URL+トークン)を端末に置いて読んでいた。
+//   新: カレンダー・単価表と同じログイン(同じサイト=保存先 'bc_sb_session' を共有)。ログインしていなければ何も出さない。
+//       データは台帳DBから直接(db_direct.js の読みだけを使う)。GASの合言葉は使わない・置かない。
+//   ⚠ログインの期限は単価表・カレンダーと同じ「秒」で持つ。db_direct.js の ensureFresh(ミリ秒で書く)は**使わない**
+//     (使うとカレンダーのログインの期限の読み方が狂う)。延長は単価表の tkEnsureFresh_ と同じ作り。
+const WV_AUTH = { url: 'https://grbqpsunbuduvvgdntzc.supabase.co', key: 'sb_publishable__CEhKynIR-v9uGW_cBg_1g_wHyN-k8n', ls: 'bc_sb_session' };
+function _wvSession() { try { const o = JSON.parse(localStorage.getItem(WV_AUTH.ls) || 'null'); return (o && o.access_token) ? o : null; } catch (_) { return null; } }
+async function _wvAuthFetch(path, body) {
+  const r = await fetch(WV_AUTH.url + '/auth/v1/' + path, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: WV_AUTH.key, Authorization: 'Bearer ' + WV_AUTH.key }, body: JSON.stringify(body || {}) });
+  let d = null; try { d = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((d && (d.error_description || d.msg || d.error || d.message)) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return d;
+}
+function _wvStore(d) {
+  if (!d || !d.access_token) throw new Error('応答にトークンがありません');
+  const ss = { access_token: d.access_token, refresh_token: d.refresh_token || '',
+    expires_at: d.expires_at || (Math.floor(Date.now() / 1000) + (d.expires_in || 3600)),
+    email: (d.user && d.user.email) || '', role: (d.user && d.user.app_metadata && d.user.app_metadata.bc_role) || '' };
+  try { localStorage.setItem(WV_AUTH.ls, JSON.stringify(ss)); } catch (_) {}
+  return ss;
+}
+async function _wvEnsureFresh() {
+  let ss = _wvSession(); if (!ss || !ss.expires_at) return ss;
+  if (ss.expires_at * 1000 - Date.now() > 90000) return ss;
+  ss = _wvSession(); if (!ss || !ss.refresh_token) return ss;          // 読み直す(カレンダーが先に延長したかもしれない)
+  if (ss.expires_at * 1000 - Date.now() > 90000) return ss;
+  try { return _wvStore(await _wvAuthFetch('token?grant_type=refresh_token', { refresh_token: ss.refresh_token })); }
+  catch (e) {
+    const now = _wvSession();
+    if (now && now.access_token !== ss.access_token) return now;
+    if (e && (e.status === 400 || e.status === 401)) { try { localStorage.removeItem(WV_AUTH.ls); } catch (_) {} return null; }
+    return ss;
+  }
+}
+// 台帳DBから読む(Web閲覧版の「☁ 全件同期」と開いた時の差分)。水位=台帳DBの更新時刻の最大−60秒(端末の時計を混ぜない)
+const _WV_DB_SYNC_KEY = 'gantt_db_sync_at_v1';
+async function _wvFetchFromDb(forceAll) {
+  const btn = document.getElementById('btn-reload');
+  const orig = btn ? btn.textContent : '';
+  const ss = await _wvEnsureFresh();
+  if (!ss) { _showSaveToast('🔑 ログインしてください(カレンダーと同じメールアドレス・パスワード)', 'error'); return; }
+  const dd = (typeof bcDbDirect !== 'undefined') ? bcDbDirect : null;
+  if (!dd || typeof dd.loadMonthAll !== 'function') { _showSaveToast('⚠ 台帳DBの部品が読み込めませんでした(ページを読み直してください)', 'error'); return; }
+  try { await dd.refresh(); } catch (_) {}
+  if (!dd.canRead()) { _showSaveToast('⚠ 台帳を読めませんでした(ログインし直してください)', 'error'); return; }
+  const water = forceAll ? '' : (localStorage.getItem(_WV_DB_SYNC_KEY) || '');
+  const waterT = water ? new Date(water).getTime() : 0;
+  if (btn) btn.disabled = true;
+  let total = 0, maxT = waterT;
+  try {
+    _showSaveToast(waterT ? '⏳ 差分確認中…' : '⏳ 台帳を読み込み中…', 'saving');
+    const months = await dd.loadMonths();
+    if (!Array.isArray(months)) throw new Error('月の一覧が読めません');
+    const now = new Date(); const lim = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const limKey = lim.getFullYear() + '-' + String(lim.getMonth() + 1).padStart(2, '0');   // 直近12か月(工程表に要るのは動いている工事)
+    let targets = months.filter(m => m && m.month && m.month >= limKey);
+    if (waterT) targets = targets.filter(m => !m.newestModifiedAt || new Date(m.newestModifiedAt).getTime() > waterT);
+    targets.sort((a, b) => a.month.localeCompare(b.month));
+    for (let i = 0; i < targets.length; i++) {
+      const m = targets[i].month;
+      if (btn) btn.textContent = `⏳ ${i + 1}/${targets.length}: ${m}`;
+      const r = await dd.loadMonthAll(m);
+      if (!r) continue;
+      for (const it of r.items) {
+        const t = it.modifiedAt ? new Date(it.modifiedAt).getTime() : 0;
+        if (t > maxT) maxT = t;
+        if (waterT && t && t <= waterT) continue;
+        const d = r.docs.get(it.name); if (!d || !d.id) continue;
+        d._driveMonth = m;
+        allEstimates[d.id] = d; total++;
+      }
+    }
+    saveEstimates(allEstimates);
+    if (maxT) { try { localStorage.setItem(_WV_DB_SYNC_KEY, new Date(maxT - 60000).toISOString()); } catch (_) {} }
+    _showSaveToast(waterT ? `✅ 差分 ${total}件を更新` : `✅ ${targets.length}か月・${total}件を読み込みました`);
+    reload();
+  } catch (e) {
+    console.error('[Web閲覧版 台帳DB]', e);
+    _showSaveToast('✗ 読み込み失敗: ' + ((e && e.message) || e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
 
-// GAS Web App 経由で見積を Drive 台帳に push
+// ★v1.4.1119(10/7): まず台帳DBへ直接、**自分が変えた欄だけ**を最新に載せて保存する。
+//   旧は手元の見積を丸ごと GAS の save-ledger へ送っていた(読み込んだ時刻も送らない=止める仕組みが何も無い)。
+//   GASは版を振り直すのでDBの照合も効かず、手元が古いと**他の人の入力を丸ごと上書き**しえた。
+//   土台=この画面が読み込んだ時の中身(reload で覚える)。相手も同じ欄を変えていたら**相手の値を残して知らせる**。
+//   本来DB直結の端末は、書けなくても**GASへ落とさない**(ログインし直してもらう)。
+async function _prgPushToLedger(est) {
+  const dd = (typeof bcDbDirect !== 'undefined') ? bcDbDirect : null;
+  if (dd && typeof dd.pushChanges === 'function' && !IS_WEB_VIEW) {
+    if (!window._prgPushBusy) window._prgPushBusy = new Set();
+    window._prgPushBusy.add(est.id);
+    try {
+      const base = window._prgBase && window._prgBase.get(est.id);
+      let r = null;
+      try { r = await dd.pushChanges(est.id, est, { base }); } catch (e) { r = { ok: false, code: 'error:' + ((e && e.message) || '') }; }
+      if (r && r.ok && r.doc) {
+        const keep = { _driveFileId: r.doc._driveFileId || est._driveFileId || '', _driveMonth: r.doc._driveMonth || est._driveMonth || '' };
+        const merged = Object.assign({}, r.doc, keep);
+        allEstimates[est.id] = merged;
+        if (window._prgBase) window._prgBase.set(est.id, JSON.stringify({ meta: merged.meta || {}, lines: merged.lines || [] }));
+        if (r.kept && r.kept.length) {
+          const nm = ((merged.meta && merged.meta.bukken) || '') + ' ' + ((merged.meta && merged.meta.roomNo) || '');
+          setTimeout(() => _showSaveToast('↔ ' + nm.trim() + ': ' + r.kept.map(p => String(p).replace(/^meta\.(hatchuOrder\.|taikyo\.)?/, '')).join('・') + ' は他の人が先に変えていたので、そちらを残しました', 'error'), 2700);
+          window._prgKeptRerender = true;
+        }
+        return { ok: true, fileId: keep._driveFileId, month: keep._driveMonth };
+      }
+      if (dd.wasOn && dd.wasOn()) {
+        throw new Error((r && r.code === 'nologin') ? 'ログインが切れています。見積アプリの設定タブからログインし直してください'
+          : (r && r.code === 'nobase') ? 'この行は読み込み直してから入力してください'
+          : ('台帳に保存できませんでした(' + ((r && r.code) || '不明') + ')'));
+      }
+    } finally { window._prgPushBusy.delete(est.id); }
+  }
+  return await gasSaveLedgerFromProgress(est);
+}
+// GAS Web App 経由で見積を Drive 台帳に push(v1.4.1119〜 直結を使えない端末だけ)
 async function gasSaveLedgerFromProgress(est) {
   if (IS_WEB_VIEW) return null; // Web閲覧版はDrive台帳に書かない(読み取り専用)
   const settings = loadSettings();
@@ -592,6 +714,7 @@ function _updateSyncBtnTitle() {
   }
 }
 async function fetchAllFromDrive(forceAll) {
+  if (IS_WEB_VIEW) return _wvFetchFromDb(forceAll);   // v10/10: 公開ページはログイン+台帳DBだけ
   const btn = document.getElementById('btn-reload');
   if (!btn) return;
   const settings = loadSettings();
@@ -751,20 +874,23 @@ function autoPushFromProgress(id) {
     autoPushFromProgress._timer = null;
     const ids = Array.from(autoPushFromProgress._pending);
     autoPushFromProgress._pending = new Set();
-    _showSaveToast('☁ Drive保存中...', 'saving');
-    let ok = 0, fail = 0, gasUnset = false;
+    _showSaveToast('☁ 台帳に保存中...', 'saving');
+    let ok = 0, fail = 0, gasUnset = false, lastErr = '';
+    window._prgKeptRerender = false;
     for (const pid of ids) {
       const est = allEstimates[pid];
       if (!est) continue;
       try {
-        const r = await gasSaveLedgerFromProgress(est);
-        if (r && r.fileId) { est._driveFileId = r.fileId; est._driveMonth = r.month; est._driveSavedAt = new Date().toISOString(); ok++; }
+        const r = await _prgPushToLedger(est);   // v1.4.1119: 台帳DBへ直接(変えた欄だけ)
+        const _c = allEstimates[pid] || est;      // 直接保存した時は台帳DBの最新に入れ替わっている
+        if (r && (r.ok || r.fileId)) { _c._driveFileId = r.fileId || _c._driveFileId || ''; _c._driveMonth = r.month || _c._driveMonth || ''; _c._driveSavedAt = new Date().toISOString(); ok++; }
         else { gasUnset = true; }
-      } catch (e) { console.warn('[progress auto push 失敗]', pid, e); fail++; }
+      } catch (e) { console.warn('[progress auto push 失敗]', pid, e); fail++; lastErr = (e && e.message) || ''; }
     }
     saveEstimates(allEstimates);
+    if (window._prgKeptRerender && typeof renderProgress === 'function') { try { renderProgress(); } catch (_) {} }
     if (gasUnset && !ok && !fail) { _showSaveToast('⚠ GAS未設定: ローカル保存のみ', 'error'); return; }
-    if (fail) { _showSaveToast(`⚠ Drive保存 ${ok}件成功 / ${fail}件失敗`, 'error'); return; }
+    if (fail) { _showSaveToast(lastErr ? `⚠ ${lastErr}(${fail}件・このPCには残っています)` : `⚠ 台帳保存 ${ok}件成功 / ${fail}件失敗`, 'error'); return; }
     _showSaveToast(`✅ Drive保存済${ok > 1 ? (' ' + ok + '件') : ''}(他PCに反映されます)`, 'success');
     // data-info も短時間書換え
     const info = document.getElementById('data-info');
@@ -1541,6 +1667,21 @@ function isProgressVisible(e) {
 
 function reload() {
   allEstimates = loadEstimates();
+  // ★v1.4.1119: **読み込んだ時の中身を覚える**(保存の時に「自分が変えた欄」だけを見分ける土台)。
+  //   ⚠下の自動変換(旧ステータスの読み替え等)より**前**に撮る=変換した分も、その行を保存する時に一緒に送る(従来どおり)。
+  //   ⚠送信待ち/送信中の行は土台を入れ替えない(入れ替えると、まだ送っていない自分の編集が土台に混ざって送られなくなる)。
+  try {
+    const _pend = (typeof autoPushFromProgress === 'function' && autoPushFromProgress._pending) || new Set();
+    const _busy = window._prgPushBusy || new Set();
+    const _old = window._prgBase || new Map();
+    const _nb = new Map();
+    Object.values(allEstimates).forEach(e => {
+      if (!e || !e.id) return;
+      if ((_pend.has(e.id) || _busy.has(e.id)) && _old.has(e.id)) _nb.set(e.id, _old.get(e.id));
+      else _nb.set(e.id, JSON.stringify({ meta: e.meta || {}, lines: e.lines || [] }));
+    });
+    window._prgBase = _nb;
+  } catch (e) { console.warn('[v1.4.1119] 読み込み時の土台を覚えられませんでした', e); }
   // v1.4.120: 旧 workflowStatus(未対応/アポ済/対応中/施工指示あり/見積提出済/完了)を新体系に変換
   // v1.4.140: 旧 status(対応中/アポ済/受注/施工指示あり)も新体系に変換
   let _autoApoChanged = false;
@@ -3212,9 +3353,13 @@ function openKintonePending(){
 // ============================================================
 function initWebView() {
   document.body.classList.add('web-view');
+  // 🔑 10/10: GASの合言葉は使わない・端末にも残さない(旧版が mitsumori_settings_v1 に写していた分を消す)
+  try { const _st = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); if (_st.gasSyncUrl || _st.gasSyncToken) { delete _st.gasSyncUrl; delete _st.gasSyncToken; localStorage.setItem(SETTINGS_KEY, JSON.stringify(_st)); } } catch (_) {}
+  const _wvLogged = !!_wvSession();
   // 🗄 台帳キャッシュをIDBから復元＋旧localStorageキャッシュはIDBへ移行して削除(共有5MB枠の解放)。
   //    自動差分同期(300ms後)と競合しないよう、置換ではなく「無いidだけ埋める」(同期が取った方が常に新しい)
   (async () => {
+    if (!_wvLogged) return;   // 🔑 ログインしていない時は、端末に残った写しも出さない
     try {
       let seed = null;
       try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) seed = JSON.parse(raw) || null; } catch (e) {}
@@ -3242,38 +3387,40 @@ function initWebView() {
       if (added) renderProgress();
     } catch (e) { console.warn('[gantt-idb] boot', e); }
   })();
-  // 設定の自動採用(tanka方式の同一オリジンlocalStorage共有)
-  let s = loadSettings();
-  if (!(s.gasSyncUrl || '').trim()) {
-    const u = (localStorage.getItem('tanka_gas_url') || '').trim();
-    const t = (localStorage.getItem('tanka_gas_token') || '').trim();
-    if (u && t) {
-      s.gasSyncUrl = u; s.gasSyncToken = t;
-      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) {}
-    }
-  }
-  const hasSettings = !!((s.gasSyncUrl || '').trim() && (s.gasSyncToken || '').trim());
-  // 上部バー
+  // 🔑 上部バー: ログイン中=表示のみの案内+ログアウト / 未ログイン=ログイン欄(カレンダーと同じメールアドレス・パスワード)
   const bar = document.createElement('div');
   bar.id = 'webview-bar';
-  if (hasSettings) {
-    bar.innerHTML = '<span>📱 <b>Web閲覧版</b>(表示のみ) — 編集はPCアプリで。「☁ 全件同期」で最新化 <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span></span>';
+  const _ss = _wvSession();
+  if (_ss) {
+    bar.innerHTML = '<span>📱 <b>Web閲覧版</b>(表示のみ) — 編集はPCアプリで。「☁ 全件同期」で最新化 <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span></span>' +
+      '<span style="margin-left:auto; font-size:11px;">👤 ' + escapeHtml(_ss.email || '') + ' <button id="wv-logout">ログアウト</button></span>';
   } else {
-    bar.innerHTML = '<span>📱 <b>Web閲覧版</b> <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span> ⚙ 同期設定(PCアプリの設定タブと同じ値):</span>' +
-      '<input id="wv-url" type="text" placeholder="GAS同期URL" style="flex:1; min-width:180px;">' +
-      '<input id="wv-token" type="password" placeholder="トークン" style="width:110px;">' +
-      '<button id="wv-save">保存して同期</button>';
+    bar.innerHTML = '<span>🔑 <b>ログインが必要です</b>(カレンダーと同じメールアドレス・パスワード) <span style="opacity:.55;font-size:10px">' + WEBVIEW_REV + '</span></span>' +
+      '<input id="wv-email" type="email" autocomplete="username" placeholder="メールアドレス" style="flex:1; min-width:170px;">' +
+      '<input id="wv-pass" type="password" autocomplete="current-password" placeholder="パスワード" style="width:130px;">' +
+      '<button id="wv-login">ログイン</button><span id="wv-err" style="color:#fecaca; font-size:11px;"></span>';
   }
   document.body.prepend(bar);
-  if (!hasSettings) {
-    document.getElementById('wv-save').addEventListener('click', () => {
-      const u = (document.getElementById('wv-url').value || '').trim();
-      const t = (document.getElementById('wv-token').value || '').trim();
-      if (!u || !t) { alert('URLとトークンを両方入れてください'); return; }
-      const cur = loadSettings(); cur.gasSyncUrl = u; cur.gasSyncToken = t;
-      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cur)); } catch (e) {}
-      location.reload();
+  if (_ss) {
+    document.getElementById('wv-logout').addEventListener('click', () => {
+      if (!confirm('ログアウトしますか？\n(カレンダー・単価表も同じログインなので、この端末ではそちらもログアウトになります)')) return;
+      try { fetch(WV_AUTH.url + '/auth/v1/logout', { method: 'POST', headers: { apikey: WV_AUTH.key, Authorization: 'Bearer ' + _ss.access_token } }).catch(() => {}); } catch (_) {}
+      try { localStorage.removeItem(WV_AUTH.ls); localStorage.removeItem(_WV_DB_SYNC_KEY); } catch (_) {}
+      try { indexedDB.deleteDatabase('bc-gantt'); } catch (_) {}   // 端末に残した台帳の写しも消す
+      setTimeout(() => location.reload(), 300);
     });
+  } else {
+    const go = async () => {
+      const em = (document.getElementById('wv-email').value || '').trim(), pw = document.getElementById('wv-pass').value || '';
+      const err = document.getElementById('wv-err'), b = document.getElementById('wv-login');
+      if (!em || !pw) { err.textContent = 'メールアドレスとパスワードを入れてください'; return; }
+      b.disabled = true; b.textContent = 'ログイン中…'; err.textContent = '';
+      try { _wvStore(await _wvAuthFetch('token?grant_type=password', { email: em, password: pw })); location.reload(); }
+      catch (e) { err.textContent = (e && e.status === 400) ? 'メールアドレスかパスワードが違います' : ('ログインできませんでした: ' + ((e && e.message) || e)); }
+      finally { b.disabled = false; b.textContent = 'ログイン'; }
+    };
+    document.getElementById('wv-login').addEventListener('click', go);
+    document.getElementById('wv-pass').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
   }
   // ビュー既定=ガント(?view=指定が無い時だけ)
   try {
@@ -3285,7 +3432,7 @@ function initWebView() {
     }
   } catch (e) {}
   // 開いた瞬間に差分同期(設定済みのみ・失敗してもローカルキャッシュで表示継続)
-  if (hasSettings) setTimeout(() => { try { fetchAllFromDrive(false); } catch (e) {} }, 300);
+  if (_wvLogged) setTimeout(() => { try { fetchAllFromDrive(false); } catch (e) {} }, 300);
 }
 
 // 初期ロード
