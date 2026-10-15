@@ -168,7 +168,12 @@ function tkStore_(d){
   tkRenderAuth_();
   return s;
 }
+// 🔑 2026-10-15: カレンダー・工程表と同じ順番待ち(navigator.locks 'bc_sb_refresh')で延長する=同時に頼んで断られない
 async function tkEnsureFresh_(){
+  if(typeof navigator!=='undefined' && navigator.locks && navigator.locks.request) return navigator.locks.request('bc_sb_refresh', tkEnsureFreshInner_);
+  return tkEnsureFreshInner_();
+}
+async function tkEnsureFreshInner_(){
   let s = tkSession_(); if(!s || !s.expires_at) return s;
   if(s.expires_at*1000 - Date.now() > 90000) return s;           // まだ1分半以上ある
   s = tkSession_(); if(!s || !s.refresh_token) return s;           // 読み直す(カレンダーが先に延長したかもしれない)
@@ -177,7 +182,10 @@ async function tkEnsureFresh_(){
   catch(e){
     const now = tkSession_();                                      // 失敗しても、その間に他が延長していればそれで良い
     if(now && now.access_token !== s.access_token) return now;
-    if(e && (e.status === 400 || e.status === 401)){ try{ localStorage.removeItem(TK_AUTH.ls); }catch(_){} tkRenderAuth_(); return null; }
+    if(e && (e.status === 400 || e.status === 401)){
+      await new Promise(r=>setTimeout(r, 1500));                   // 少し待って読み直す(別の画面の延長が入るかもしれない)
+      const again = tkSession_(); if(again && again.access_token !== s.access_token) return again;
+      try{ localStorage.removeItem(TK_AUTH.ls); }catch(_){} tkRenderAuth_(); return null; }
     return s;
   }
 }
