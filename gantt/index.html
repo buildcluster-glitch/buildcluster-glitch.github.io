@@ -507,7 +507,7 @@ function loadSettings() {
 // ============================================================
 const IS_WEB_VIEW = !window.bcApi;
 // 📌 Web閲覧版の版印: gantt公開のたびに上げる(バーに表示=端末がどの版を読んでいるか一目で検証できる)
-const WEBVIEW_REV = 'r5 (10/10 ログイン必須・台帳DB直読み)';
+const WEBVIEW_REV = 'r6 (10/15 ログイン延長をカレンダー・単価表と同じ順番待ちに)';
 // ===== 🔑 Web閲覧版のログイン(2026-10-10 山田「(工程表の公開ページは)ログイン必須にして」) =====
 //   旧: 公開ページは誰でも開け、データはGASの合言葉(URL+トークン)を端末に置いて読んでいた。
 //   新: カレンダー・単価表と同じログイン(同じサイト=保存先 'bc_sb_session' を共有)。ログインしていなければ何も出さない。
@@ -531,7 +531,13 @@ function _wvStore(d) {
   try { localStorage.setItem(WV_AUTH.ls, JSON.stringify(ss)); } catch (_) {}
   return ss;
 }
+// 🔑 2026-10-15(カレンダーセッション依頼): カレンダー・単価表と同じ順番待ち(navigator.locks 'bc_sb_refresh')で延長する
+//   =同じ端末の別の画面と同時に延長を頼んで断られない。断られても、すぐにはログインを消さない(下の catch)。
 async function _wvEnsureFresh() {
+  if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) return navigator.locks.request('bc_sb_refresh', _wvEnsureFreshInner);
+  return _wvEnsureFreshInner();
+}
+async function _wvEnsureFreshInner() {
   let ss = _wvSession(); if (!ss || !ss.expires_at) return ss;
   if (ss.expires_at * 1000 - Date.now() > 90000) return ss;
   ss = _wvSession(); if (!ss || !ss.refresh_token) return ss;          // 読み直す(カレンダーが先に延長したかもしれない)
@@ -540,7 +546,11 @@ async function _wvEnsureFresh() {
   catch (e) {
     const now = _wvSession();
     if (now && now.access_token !== ss.access_token) return now;
-    if (e && (e.status === 400 || e.status === 401)) { try { localStorage.removeItem(WV_AUTH.ls); } catch (_) {} return null; }
+    if (e && (e.status === 400 || e.status === 401)) {
+      await new Promise(r => setTimeout(r, 1500));                       // 少し待って読み直す(別の画面の延長が入るかもしれない)
+      const again = _wvSession(); if (again && again.access_token !== ss.access_token) return again;
+      try { localStorage.removeItem(WV_AUTH.ls); } catch (_) {} return null;
+    }
     return ss;
   }
 }

@@ -239,6 +239,24 @@
     } catch (e) { console.warn('[DB直結] 元請けの読み込みに失敗', e && e.message); return null; }
   }
 
+  // v1.4.1127: 請求書の「依頼元」用。元請け(=宛名)に加えて、現場の元請(立会情報 meta.taikyo.motouke)も返す。
+  //   戻り: {id: {motouke, genba}} / null(読めない時・呼び出し側は表示を諦める)
+  async function loadIraiByIds(ids) {
+    if (!canReadSync()) return null;
+    var list = (ids || []).filter(function (x) { return /^E[0-9]{8}_[0-9]{6}_[A-Za-z0-9]+$/.test(String(x || '')); });
+    if (!list.length) return {};
+    try {
+      var out = {};
+      for (var i = 0; i < list.length; i += 80) {
+        var part = list.slice(i, i + 80);
+        var rows = await rest('anken?select=id,motouke,genba:doc->meta->taikyo->>motouke&id=in.(' + part.map(encodeURIComponent).join(',') + ')');
+        if (!Array.isArray(rows)) return null;
+        rows.forEach(function (r) { if (r && r.id) out[r.id] = { motouke: r.motouke || '', genba: r.genba || '' }; });
+      }
+      return out;
+    } catch (e) { console.warn('[DB直結] 依頼元の読み込みに失敗', e && e.message); return null; }
+  }
+
   async function loadMonths() {
     if (!canReadSync()) return null;
     try {
@@ -879,6 +897,37 @@
     return { ok: false, code: 'unknown:' + JSON.stringify(r).slice(0, 80) };
   }
 
+  // v1.4.1126(migration 083): この端末のアプリの版数を DB に残す(誰がどの版かを、聞いて回らずに確かめるため)。
+  //   名前はログインから DB 側で決める。端末の区別は端末ごとの乱数(localStorage 'bc_device_id')。
+  //   失敗しても何もしない(版数の記録は「あれば助かる」層・保存や表示を止めない)。戻り: 'ok' / null
+  async function appSeen(ver) {
+    try {
+      ver = String(ver || '').trim(); if (!/^[0-9]{1,4}(\.[0-9]{1,6}){1,3}$/.test(ver)) return null;
+      await ensureFresh();
+      if (!token()) return null;
+      var dev = '';
+      try { dev = localStorage.getItem('bc_device_id') || ''; } catch (e) {}
+      if (!/^[A-Za-z0-9_-]{4,40}$/.test(dev)) {
+        dev = 'pc-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+        try { localStorage.setItem('bc_device_id', dev); } catch (e) {}
+      }
+      return await rest('rpc/bc_app_seen', { method: 'POST', body: JSON.stringify({ p_app: 'mitsumori', p_version: ver, p_device: dev }) });
+    } catch (e) { return null; }
+  }
+
+  // v1.4.1125(migration 082): 立会の記録(旧 共有設定 taikyo_keiyaku_extract の塊)を表から1件読む。
+  //   クラ助が1件1行の表 tachiai_records に書くようになった(塊の丸ごと読み書きで朝バッチが6分切れ→7日止まった)。
+  //   戻り: 塊と同じ形(camelCase)の record / null = 未ログイン・読めない・無い(呼び出し側は従来の塊へ)
+  async function keiyakuExtractLoad(no) {
+    try {
+      no = String(no || '').trim(); if (!no) return null;
+      await ensureFresh();
+      if (!token()) return null;
+      var rows = await rest('tachiai_records_v?select=rec&tachiai_no=eq.' + encodeURIComponent(no) + '&limit=1');
+      return (Array.isArray(rows) && rows[0] && rows[0].rec) ? rows[0].rec : null;
+    } catch (e) { try { console.warn('[db直読み] 立会の記録が読めず→塊(GAS)へ:', e.message); } catch (e2) {} return null; }
+  }
+
   // ---- 読み: 請求書台帳(v1.4.1088・読み切替) --------------------------------------
   //   スイッチ = shared_config db_direct の invoiceRead(名前の一覧)/allInvoiceRead(全員)。**既定OFF**。
   //   戻り: 行の doc の配列 / **null = 呼び出し側は従来の塊(GAS)を読む**(OFF・未ログイン・通信失敗・0件)
@@ -918,6 +967,61 @@
       if (code === 'applied' || code === 'already_processed') return { ok: true, via: 'db', result: code };
       return null;
     } catch (e) { try { console.warn('[db直書き] 共有設定が書けず→GASへ:', key, e.message); } catch (e2) {} return null; }
+  }
+
+  // ---- 読み: 共有設定(v1.4.1129・GAS廃止 段1) ------------------------------------------
+  //   GASの get-shared-config / get-shared-config-meta を通さず、DBの shared_config を直接読む
+  //   (表は社内の全員=admin/jimu/genba/reader が読める)。GASも ver99 から同じ表を読んで返しているので、答えは同じ。
+  //   スイッチ = db_direct の scRead(名前)/allScRead(全員)。**既定OFF**。
+  //   戻り: GASと同じ形 {ok:true, value, source:'db', savedBy, savedAt} / **null = 呼び出し側は従来のGASへ**
+  //   ⚠DBに**そのキーの行が無い**時も null。GASはその時だけ Script Properties の古い控えを返す(今は ai_assign_rules がそれ)。
+  //     「行が無い」を「空」と答えない(空の答えで手元の設定を上書きさせない)。
+  var SC_READ_KEY_RE = /^[A-Za-z0-9_.:-]{1,120}$/;
+  async function loadSharedConfigRow(key, cols) {
+    try {
+      key = String(key || '');
+      if (!SC_READ_KEY_RE.test(key)) return null;
+      await ensureFresh();
+      if (!token()) return null;
+      if (_dbName === null) await fetchDbName();
+      await flag();
+      if (!allowed(_flag, 'scRead')) return null;
+      var rows = await rest('shared_config?key=eq.' + encodeURIComponent(key) + '&select=' + (cols || 'value,saved_by,updated_at') + '&limit=1');
+      if (!Array.isArray(rows) || !rows.length) return null;
+      return rows[0];
+    } catch (e) { try { console.warn('[db直読み] 共有設定が読めず→GASへ:', key, e.message); } catch (e2) {} return null; }
+  }
+  async function loadSharedConfig(key) {
+    var r = await loadSharedConfigRow(key);
+    if (!r) return null;
+    return { ok: true, value: (r.value == null ? '' : String(r.value)), source: 'db', savedBy: r.saved_by || '', savedAt: r.updated_at || '' };
+  }
+  async function loadSharedConfigMeta(key) {
+    var r = await loadSharedConfigRow(key, 'saved_by,updated_at');
+    if (!r) return null;
+    return { ok: true, savedBy: r.saved_by || '', savedAt: r.updated_at || '', source: 'db' };
+  }
+
+  // ---- 在席の心拍(v1.4.1129・migration 086 mitsu_presence_beat と対) -----------------------
+  //   GASの presence-beat は在席を **GASの中(Script Properties)だけ** に置いていた。DBの1人1行の表へ移す
+  //   (同時に打っても消えない・共有設定の版や履歴を増やさない)。戻りの形は presence-beat の value と同じ。
+  //   スイッチ = 共有設定の書きと同じ scWrite / allScWrite。
+  //   戻り: map / **null = 呼び出し側は従来のGASへ**(OFF・未ログイン・reader・通信失敗)
+  //   opts.keepalive=true … 画面を閉じる時の「離れる」を、閉じた後も届くように送る
+  async function presenceBeat(meKey, entry, ttlMs, opts) {
+    try {
+      if (!meKey) return null;
+      if (!(opts && opts.keepalive)) {                      // 閉じる時は待たない(手元の鍵と名簿のまま送る)
+        await ensureFresh();
+        if (_dbName === null) await fetchDbName();
+        await flag();
+      }
+      if (!token()) return null;
+      if (!allowed(_flag, 'scWrite')) return null;
+      var r = await rest('rpc/mitsu_presence_beat', { method: 'POST', keepalive: !!(opts && opts.keepalive),
+        body: JSON.stringify({ p_me_key: String(meKey), p_entry: entry || null, p_ttl_ms: Number(ttlMs) || 180000 }) });
+      return (r && typeof r === 'object' && !Array.isArray(r)) ? r : null;
+    } catch (e) { try { console.warn('[db直書き] 在席の心拍が打てず→GASへ:', e.message); } catch (e2) {} return null; }
   }
 
   // ---- 写真: Supabase Storage の非公開置き場 photos(v1.4.1093・migration 060・カレンダーと共通) ----------------
@@ -972,11 +1076,14 @@
 
   global.bcDbDirect = {
     refresh: refresh, canRead: canReadSync, canWrite: canWriteSync,
-    loadMonths: loadMonths, loadMonthIds: loadMonthIds, loadMotoukeByIds: loadMotoukeByIds, loadBukken: loadBukken, loadMonthAll: loadMonthAll, loadMonthDocs: loadMonthDocs, loadOneByFileId: loadOneByFileId, loadOneById: loadOneById, saveLedger: saveLedger,
+    loadMonths: loadMonths, loadMonthIds: loadMonthIds, loadMotoukeByIds: loadMotoukeByIds, loadIraiByIds: loadIraiByIds, loadBukken: loadBukken, loadMonthAll: loadMonthAll, loadMonthDocs: loadMonthDocs, loadOneByFileId: loadOneByFileId, loadOneById: loadOneById, saveLedger: saveLedger,
     status: status,
     saveInvoices: saveInvoices, newOpId: function () { return opId(); },   // v1.4.1083
     loadInvoices: loadInvoices,   // v1.4.1088
+    keiyakuExtractLoad: keiyakuExtractLoad,   // v1.4.1125(082)
+    appSeen: appSeen,                         // v1.4.1126(083)
     saveSharedConfig: saveSharedConfig,   // v1.4.1088
+    loadSharedConfig: loadSharedConfig, loadSharedConfigMeta: loadSharedConfigMeta, presenceBeat: presenceBeat,   // v1.4.1129(段1・086)
     // v1.4.1076: **GAS経路からも同じ物差しを使えるように公開する**。
     //   1075では中身チェックをDB直結の経路にしか入れておらず、
     //   **直結が落ちてGASへ落ちた瞬間だけ無防備**だった(2026-09-19 16:10に実際にすり抜けた)。
