@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>10月の工事確認</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+:root{
+  --bg:#F5F4F0; --paper:#FFFFFF; --ink:#1E2321; --muted:#6A6F6B; --line:#DCDAD3; --line2:#EEECE6;
+  --accent:#0E6E6B; --accent-ink:#FFFFFF;
+  --ok:#2E7D32; --ok-bg:#E8F3E9; --ng:#C62828; --ng-bg:#FBE9E9; --part:#B26A00; --part-bg:#FFF3E0;
+  --warn:#9A4A00; --warn-bg:#FFF4E5; --warn-line:#F2C48C;
+  --shadow:0 1px 0 rgba(30,35,33,.06), 0 8px 24px -16px rgba(30,35,33,.25);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#151816; --paper:#1D211F; --ink:#ECEBE6; --muted:#9BA09B; --line:#2E3431; --line2:#262B28;
+  --accent:#4FB3AF; --accent-ink:#0F1A19;
+  --ok:#7CC57F; --ok-bg:#1C2E1E; --ng:#F07171; --ng-bg:#3A2020; --part:#F0B35A; --part-bg:#3A2D18;
+  --warn:#F0B35A; --warn-bg:#33281A; --warn-line:#5A4526;
+  --shadow:0 1px 0 rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#151816; --paper:#1D211F; --ink:#ECEBE6; --muted:#9BA09B; --line:#2E3431; --line2:#262B28;
+  --accent:#4FB3AF; --accent-ink:#0F1A19;
+  --ok:#7CC57F; --ok-bg:#1C2E1E; --ng:#F07171; --ng-bg:#3A2020; --part:#F0B35A; --part-bg:#3A2D18;
+  --warn:#F0B35A; --warn-bg:#33281A; --warn-line:#5A4526;
+  --shadow:0 1px 0 rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",sans-serif;font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%}
+h1,h2,.num{font-family:"Zen Kaku Gothic New","BIZ UDPGothic","Hiragino Sans",sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:0 14px 120px}
+header.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+h1{font-size:22px;font-weight:900;margin:2px 0 8px;letter-spacing:.01em;text-wrap:balance}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:4px}   /* 折り返す(横スクロールだと右端の人が隠れて見えなかった 2026-10-02) */
+.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip .n{font-weight:400;opacity:.75;margin-left:4px;font-variant-numeric:tabular-nums}
+.chip:focus-visible,.seg button:focus-visible,.send:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.progress{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--muted)}
+.bar{flex:1;height:6px;background:var(--line2);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+.hint{margin:14px 0 6px;font-size:13px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;box-shadow:var(--shadow);position:relative}
+.card.warn{border-color:var(--warn-line)}
+.card.warn::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 3px 3px 0;background:var(--warn)}
+.card.answered{border-color:var(--line2)}
+.card.sent{border-color:var(--ok);background:color-mix(in srgb,var(--ok-bg) 35%,var(--paper))}
+.state{position:absolute;right:12px;top:12px;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px}
+.state.sent{background:var(--ok-bg);color:var(--ok)}
+.state.draft{background:var(--part-bg);color:var(--part)}
+.card h2{padding-right:92px}
+.alldone{margin-top:12px;padding:12px 14px;border-radius:10px;background:var(--ok-bg);color:var(--ok);font-weight:700;border:1px solid var(--ok)}
+.chip .n.done{color:inherit;opacity:1}
+.card h2{font-size:17px;font-weight:700;margin:0 0 2px;line-height:1.35;text-wrap:balance}
+.koji{font-size:14px;color:var(--ink)}
+.meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:13px;color:var(--muted)}
+.meta .num{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:700}
+.items{margin:8px 0 0;padding:0;list-style:none;font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 8px}
+.items li::before{content:"·";margin-right:6px}
+.evidence{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-size:12px;padding:3px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted);background:transparent}
+.tag.warn{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn);font-weight:700}
+.tag.ok{color:var(--ok);border-color:transparent;background:var(--ok-bg)}
+.why{margin-top:8px;font-size:13px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;padding:8px 10px}
+.seg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:12px}
+.seg button{font-family:inherit;font-size:15px;font-weight:700;padding:11px 4px;border-radius:9px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.seg button[data-v="done"][aria-pressed="true"]{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.seg button[data-v="not"][aria-pressed="true"]{background:var(--ng-bg);border-color:var(--ng);color:var(--ng)}
+.seg button[data-v="amt"][aria-pressed="true"]{background:var(--part-bg);border-color:var(--part);color:var(--part)}
+.ask{margin-top:12px;font-size:14px;font-weight:700}
+.price{display:flex;align-items:baseline;gap:8px;margin-top:8px}
+.price .big{font-family:"Zen Kaku Gothic New","BIZ UDPGothic",sans-serif;font-size:26px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.price .tax{font-size:12px;color:var(--muted)}
+.fix{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px;border-radius:9px;background:var(--part-bg);border:1px solid var(--part)}
+.fix label{font-size:13px;font-weight:700;color:var(--part);white-space:nowrap}
+.fix input{flex:1;min-width:0;font-family:inherit;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);text-align:right}
+.fix input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.fix .diff{font-size:12px;color:var(--muted);white-space:nowrap}
+textarea{width:100%;margin-top:8px;font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);resize:vertical;min-height:38px}
+textarea::placeholder{color:var(--muted)}
+.foot{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--paper);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+.foot .in{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.foot .st{flex:1;font-size:13px;color:var(--muted)}
+.send{font-family:inherit;font-size:15px;font-weight:700;padding:12px 18px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.send[disabled]{opacity:.5;cursor:default}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+.empty{padding:40px 10px;text-align:center;color:var(--muted)}
+.note{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.6}
+.lock{max-width:420px;margin:12vh auto 0;padding:0 18px;text-align:center}
+.lock h1{font-size:20px;margin-bottom:6px}
+.lock p{color:var(--muted);font-size:14px;margin:0 0 16px}
+.lock form{display:flex;gap:8px}
+.lock input{flex:1;font-family:inherit;font-size:16px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink)}
+.lock input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.lock .err{color:var(--ng);font-size:13px;min-height:1.4em;margin-top:8px}
+.login{position:fixed;inset:0;z-index:20;background:var(--bg);overflow:auto}
+.login form{flex-direction:column}
+.login .send{width:100%}
+.whoami{margin-top:8px;font-size:12px;color:var(--muted)}
+.whoami button{font-family:inherit;font-size:12px;color:var(--accent);background:none;border:0;padding:0 0 0 6px;cursor:pointer;text-decoration:underline}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: reduce){.bar i,.toast{transition:none}}
+</style>
+
+<div class="lock" id="lock">
+  <div class="eyebrow">ビルドクラスタ · 月初の確認</div>
+  <h1>10月の工事確認</h1>
+  <p>社内で共有したパスワードを入れてください</p>
+  <form id="lockf"><input id="pw" type="password" autocomplete="current-password" placeholder="パスワード" autofocus><button class="send" type="submit">開く</button></form>
+  <div class="err" id="lockerr"></div>
+</div>
+<div class="lock login" id="login" hidden>
+  <div style="max-width:420px;margin:12vh auto 0;padding:0 18px">
+    <div class="eyebrow">ビルドクラスタ · 月初の確認</div>
+    <h1>ログインしてください</h1>
+    <p id="loginmsg">カレンダーと同じメールアドレスとパスワードです</p>
+    <form id="loginf"><input id="lg-email" type="email" autocomplete="username" placeholder="メールアドレス"><input id="lg-pass" type="password" autocomplete="current-password" placeholder="パスワード"><button class="send" id="lg-go" type="submit">ログイン</button></form>
+    <div class="err" id="lg-err"></div>
+  </div>
+</div>
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div class="eyebrow">ビルドクラスタ · 月初の確認</div>
+    <h1 id="ttl">10月にやった工事、これで合っていますか</h1>
+    <div class="chips" id="chips" role="group" aria-label="担当者"></div>
+    <div class="progress"><div class="bar"><i id="bar"></i></div><span id="prog">0 / 0</span></div>
+    <div class="whoami" id="whoami" hidden></div>
+  </header>
+  <p class="hint">自分の名前をタップ → 1件ずつ<b>「この金額で請求していいか」</b>を答えてください。金額がちがう時は<b>正しい金額（税抜）</b>を入れてください。押し間違えたら、同じボタンをもう一度押すと取り消せます。</p>
+  <div class="list" id="list"></div>
+  <p class="note">※「波及で完了」＝アプリが兄弟パターンにあわせて自動で完了にした案件です。本人が完了にしていない可能性があるので必ず確認してください。<br>※写真の枚数は、案件フォルダの中で名前に「完了」「施工」「最終確認」などが付いたフォルダの写真を数えた目安です。「リサイズ」などの名前のままだと数えられません（写真を入れたら、フォルダ名を「完了写真」などに変えてください）。</p>
+</div>
+<div class="foot" id="foot" hidden><div class="in"><div class="st" id="st">まだ回答がありません</div><button class="send" id="send" disabled>送信</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const ENC = {"salt": "dHxuNxCOdB2jy9r2nY5/KQ==", "iv": "qHyYixpSxesjdXnn", "ct": "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", "iter": 200000};
+let DATA = null, GAS = '', TOKEN = '', DB = null;   // DB={url,key}: 回答表(追記専用)へ直接。GASは使わない(2026-10-02)
+let DEVICE = ''; try { DEVICE = localStorage.getItem('mc_device') || ''; if (!DEVICE){ DEVICE = Math.random().toString(36).slice(2,10); localStorage.setItem('mc_device', DEVICE); } } catch(e){}
+const KEY = 'mc_2026-10';
+const params = new URLSearchParams(location.search);
+let who = params.get('who') || '';
+let ans = {};
+try { ans = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { ans = {}; }
+
+const yen = n => '¥' + Number(n||0).toLocaleString('ja-JP');
+const esc = s => String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// 🔑 2026-10-15 ログイン必須(山田「月初確認ページもログイン必須にして」・セキュリティ点検の残り1件・migration 085)。
+//   回答の表は公開キー(anon)では読み書きできなくなる → ログインした人の鍵(access_token)で読む・送る。
+//   保存先はカレンダー・単価表と同じ 'bc_sb_session'(同じサイト=どれかでログインしていればそのまま通る)。形も単価表の tkStore_ と同じ。
+//   期限(1時間)が近ければ自動で延長。⚠延長の直前にもう一度読み直す(カレンダーが先に延長していれば、その新しい方を使う)。
+//   401 は延長を1回試して、だめならログイン欄。黙って公開キーに戻さない。中身(金額の一覧)のパスワード暗号化はそのまま。
+const SB_LS = 'bc_sb_session';
+const authOn = () => !!(DB && DB.url && DB.key);
+const dbBase = () => DB.url.replace(/\/$/,'');
+function mcSession_(){ try { const o = JSON.parse(localStorage.getItem(SB_LS) || 'null'); return (o && o.access_token) ? o : null; } catch(_){ return null; } }
+async function mcAuthFetch_(path, body){
+  const r = await fetch(dbBase() + '/auth/v1/' + path, {method:'POST',
+    headers:{'Content-Type':'application/json', apikey: DB.key, Authorization: 'Bearer ' + DB.key}, body: JSON.stringify(body || {})});
+  let d = null; try { d = await r.json(); } catch(_){}
+  if (!r.ok){ const e = new Error((d && (d.error_description || d.msg || d.error || d.message)) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return d;
+}
+function mcStore_(d){
+  if (!d || !d.access_token) throw new Error('応答にトークンがありません');
+  const s = {access_token: d.access_token, refresh_token: d.refresh_token || '',
+    expires_at: d.expires_at || (Math.floor(Date.now()/1000) + (d.expires_in || 3600)),
+    email: (d.user && d.user.email) || '', role: (d.user && d.user.app_metadata && d.user.app_metadata.bc_role) || ''};
+  try { localStorage.setItem(SB_LS, JSON.stringify(s)); } catch(_){}
+  renderWhoami_();
+  return s;
+}
+// 🔑 2026-10-15(午後): 延長はカレンダー・単価表・工程表と同じ順番待ち(navigator.locks 'bc_sb_refresh')の中でやる=同時に頼んで断られない。
+//   ロックの無いブラウザはそのまま延長。順番が来たら読み直す(別の画面が延長済みならそれを使う)。
+//   断られた(400/401)ら、すぐには消さない: 1.5秒待って読み直し、access_token が変わっていればそれを使う。変わっていなければ消してログイン欄。
+//   通信エラーでは消さない。見本=単価表 tkEnsureFresh_ / tkEnsureFreshInner_。
+function mcLocked_(fn){
+  if (typeof navigator !== 'undefined' && navigator.locks && navigator.locks.request) return navigator.locks.request('bc_sb_refresh', fn);
+  return fn();
+}
+async function mcRefresh_(s){   // s=延長の元にしたセッション。通信エラーは投げ返す(ログインは消さない)
+  try { return mcStore_(await mcAuthFetch_('token?grant_type=refresh_token', {refresh_token: s.refresh_token})); }
+  catch(e){
+    const now = mcSession_(); if (now && now.access_token !== s.access_token) return now;   // その間に他が延長していればそれで良い
+    if (e && (e.status === 400 || e.status === 401)){
+      await new Promise(r => setTimeout(r, 1500));                     // 少し待って読み直す(別の画面の延長が入るかもしれない)
+      const again = mcSession_(); if (again && again.access_token !== s.access_token) return again;
+      try { localStorage.removeItem(SB_LS); } catch(_){} renderWhoami_(); return null;
+    }
+    throw e;
+  }
+}
+function mcEnsureFresh_(){
+  return mcLocked_(async () => {
+    let s = mcSession_(); if (!s || !s.expires_at) return s;
+    if (s.expires_at*1000 - Date.now() > 90000) return s;            // まだ1分半以上ある
+    s = mcSession_(); if (!s || !s.refresh_token) return s;            // 読み直す(カレンダーが先に延長したかもしれない)
+    if (s.expires_at*1000 - Date.now() > 90000) return s;
+    try { return await mcRefresh_(s); } catch(e){ return s; }          // 通信エラー=今の鍵のまま進む(401なら後で扱う)
+  });
+}
+function mcAfter401_(used){   // 401 が返った時に1回だけ: 他の画面が延長済みならそれ、無ければ延長(通信エラーは投げ返す)
+  return mcLocked_(async () => {
+    const now = mcSession_(); if (now && now.access_token !== used) return now;
+    if (!now || !now.refresh_token) return null;
+    return await mcRefresh_(now);
+  });
+}
+function loginNeeded_(msg){ showLogin_(msg); const e = new Error('ログインが必要です'); e.login = true; return e; }
+async function mcDbFetch_(path, opts){   // 回答の表を読む・書くのは必ずここを通す(公開キーでは送らない)
+  const s = await mcEnsureFresh_(); if (!s) throw loginNeeded_('');
+  const go = tok => fetch(dbBase() + path, Object.assign({}, opts, {headers: Object.assign({}, (opts && opts.headers) || {}, {apikey: DB.key, Authorization: 'Bearer ' + tok})}));
+  let r = await go(s.access_token);
+  if (r.status === 401){
+    const s2 = await mcAfter401_(s.access_token);
+    if (!s2) throw loginNeeded_('ログインが切れました。もう一度ログインしてください');
+    r = await go(s2.access_token);
+    if (r.status === 401) throw loginNeeded_('ログインが切れました。もう一度ログインしてください');
+  }
+  return r;
+}
+function renderWhoami_(){
+  const el = document.getElementById('whoami'); if (!el) return;
+  const s = authOn() ? mcSession_() : null;
+  el.hidden = !s;
+  if (s){ el.innerHTML = `👤 ${esc(s.email || 'ログイン中')}<button type="button" id="logout">ログアウト</button>`;
+    document.getElementById('logout').addEventListener('click', () => {
+      if (!confirm('ログアウトしますか？\n(カレンダー・単価表も同じログインなので、この端末ではそちらもログアウトになります)')) return;
+      const cur = mcSession_();
+      try { if (cur) fetch(dbBase() + '/auth/v1/logout', {method:'POST', headers:{apikey: DB.key, Authorization: 'Bearer ' + cur.access_token}}).catch(()=>{}); } catch(_){}
+      try { localStorage.removeItem(SB_LS); } catch(_){}
+      renderWhoami_(); showLogin_('');
+    }); }
+}
+function showLogin_(msg){
+  document.getElementById('loginmsg').textContent = msg || 'カレンダーと同じメールアドレスとパスワードです';
+  document.getElementById('lg-err').textContent = '';
+  document.getElementById('login').hidden = false;
+  setTimeout(() => { const e = document.getElementById('lg-email'); if (e && !e.value) e.focus(); else document.getElementById('lg-pass').focus(); }, 50);
+}
+function showApp_(){
+  document.getElementById('lock').hidden = true; document.getElementById('login').hidden = true;
+  document.getElementById('app').hidden = false; document.getElementById('foot').hidden = false;
+  renderWhoami_(); render();
+  syncFromDb().then(ok => { if (ok) render(); });
+}
+async function afterUnlock_(){   // パスワードで中身を開いた後: 回答の表を使うページならログインを確かめる
+  document.getElementById('lock').hidden = true;
+  if (authOn() && !(await mcEnsureFresh_())){ showLogin_(''); return; }
+  showApp_();
+}
+document.getElementById('loginf').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const em = document.getElementById('lg-email').value.trim(), pw = document.getElementById('lg-pass').value;
+  const err = document.getElementById('lg-err'), btn = document.getElementById('lg-go');
+  if (!em || !pw){ err.textContent = 'メールアドレスとパスワードを入れてください'; return; }
+  btn.disabled = true; btn.textContent = 'ログイン中…'; err.textContent = '';
+  try {
+    mcStore_(await mcAuthFetch_('token?grant_type=password', {email: em, password: pw}));
+    document.getElementById('lg-pass').value = '';
+    showApp_();
+  } catch(e){
+    err.textContent = (e && e.status === 400) ? 'メールアドレスかパスワードが違います' : ('ログインできませんでした: ' + ((e && e.message) || e));
+  } finally { btn.disabled = false; btn.textContent = 'ログイン'; }
+});
+
+function jobsFor(){ return who ? DATA.jobs.filter(j => j.tantou === who) : DATA.jobs; }
+
+function renderChips(){
+  const el = document.getElementById('chips');
+  const counts = {}, sentN = {};
+  DATA.jobs.forEach(j => { counts[j.tantou] = (counts[j.tantou]||0) + 1; if (ans[j.id] && ans[j.id].sent) sentN[j.tantou] = (sentN[j.tantou]||0) + 1; });
+  const names = DATA.tantou;
+  const lab = n => { const t = counts[n]||0, d = sentN[n]||0; return d >= t && t ? `<span class="n done">✅${d}/${t}</span>` : `<span class="n">${d}/${t}</span>`; };
+  el.innerHTML = [`<button class="chip" aria-pressed="${who===''}" data-who="">全員<span class="n">${DATA.jobs.length}</span></button>`]
+    .concat(names.map(n => `<button class="chip" aria-pressed="${who===n}" data-who="${esc(n)}">${esc(n.replace(/\s+/g,''))}${lab(n)}</button>`)).join('');
+  el.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { who = b.dataset.who; render(); window.scrollTo({top:0}); }));
+}
+
+function reasons(j){
+  const r = [];
+  if (j.propagated) r.push('波及で完了');
+  if (j.siblingDoneCount > 1) r.push(`同じ案件のパターン${j.siblingDoneCount}件が完了`);
+  if (j.photos === 0) r.push('完了写真が見つからない');
+  else if (j.photoFolderMatch < 4) r.push('この工事の写真が見当たらない');
+  return r;
+}
+
+function renderList(){
+  const list = document.getElementById('list');
+  const js = jobsFor();
+  if (!js.length){ list.innerHTML = '<div class="empty">この担当の10月完了案件はありません</div>'; return; }
+  if (!who){
+    const ansText = a => !a || !a.v ? '' : (a.v === 'done' ? '回答：この金額でOK' : a.v === 'not' ? '回答：やってない' : `回答：金額がちがう → 正しい金額 ${a.amt != null ? yen(a.amt) : '未入力'}`) + (a.c ? `　「${esc(a.c)}」` : '');
+    list.innerHTML = '<div class="why">まず上の<b>自分の名前</b>をタップしてください（「全員」は見るだけで、ここでは答えられません）</div>' + js.map(j => { const a = ans[j.id] || {};
+      const state = a.sent ? '<span class="state sent">✅ 送信済み</span>' : (a.v ? '<span class="state draft">📝 未送信</span>' : '');
+      return `<article class="card${a.sent?' sent':''}">${state}<h2>${esc(j.bukken)} ${esc(j.room)}</h2><div class="koji">${esc(j.koji)}</div><div class="meta"><span>${esc(j.motouke)}</span><span>完了 ${esc(j.completeDate)}</span><span>担当 ${esc(j.tantou)}</span></div><div class="price"><span class="big">${yen(j.total)}</span><span class="tax">税抜・台帳の金額</span></div>${a.v ? `<div class="meta" style="margin-top:8px"><span class="${a.v==='done'?'tag ok':'tag warn'}">${ansText(a)}</span></div>` : ''}</article>`; }).join('');
+    return;
+  }
+  const allSent = js.length && js.every(j => ans[j.id] && ans[j.id].sent);
+  const banner = allSent ? `<div class="alldone">✅ ${esc(who)}さんの${js.length}件は全部送信済みです。ありがとうございました。（直したい時は、その案件のボタンを押し直して、もう一度送信してください）</div>` : '';
+  list.innerHTML = banner + js.map(j => {
+    const a = ans[j.id] || {};
+    const state = a.sent ? '<span class="state sent">✅ 送信済み</span>' : (a.v ? '<span class="state draft">📝 未送信</span>' : '');
+    const rs = reasons(j);
+    const warn = j.propagated || j.siblingDoneCount > 1 || j.photos === 0 || j.photoFolderMatch < 4;
+    const photo = j.photos === 0 ? '<span class="tag warn">完了写真が見つからない（フォルダ名に「完了」が無いと数えません）</span>'
+      : (j.photoFolderMatch >= 4 ? `<span class="tag ok">写真 ${j.photos}枚</span>` : `<span class="tag warn">写真 ${j.photos}枚（別の工事のものかも）</span>`);
+    return `<article class="card${warn?' warn':''}${a.v?' answered':''}${a.sent?' sent':''}" data-id="${esc(j.id)}">
+      ${state}<h2>${esc(j.bukken)} ${esc(j.room)}</h2>
+      <div class="koji">${esc(j.koji)}${j.patternLabel?` <span class="tag">${esc(j.patternLabel)}</span>`:''}</div>
+      <div class="meta"><span>${esc(j.motouke)}</span><span>完了 ${esc(j.completeDate)}</span>${who?'':`<span>担当 ${esc(j.tantou)}</span>`}</div>
+      <div class="price"><span class="big">${yen(j.total)}</span><span class="tax">税抜・台帳の金額</span></div>
+      ${j.items.length?`<ul class="items">${j.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`:''}
+      <div class="evidence">${photo}${j.propagated?'<span class="tag warn">波及で完了</span>':''}${j.siblingDoneCount>1?`<span class="tag warn">パターン${j.siblingDoneCount}件が完了</span>`:''}</div>
+      ${rs.length?`<div class="why">確認してほしい点：${rs.join('・')}</div>`:''}
+      <div class="ask">この金額で請求していいですか？</div>
+      <div class="seg" role="group" aria-label="回答">
+        <button data-v="done" aria-pressed="${a.v==='done'}">この金額でOK</button>
+        <button data-v="amt" aria-pressed="${a.v==='amt'||a.v==='part'}">金額がちがう</button>
+        <button data-v="not" aria-pressed="${a.v==='not'}">やってない</button>
+      </div>
+      ${(a.v==='amt'||a.v==='part')?`<div class="fix"><label for="amt-${esc(j.id)}">正しい金額（税抜）</label><input id="amt-${esc(j.id)}" class="amt" inputmode="numeric" placeholder="例 45000" value="${a.amt!=null?esc(a.amt):''}"><span class="diff">${a.amt!=null&&a.amt!==''?(Number(a.amt)-Number(j.total||0)>=0?'+':'')+yen(Number(a.amt)-Number(j.total||0)).replace('¥-','-¥'):''}</span></div>`:''}
+      <textarea rows="1" placeholder="ひとこと（例：便器交換はやっていない／追加でクロス1面）">${esc(a.c||'')}</textarea>
+    </article>`;
+  }).join('');
+  list.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    const id = b.closest('.card').dataset.id;
+    if (ans[id] && ans[id].v === b.dataset.v){
+      // 同じボタンをもう一度押したら取り消し(押し間違い用)。ひとことと金額も消す
+      delete ans[id]; save(); render(); toast('選択を取り消しました'); return;
+    }
+    ans[id] = Object.assign({}, ans[id], {v: b.dataset.v, at: new Date().toISOString(), who: who || null, sent: null});
+    save(); render();
+    if (b.dataset.v === 'amt'){ const el = document.getElementById('amt-' + id); if (el) el.focus(); }
+  }));
+  list.querySelectorAll('input.amt').forEach(t => {
+    t.addEventListener('input', () => {
+      const id = t.closest('.card').dataset.id;
+      const v = t.value.normalize('NFKC').replace(/[^0-9]/g, '');
+      ans[id] = Object.assign({}, ans[id], {amt: v === '' ? null : Number(v), at: new Date().toISOString(), sent: null});
+      save(); renderFoot();
+    });
+    t.addEventListener('change', () => renderList());
+  });
+  list.querySelectorAll('textarea').forEach(t => t.addEventListener('input', () => {
+    const id = t.closest('.card').dataset.id;
+    ans[id] = Object.assign({}, ans[id], {c: t.value, at: new Date().toISOString(), sent: null});
+    save(); renderFoot();
+  }));
+}
+
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(ans)); } catch(e){} }
+
+function renderFoot(){
+  const js = jobsFor();
+  const n = js.filter(j => ans[j.id] && ans[j.id].v).length;
+  const nn = js.filter(j => ans[j.id] && ans[j.id].v === 'not').length;
+  const np = js.filter(j => ans[j.id] && (ans[j.id].v === 'amt' || ans[j.id].v === 'part')).length;
+  const nmiss = js.filter(j => ans[j.id] && ans[j.id].v === 'amt' && (ans[j.id].amt == null)).length;
+  const nunsent = js.filter(j => ans[j.id] && ans[j.id].v && !ans[j.id].sent).length;
+  document.getElementById('prog').textContent = `${n} / ${js.length}`;
+  document.getElementById('bar').style.width = js.length ? (100*n/js.length)+'%' : '0%';
+  const st = document.getElementById('st');
+  st.textContent = n ? `${n}件回答（金額ちがう${np}・やってない${nn}）` + (nunsent ? `　未送信${nunsent}件` : '　✅全部送信済み') + (nmiss ? `　⚠正しい金額が未入力${nmiss}件` : '') + ((GAS || DB) ? '' : '　※試作：この端末に保存') : 'まだ回答がありません';
+  document.getElementById('send').disabled = !who || !n || nmiss > 0 || nunsent === 0;
+}
+
+function render(){ renderChips(); renderList(); renderFoot(); }
+
+// 開いた時にDBの最新回答(monthly_confirm_latest_v)を取り込む(2026-10-02)。
+// 目的=別の端末で開いても「✅送信済み」と答えた内容が出る。手元に新しい未送信の変更があればそちらを残す。
+// 読めない時(圏外など)は黙って手元だけで動く。ログインが切れていればログイン欄を出す(2026-10-15)。
+async function syncFromDb(){
+  if (!authOn() || !DATA) return false;
+  try {
+    const u = '/rest/v1/monthly_confirm_latest_v?month=eq.' + encodeURIComponent(DATA.month)
+            + '&select=estimate_id,tantou,answer,amount,comment,answered_at&limit=1000';
+    const r = await mcDbFetch_(u, {});
+    if (!r.ok) return false;
+    const rows = await r.json(); if (!Array.isArray(rows)) return false;
+    const T = {ok:'done', amt:'amt', not:'not'};
+    const jobIds = new Set(DATA.jobs.map(j => j.id));
+    let changed = false;
+    for (const row of rows){
+      const id = row.estimate_id; if (!id || !jobIds.has(id) || String(id).startsWith('E_TEST_')) continue;
+      const dbAt = Date.parse(row.answered_at || '') || 0;
+      const a = ans[id];
+      const localAt = a ? (Date.parse(a.at || '') || 0) : 0;
+      if (a && !a.sent && localAt > dbAt) continue;           // 手元の方が新しい未送信の直し → 残す
+      ans[id] = {v: T[row.answer] || row.answer, amt: row.amount == null ? null : Number(row.amount), c: row.comment || '',
+                 at: row.answered_at, who: row.tantou || null, sent: row.answered_at};
+      changed = true;
+    }
+    if (changed) save();
+    return true;
+  } catch(e){ return false; }
+}
+
+function toast(m){ const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'), 1800); }
+
+document.getElementById('send').addEventListener('click', async () => {
+  if (!who){ toast('先に自分の名前を選んでください'); return; }
+  // 送るのは自分の担当ぶんだけ。1回答=1行を「追記」する(上書きなし=誰かの回答を消す経路が無い。最新は読む側で採る)
+  const V = {done:'ok', amt:'amt', part:'amt', not:'not'};
+  const rows = [];
+  jobsFor().forEach(j => { const a = ans[j.id]; if (!a || !a.v || a.sent) return;   // 送信済みは送り直さない(直した時は sent が消える)
+    rows.push({month: DATA.month, estimate_id: j.id, tantou: who, answer: V[a.v] || a.v,
+      amount: (V[a.v] === 'amt') ? Number(a.amt) : null, comment: (a.c || '').slice(0,500) || null,
+      answered_at: a.at || new Date().toISOString(), device: DEVICE || null}); });
+  if (!rows.length) return;
+  const markSent = () => { const t = new Date().toISOString(); rows.forEach(r => { if (ans[r.estimate_id]) ans[r.estimate_id].sent = t; }); save(); render(); };
+  if (!authOn()){ markSent(); toast('保存しました（試作：この端末のみ）'); return; }
+  const btn = document.getElementById('send'); btn.disabled = true;
+  const st = document.getElementById('st');
+  let ok = false, lastErr = '';
+  for (let i = 0; i < 4 && !ok; i++){          // 回線やサーバーの一時的な不調は自動でやり直す(0,2,5,10秒)
+    if (i) { st.textContent = `送信をやり直しています(${i}回目)…`; await new Promise(r => setTimeout(r, [0,2000,5000,10000][i])); }
+    try {
+      const r = await mcDbFetch_('/rest/v1/monthly_confirm_answers', {method:'POST',
+        headers:{'Content-Type':'application/json', 'Prefer':'return=minimal'}, body: JSON.stringify(rows)});
+      if (r.status === 201) ok = true;
+      else { lastErr = 'HTTP ' + r.status; if (r.status === 400 || r.status === 403) break; }   // 中身・権限の問題はやり直しても同じ
+    } catch(e){ if (e && e.login){ lastErr = 'ログイン'; break; } lastErr = '通信'; }
+  }
+  if (ok){ try { localStorage.setItem(KEY + '_sent', new Date().toISOString()); } catch(e){} markSent(); toast('送信しました。ありがとうございます'); if (await syncFromDb()) render(); }
+  else toast(lastErr === 'ログイン' ? 'ログインしてから、もう一度「送信」を押してください（回答は残っています）'
+           : lastErr === '通信' ? '送信できませんでした。電波の良いところで再度お試しください' : `送信できませんでした(${lastErr})。山田まで連絡してください`);
+  btn.disabled = false; renderFoot();
+});
+
+async function unlock(pw){
+  const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:b(ENC.salt), iterations:ENC.iter, hash:'SHA-256'}, km, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv:b(ENC.iv)}, key, b(ENC.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+document.getElementById('lockf').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const err = document.getElementById('lockerr'); err.textContent = '';
+  try {
+    const p = await unlock(document.getElementById('pw').value);
+    DATA = p.data; GAS = p.gas || ''; TOKEN = p.token || ''; DB = p.db || null;
+    try { sessionStorage.setItem(KEY + '_pw', document.getElementById('pw').value); } catch(e){}
+  } catch(e) { err.textContent = 'パスワードが違います'; return; }
+  await afterUnlock_();
+});
+(async () => {   // 同じタブで開き直した時だけ自動で開く
+  let pw = ''; try { pw = sessionStorage.getItem(KEY + '_pw') || ''; } catch(e){}
+  if (!pw) return;
+  try { const p = await unlock(pw); DATA = p.data; GAS = p.gas || ''; TOKEN = p.token || ''; DB = p.db || null; } catch(e){ return; }
+  await afterUnlock_();
+})();
+</script>
