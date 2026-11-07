@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>現場の拾い出し</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Klee+One:wght@600&text=0123456789.%E3%8E%A1m%E5%A3%81%E5%A4%A9%E3%82%A2%E5%B7%BE&display=swap">
+<style>
+/* 紙の拾い出しシートをスマホへ。黒い帯・灰色の見出しは紙と同じ。選ぶと赤ペンの丸、下書きに入ると青い✓ */
+:root{
+  --paper:#eef1f3; --sheet:#ffffff; --ink:#1d2226; --ink2:#47515a; --muted:#6b7680; --line:#c9d0d6;
+  --band:#3a4046; --band-ink:#ffffff; --grey:#dde2e6; --pen:#c7281e; --check:#1a6fd6; --warnbg:#fff4d6; --warnink:#6d4a00; --okbg:#e3f3ea; --okink:#14573a; --ngbg:#fde7e4; --ngink:#8a1d14;
+  --s-tap:#1a5fb4; --s-num:#0e9474; --s-auto:#7a5fc0; --s-search:#e5a50a; --s-free:#c7362c;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic",sans-serif; --hand:"Klee One","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#14171a; --sheet:#1c2024; --ink:#e9ecee; --ink2:#bcc5cc; --muted:#94a0a9; --line:#3a4249;
+  --band:#2c3238; --band-ink:#f1f3f4; --grey:#2a3036; --pen:#ff7468; --check:#6aaeff; --warnbg:#3a2f12; --warnink:#f4d98f; --okbg:#143225; --okink:#9fe0bf; --ngbg:#3d1c19; --ngink:#ffb4ab;
+  --s-tap:#3f86dc; --s-num:#0f9a78; --s-auto:#b26adf; --s-search:#b98407; --s-free:#b8352c; color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.55}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select,textarea{font-size:16px} /* iPhoneで勝手に拡大しないため */
+:focus-visible{outline:3px solid var(--check);outline-offset:2px}
+[hidden]{display:none!important}
+a{color:var(--check)}
+.wrap{max-width:1120px;margin:0 auto;padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:40px;padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));display:grid;gap:12px}
+.stage{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:880px){.stage{grid-template-columns:minmax(0,1fr)}.only-wide{display:none!important}}
+@media (min-width:881px){.only-narrow{display:none!important}}
+.tool,.draft,.box{background:var(--sheet);border:1.5px solid var(--ink);min-width:0}
+.head{padding:8px 12px;display:grid;gap:4px;border-bottom:1.5px solid var(--ink)}
+.head h1{font-size:17px;margin:0;line-height:1.35}
+.sub{font-size:13px;color:var(--ink2)}
+.toprow{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.status{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--grey);white-space:nowrap}
+.status.ok{background:var(--okbg);color:var(--okink)}.status.ng{background:var(--ngbg);color:var(--ngink)}.status.wait{background:var(--warnbg);color:var(--warnink)}
+.warn{background:var(--warnbg);color:var(--warnink);padding:8px 12px;font-size:13px;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.warn.ng{background:var(--ngbg);color:var(--ngink)}
+.warn.ok{background:var(--okbg);color:var(--okink)}
+details>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;padding:4px 12px;font-size:13px;font-weight:700;color:var(--ink2);border-bottom:1px solid var(--line)}
+details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid;gap:8px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.plan-img{max-width:100%;max-height:60vh;display:block;margin:0 auto;background:#fff}
+.tabs{display:flex;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--band)}
+.tabs button{flex:1 1 0;background:none;border:0;color:var(--band-ink);min-height:46px;font-size:14px;font-weight:700;cursor:pointer;position:relative;padding:4px 2px}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:12%;right:12%;bottom:5px;height:3px;background:var(--band-ink);border-radius:2px}
+.band{background:var(--grey);text-align:center;font-weight:700;font-size:14px;padding:6px 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.row{padding:8px 12px;border-bottom:1px solid var(--line);display:grid;gap:6px;min-width:0}
+.lbl{font-size:13px;color:var(--ink2);font-weight:700}
+.opts{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.optw{display:inline-flex;align-items:center;gap:4px}
+.opt{min-height:44px;min-width:44px;padding:4px 13px;background:transparent;border:1.5px solid var(--line);border-radius:10px;cursor:pointer}
+.opt.on{border:2.5px solid var(--pen);border-radius:48% 52% 45% 55%/62% 44% 56% 38%;font-weight:700;padding:3px 15px}
+.st{display:inline-flex;align-items:center;gap:2px}
+.st button{width:38px;height:38px;border:1.5px solid var(--line);background:var(--sheet);border-radius:8px;font-size:18px;line-height:1;cursor:pointer}
+.st b{font-family:var(--hand);color:var(--pen);font-size:21px;min-width:26px;text-align:center}
+.room{border-bottom:1px solid var(--line)}
+.room>button{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:48px;padding:6px 12px;background:none;border:0;cursor:pointer;text-align:left}
+.room>button b{font-size:15px}
+.room>button span{font-size:13px;font-family:var(--hand);color:var(--pen);text-align:right}
+.rbody{padding:4px 12px 12px;display:grid;gap:8px}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nf{display:grid;gap:3px;font-size:12px;color:var(--ink2);min-width:0;align-content:start}
+.nf input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);text-align:center;font-family:var(--hand);font-size:23px;color:var(--pen);padding:0 4px}
+.hint{border:1px dashed var(--line);background:none;border-radius:8px;padding:4px 6px;font-size:12px;min-height:34px;cursor:pointer;color:var(--ink2)}
+.txt{width:100%;min-height:46px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);padding:6px 10px}
+.res{display:grid}
+.res button{display:flex;justify-content:space-between;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);min-height:44px;padding:6px 2px;cursor:pointer}
+.res button span:last-child{white-space:nowrap;color:var(--ink2);font-size:13px}
+.free{display:grid;grid-template-columns:minmax(0,1fr) 62px 62px 84px;gap:6px}
+.free input{height:46px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);padding:0 8px;min-width:0;width:100%}
+.btn{min-height:44px;padding:6px 14px;border:1.5px solid var(--ink);background:var(--sheet);border-radius:8px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)}
+.btn.pri{background:var(--band);color:var(--band-ink);border-color:var(--band)}
+.btn.small{min-height:36px;padding:3px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.foot{position:sticky;bottom:0;background:var(--band);color:var(--band-ink);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:4}
+.foot .sum{font-size:13px;line-height:1.35}
+.foot .sum b{font-size:17px}
+.foot .btn{border-color:var(--band-ink);background:var(--band-ink);color:var(--band)}
+.draft{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);max-height:calc(100vh - 16px);overflow:auto}
+@media (max-width:880px){.draft{position:static;max-height:none;border:0;border-top:1.5px solid var(--ink)}}
+.dhead{background:var(--band);color:var(--band-ink);padding:8px 12px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.tally{display:flex;flex-wrap:wrap;gap:4px 14px;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--line)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.s-tap{background:var(--s-tap)}.s-num{background:var(--s-num)}.s-auto{background:var(--s-auto)}.s-search{background:var(--s-search)}.s-free{background:var(--s-free)}
+.ln{border-bottom:1px solid var(--line)}
+.ln>button{width:100%;display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:6px 8px;align-items:start;background:none;border:0;text-align:left;padding:8px 12px;cursor:pointer}
+.ck{color:var(--check);font-weight:700;font-size:16px;line-height:1.3}
+.nm{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.sp{font-size:12px;color:var(--ink2);display:block;font-weight:400}
+.am{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.am small{display:block;color:var(--muted);font-size:12px}
+.no-amount .am,.no-amount .amt{visibility:hidden}
+.tenant,.flag{font-size:11px;border:1px solid var(--pen);color:var(--pen);border-radius:4px;padding:0 4px;margin-left:4px;font-weight:700;white-space:nowrap}
+.flag{border-color:var(--warnink);color:var(--warnink)}
+.edit{padding:0 12px 10px 42px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.edit input{width:96px;height:42px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);padding:0 8px;font-variant-numeric:tabular-nums}
+.edit label{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:5px}
+.total{display:flex;justify-content:space-between;padding:10px 12px;font-weight:700;font-size:16px}
+.note{font-size:13px;color:var(--muted)}
+.list{display:grid}
+.card{display:grid;gap:2px;padding:10px 12px;border-bottom:1px solid var(--line);text-decoration:none;color:inherit}
+.card b{font-size:15px}
+.pill{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--grey);margin-left:6px;white-space:nowrap}
+.pill.todo{background:var(--warnbg);color:var(--warnink)}.pill.done{background:var(--okbg);color:var(--okink)}.pill.again{background:var(--ngbg);color:var(--ngink)}
+.tick{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:6px 8px;padding:8px 12px;border-bottom:1px solid var(--line);align-items:start}
+.tick input{width:22px;height:22px;margin:2px 0 0}
+.tick.on .nm{color:var(--muted)}
+#login{position:fixed;inset:0;background:var(--paper);z-index:30;display:grid;place-items:center;padding:16px}
+#login form{background:var(--sheet);border:1.5px solid var(--ink);padding:16px;max-width:360px;width:100%;display:grid;gap:10px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--band);color:var(--band-ink);padding:8px 14px;border-radius:8px;font-size:14px;z-index:20;max-width:90vw}
+</style>
+</head>
+<body>
+<div id="app" class="wrap"><p class="note">読み込み中です…</p></div>
+<div id="login" hidden>
+  <form id="loginForm" autocomplete="on">
+    <b>現場の拾い出し</b>
+    <p class="note" id="loginMsg" style="margin:0">カレンダーと同じメールアドレスとパスワードです</p>
+    <input id="lgEmail" class="txt" type="email" autocomplete="username" placeholder="メールアドレス" required>
+    <input id="lgPass" class="txt" type="password" autocomplete="current-password" placeholder="パスワード" required>
+    <div id="lgErr" class="note" style="color:var(--pen)"></div>
+    <button class="btn pri" type="submit" id="lgBtn">ログイン</button>
+  </form>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="sheet.js?v=1"></script>
+<script>
+'use strict';
+// ---- 設定 ------------------------------------------------------------------------------------
+const DB = { url: 'https://grbqpsunbuduvvgdntzc.supabase.co', key: 'sb_publishable__CEhKynIR-v9uGW_cBg_1g_wHyN-k8n' };   // 公開前提のキー(カレンダー・単価表と同じ)
+const SB_LS = 'bc_sb_session';   // ログインはカレンダーと同じ入れ物(同じサイト=どれかでログインしていれば通る)
+const Q = new URLSearchParams(location.search);
+const DEMO = Q.get('demo') === '1';
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const yen = (n) => '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
+const norm = (s) => String(s || '').normalize('NFKC').replace(/[\s　・\-‐ー―]/g, '').toLowerCase();
+const rid = (p, n) => p + Date.now().toString(36) + Array.from(crypto.getRandomValues(new Uint8Array(n || 5)), (b) => (b % 36).toString(36)).join('');
+const when = (t) => { if (!t) return ''; const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600); }
+
+// ---- スマホ内の保存(IndexedDB)。localStorage はカレンダーと同じ5MB枠なので使わない ---------------
+const store = (() => {
+  let dbp = null;
+  const mem = new Map();
+  const open = () => dbp || (dbp = new Promise((res) => {
+    try {
+      const r = indexedDB.open('hd_store', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(null);
+      r.onblocked = () => res(null);
+    } catch (_) { res(null); }
+  }));
+  const tx = async (mode, fn) => {
+    const db = await open(); if (!db) return undefined;
+    return new Promise((res) => {
+      try {
+        const t = db.transaction('kv', mode), s = t.objectStore('kv'); const q = fn(s);
+        t.oncomplete = () => res(q && q.result); t.onerror = () => res(undefined); t.onabort = () => res(undefined);
+      } catch (_) { res(undefined); }
+    });
+  };
+  return {
+    async get(k) { const v = await tx('readonly', (s) => s.get(k)); return v === undefined ? mem.get(k) : v; },
+    async set(k, v) { mem.set(k, v); await tx('readwrite', (s) => s.put(v, k)); },
+    async del(k) { mem.delete(k); await tx('readwrite', (s) => s.delete(k)); },
+    async keys() { const v = await tx('readonly', (s) => s.getAllKeys()); return v || [...mem.keys()]; },
+  };
+})();
+
+// ---- ログインと通信(確認ページ・単価表と同じ作法) ---------------------------------------------
+function session() { try { const o = JSON.parse(localStorage.getItem(SB_LS) || 'null'); return (o && o.access_token) ? o : null; } catch (_) { return null; } }
+async function authFetch(path, body) {
+  const r = await fetch(DB.url + '/auth/v1/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: DB.key, Authorization: 'Bearer ' + DB.key }, body: JSON.stringify(body || {}) });
+  let d = null; try { d = await r.json(); } catch (_) {}
+  if (!r.ok) { const e = new Error((d && (d.error_description || d.msg || d.error || d.message)) || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+  return d;
+}
+function storeToken(d) {
+  if (!d || !d.access_token) throw new Error('応答にトークンがありません');
+  const s = { access_token: d.access_token, refresh_token: d.refresh_token || '', expires_at: d.expires_at || (Math.floor(Date.now() / 1000) + (d.expires_in || 3600)), email: (d.user && d.user.email) || '', role: (d.user && d.user.app_metadata && d.user.app_metadata.bc_role) || '' };
+  try { localStorage.setItem(SB_LS, JSON.stringify(s)); } catch (_) {}
+  return s;
+}
+const locked = (fn) => (navigator.locks && navigator.locks.request) ? navigator.locks.request('bc_sb_refresh', fn) : fn();
+// 🔴 bc_sb_session はカレンダーと共有。このページから消すとカレンダーごとログアウトになるので、失敗しても消さない。
+//    延長の直前に読み直す(別の画面が延長済みならそれを使う)。だめな時はログイン欄を出すだけ(手本=カレンダー sbRefresh_)。
+async function refresh(s) {
+  try { return storeToken(await authFetch('token?grant_type=refresh_token', { refresh_token: s.refresh_token })); }
+  catch (e) {
+    const now = session(); if (now && now.access_token !== s.access_token) return now;
+    if (e && (e.status === 400 || e.status === 401)) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const again = session(); if (again && again.access_token !== s.access_token) return again;
+      return null;
+    }
+    throw e;
+  }
+}
+const ensureFresh = () => locked(async () => {
+  let s = session(); if (!s || !s.expires_at) return s;
+  if (s.expires_at * 1000 - Date.now() > 90000) return s;
+  s = session(); if (!s || !s.refresh_token) return s;
+  if (s.expires_at * 1000 - Date.now() > 90000) return s;
+  try { return await refresh(s); } catch (_) { return s; }
+});
+const after401 = (used) => locked(async () => {
+  const now = session(); if (now && now.access_token !== used) return now;
+  if (!now || !now.refresh_token) return null;
+  return await refresh(now);
+});
+function needLogin(msg) { showLogin(msg); const e = new Error('ログインが必要です'); e.login = true; return e; }
+async function dbFetch(path, opts) {
+  const s = await ensureFresh(); if (!s) throw needLogin('');
+  const go = (tok) => fetch(DB.url + path, Object.assign({}, opts, { headers: Object.assign({ 'Content-Type': 'application/json' }, (opts && opts.headers) || {}, { apikey: DB.key, Authorization: 'Bearer ' + tok }) }));
+  let r = await go(s.access_token);
+  if (r.status === 401) {
+    const s2 = await after401(s.access_token);
+    if (!s2) throw needLogin('ログインが切れました。もう一度ログインしてください');
+    r = await go(s2.access_token);
+    if (r.status === 401) throw needLogin('ログインが切れました。もう一度ログインしてください');
+  }
+  return r;
+}
+async function dbJson(path, opts) {
+  const r = await dbFetch(path, opts);
+  if (!r.ok) { let m = ''; try { const d = await r.json(); m = d.message || d.code || ''; } catch (_) {} const e = new Error(m || ('HTTP ' + r.status)); e.status = r.status; e.server = true; throw e; }
+  return r.json();
+}
+const rpc = (fn, args) => dbJson('/rest/v1/rpc/' + fn, { method: 'POST', body: JSON.stringify(args) });
+const enc = encodeURIComponent;
+const ANKEN_COLS = 'id,bukken,room,motouke,koji,status,total,created_at,priceCol:doc-%3Emeta-%3E%3EpriceCol,madori:doc-%3Emeta-%3Etaikyo-%3E%3Emadori,deleted:doc-%3E%3Edeleted';
+const LIST_COLS = 'id,anken_id,bukken,room,koji,motouke,status,version,line_count,total,updated_at,updated_by,created_by,sent_at,sent_by,sent_version,entered_at,entered_by,entered_version';
+
+const RealApi = {
+  who() { const s = session(); return s ? { email: s.email, role: s.role } : null; },
+  async items() {
+    let rows;
+    try { rows = await dbJson('/rest/v1/tanka_items?is_deleted=eq.false&select=item_no,cat,item,unit,prices,room:doc-%3E%3E' + enc('室名')); }
+    catch (e) { if (!e.server) throw e; rows = await dbJson('/rest/v1/tanka_items?is_deleted=eq.false&select=item_no,cat,item,unit,prices'); }
+    if (!rows.length) throw new Error('単価表が空です');
+    return rows;
+  },
+  async anken(id) { const r = await dbJson(`/rest/v1/anken?id=eq.${enc(id)}&select=${ANKEN_COLS}`); return r[0] || null; },
+  async candidates(room) { const x = String(room || '').replace(/号室$/, ''); return dbJson(`/rest/v1/anken?room=in.(${enc('"' + x + '"')},${enc('"' + x + '号室"')})&select=${ANKEN_COLS}&order=created_at.desc&limit=60`); },
+  async bukkenNames() { return (await dbJson('/rest/v1/bukken?select=name&order=name')).map((x) => x.name); },
+  async bukken(name) { const r = await dbJson(`/rest/v1/bukken?name=eq.${enc(name)}&select=name,type,loft,madori,accent,cf,notes,memo,images:doc-%3EmadoriImages,options:doc-%3EmadoriOptions,defaultMadori:doc-%3E%3EmadoriDefault`); return r[0] || null; },
+  async draftByAnken(id) { const r = await dbJson(`/rest/v1/genba_hiroidashi?anken_id=eq.${enc(id)}&select=*`); return r[0] || null; },
+  async draftByPlace(b, room) { const r = await dbJson(`/rest/v1/genba_hiroidashi?bukken=eq.${enc(b)}&room=eq.${enc(room)}&order=updated_at.desc&limit=1&select=*`); return r[0] || null; },
+  async draft(id) { const r = await dbJson(`/rest/v1/genba_hiroidashi?id=eq.${enc(id)}&select=*`); return r[0] || null; },
+  async list(filter) {
+    let q = `/rest/v1/genba_hiroidashi?select=${LIST_COLS}&limit=80`;
+    q += filter === 'sent' ? '&status=eq.sent&order=sent_at.desc' : '&order=updated_at.desc';
+    return dbJson(q);
+  },
+  save(j) { return rpc('hiroidashi_save', { p_operation_id: j.op, p_id: j.id, p_base_version: j.base, p_anken_id: j.anken || null, p_bukken: j.bukken, p_room: j.room, p_koji: j.koji || null, p_motouke: j.motouke || null, p_doc: j.doc, p_send: !!j.send, p_editor: j.editor || '' }); },
+  del(j) { return rpc('hiroidashi_delete', { p_operation_id: j.op, p_id: j.id, p_base_version: j.base, p_editor: j.editor || '' }); },
+  mark(j) { return rpc('hiroidashi_mark_entered', { p_operation_id: j.op, p_id: j.id, p_done: j.done, p_editor: j.editor || '' }); },
+  async planUrls(refs) {
+    const paths = refs.filter((r) => /^sb:photos\//.test(r)).map((r) => r.slice('sb:photos/'.length)); if (!paths.length) return {};
+    const arr = await dbJson('/storage/v1/object/sign/photos', { method: 'POST', body: JSON.stringify({ expiresIn: 3600, paths }) });
+    const out = {}; (arr || []).forEach((x) => { const u = x && (x.signedURL || x.signedUrl); if (u && x.path) out['sb:photos/' + x.path] = /^https?:/.test(u) ? u : DB.url + '/storage/v1' + u; });
+    return out;
+  },
+};
+let Api = RealApi;
+
+// ---- 単価表 ------------------------------------------------------------------------------------
+let CAT = [];            // [{no,name,unit,cat,room,prices}]
+let COLS = [];           // 元請けの列
+async function loadCatalog() {
+  let rows = null, stale = false;
+  try { rows = await Api.items(); store.set('catalog', { at: Date.now(), rows }).catch(() => {}); }
+  catch (e) { if (e.login) throw e; const c = await store.get('catalog'); if (c) { rows = c.rows; stale = true; } else throw e; }
+  CAT = rows.map((r) => ({ no: r.item_no, name: r.item, unit: r.unit || '式', cat: r.cat, room: typeof r.room === 'string' ? r.room : '', prices: r.prices || {} })).sort((a, b) => a.no - b.no);
+  const count = {}; CAT.forEach((c) => Object.keys(c.prices).forEach((k) => { if (c.prices[k] != null) count[k] = (count[k] || 0) + 1; }));
+  COLS = Object.keys(count).sort((a, b) => count[b] - count[a]);
+  return stale;
+}
+function colFor(motouke, priceCol) {
+  if (priceCol && COLS.includes(priceCol)) return priceCol;
+  const n = (s) => String(s || '').normalize('NFKC').replace(/\s|　|株式会社|有限会社|\(株\)|（株）|\(有\)|（有）/g, '');
+  const c = n(motouke); if (!c) return '';
+  return COLS.find((col) => { const x = n(col); return x && (c.includes(x) || x.includes(c)); }) || '';
+}
+function byNo(col) { const by = {}; CAT.forEach((c) => { by[c.no] = { name: c.name, unit: c.unit, cat: c.cat, room: c.room, price: col && c.prices[col] != null ? c.prices[col] : null }; }); return by; }
+
+// ---- 下書きの状態 ------------------------------------------------------------------------------
+let R = null;   // 開いている下書き
+const UI = { tab: 'rooms', openRoom: null, openLine: null, q: '', fN: '', fQ: '1', fU: '式', fP: '', confirmDel: false, hideAmount: false };
+function newDoc(madori) { return { schema: 1, madori: madori || '', loft: false, stair: false, ampere: '', rooms: HD.defaultRooms(madori).map(HD.blankRoom), sel: {}, free: [], over: {}, del: {}, tags: {}, memo: '', priceCol: '' }; }
+function normalizeDoc(d) { const n = newDoc(d && d.madori); return Object.assign(n, d || {}, { rooms: (d && d.rooms) || n.rooms, sel: (d && d.sel) || {}, free: (d && d.free) || [], over: (d && d.over) || {}, del: (d && d.del) || {}, tags: (d && d.tags) || {} }); }
+const currentLines = () => HD.buildLines(R.doc, byNo(R.doc.priceCol));
+function fromRow(row) { return { id: row.id, version: row.version, ankenId: row.anken_id, bukken: row.bukken, room: row.room, koji: row.koji, motouke: row.motouke, status: row.status, sentVersion: row.sent_version, sentAt: row.sent_at, sentBy: row.sent_by, updatedBy: row.updated_by, updatedAt: row.updated_at, enteredAt: row.entered_at, enteredBy: row.entered_by, enteredVersion: row.entered_version, doc: normalizeDoc(row.doc), dirty: false, seq: 0, inflight: null, conflict: null }; }
+const persistable = () => { const { info, planUrls, candidates, ankenNote, ankenInfo, ...rest } = R; return Object.assign({}, rest, { savedAt: Date.now() }); };
+let persistT = null;
+function persistSoon() { clearTimeout(persistT); persistT = setTimeout(persistNow, 60); }   // カレンダーの枠が閉じられても消えないよう、押したらすぐ手元に残す
+const persistNow = async () => { clearTimeout(persistT); if (R && (R.dirty || R.inflight || R.version > 0)) await store.set('d:' + R.id, persistable()); };
+async function localDrafts() { const keys = (await store.keys()).filter((k) => String(k).startsWith('d:')); const out = []; for (const k of keys) { const v = await store.get(k); if (v) out.push(v); } return out; }
+async function purgeOld() { const limit = Date.now() - 30 * 864e5; for (const d of await localDrafts()) if (!d.dirty && !d.inflight && (d.savedAt || 0) < limit) await store.del('d:' + d.id); }
+
+// ---- サーバへ送る(答えが返らなかった送信は、同じ内容・同じ番号で送り直す) ----------------------------
+let pushing = false, pushAgain = false, pushT = null, retryT = null, online = true;
+// 入力にかかった時間を下書きに残す。5分以上あいた分は数えない(別の作業や翌日に続けた分を入れないため)
+function tickTiming() {
+  const t = R.doc.timing || (R.doc.timing = {}); const now = Date.now(); const iso = new Date(now).toISOString();
+  if (!t.openedAt) t.openedAt = iso;
+  if (!t.firstInputAt) t.firstInputAt = iso;
+  if (t.lastMs && now - t.lastMs < 5 * 60000) t.activeMs = (t.activeMs || 0) + (now - t.lastMs);
+  t.lastMs = now; t.inputs = (t.inputs || 0) + 1;
+}
+function timingText(t) {
+  if (!t || !t.inputs) return '';
+  const m = Math.round((t.activeMs || 0) / 60000);
+  return `${m < 1 ? '1分未満' : '約' + m + '分'} ・ ${t.inputs}回の操作`;
+}
+function changed() { tickTiming(); R.dirty = true; R.seq = (R.seq || 0) + 1; persistSoon(); schedulePush(3500); renderStatus(); }
+function schedulePush(ms) { clearTimeout(pushT); pushT = setTimeout(() => pushNow(false), ms); }
+function snapshotDoc() { const lines = currentLines(); return JSON.parse(JSON.stringify(Object.assign({}, R.doc, { lines, total: HD.totalOf(lines), savedFrom: 'page-v1' }))); }   // 送る時点の内容で固定する(送り直しても同じ中身)
+function editorName() { const s = session(); return (s && s.email) || ''; }
+async function pushNow(send) {
+  if (!R) return;
+  if (pushing) { pushAgain = true; if (send) R.sendAfter = true; return; }
+  pushing = true; clearTimeout(pushT); clearTimeout(retryT);
+  try {
+    if (send) R.sendAfter = true;
+    for (let i = 0; i < 8; i++) {
+      if (R.conflict) break;
+      let job = R.inflight;
+      if (!job) {
+        if (!R.dirty && !R.sendAfter) break;
+        job = { op: rid('op', 6), id: R.id, base: R.version || 0, anken: R.ankenId, bukken: R.bukken, room: R.room, koji: R.koji, motouke: R.motouke, doc: snapshotDoc(), send: !!R.sendAfter, seq: R.seq, editor: editorName() };
+        R.inflight = job; await persistNow();
+      }
+      const res = await Api.save(job);
+      R.inflight = null; online = true;
+      const result = res && res.result;
+      if (result === 'applied') {
+        R.version = res.version;
+        if (job.send) { R.status = 'sent'; R.sentVersion = res.version; R.sentAt = new Date().toISOString(); R.sendAfter = false; toast('送りました'); }
+        if (R.seq === job.seq) R.dirty = false;
+      } else if (result === 'stale_version') {
+        R.conflict = { kind: 'stale', by: res.updated_by, at: res.updated_at, version: res.version };
+      } else if (result === 'exists') {
+        if (res.id === R.id) { R.version = res.version; R.dirty = true; continue; }   // 自分の前の保存が入っていた
+        R.conflict = { kind: 'exists', id: res.id, version: res.version };
+      } else if (result === 'deleted' || result === 'not_found') {
+        R.conflict = { kind: 'deleted' };
+      } else if (result === 'already_processed') {
+        const row = await Api.draft(R.id); if (row) R.version = row.version;
+      } else throw Object.assign(new Error('想定外の答え: ' + result), { server: true });
+      await persistNow();
+    }
+    R.lastError = '';
+  } catch (e) {
+    if (e && e.login) { R.lastError = 'ログインが必要です'; }
+    else if (e && e.server) {
+      R.inflight = null;
+      R.lastError = /no role/.test(e.message) ? 'この権限では保存できません(スマホ内には残っています)'
+        : (e.status === 404 ? '保存先がまだ準備できていません(スマホ内には残っています)' : '保存できませんでした: ' + e.message);
+    } else { online = false; R.lastError = ''; if (R.sendAfter) toast('電波が戻ったら送ります'); clearTimeout(retryT); retryT = setTimeout(() => pushNow(false), 20000); }
+    await persistNow();
+  } finally {
+    pushing = false; renderStatus(); renderBanner();
+    if (pushAgain) { pushAgain = false; schedulePush(300); }
+  }
+}
+window.addEventListener('online', () => { if (R) pushNow(false); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && R) { persistNow(); if (R.dirty || R.inflight) pushNow(false); } });
+window.addEventListener('pagehide', () => { if (R) persistNow(); });
+
+function statusInfo() {
+  if (!R) return ['', ''];
+  if (R.conflict) return ['ng', '確認が必要です'];
+  if (R.lastError) return ['ng', R.lastError];
+  if (!online && (R.dirty || R.inflight)) return ['wait', '電波待ち(スマホ内に保存済み)'];
+  if (pushing) return ['', '保存中…'];
+  if (R.dirty || R.inflight) return ['wait', 'スマホ内に保存済み'];
+  if (R.version) return ['ok', '保存済み'];
+  return ['', 'まだ入力がありません'];
+}
+function renderStatus() { const el = $('status'); if (!el) return; const [c, t] = statusInfo(); el.className = 'status ' + c; el.textContent = t; }
+
+function bannerHtml() {
+  if (!R) return '';
+  const c = R.conflict;
+  if (c && c.kind === 'stale') return `<div class="warn ng"><div><b>${esc(c.by || '別の人')}さんが ${esc(when(c.at))} に直しました。</b> どちらを残すか選んでください。こちらの入力はスマホ内に残っています。</div><div class="opts"><button class="btn small" data-act="useRemote">相手の版を読む</button><button class="btn small" data-act="overwrite">自分の版で上書きする</button></div></div>`;
+  if (c && c.kind === 'exists') return `<div class="warn ng"><div><b>この見積の下書きは、別の人がもう始めています。</b></div><div class="opts"><button class="btn small" data-act="useExisting">そちらを開く(こちらの入力は消えます)</button><button class="btn small" data-act="overwriteExisting">自分の入力で上書きする</button></div></div>`;
+  if (c && c.kind === 'deleted') return `<div class="warn ng"><div><b>この下書きは消されています。</b> 入力を残すなら新しい下書きとして保存します。</div><div class="opts"><button class="btn small" data-act="saveAsNew">新しい下書きにする</button></div></div>`;
+  if (R.status === 'sent' && R.version && R.sentVersion && R.version > R.sentVersion) return `<div class="warn"><div>送った後に直しました。見積の担当に見てもらうには、もう一度送ってください。</div></div>`;
+  if (R.status === 'sent') return `<div class="warn ok"><div>${esc(when(R.sentAt))} に送りました。${R.enteredAt ? ` ${esc(R.enteredBy || '')}さんが見積に入れました。` : ''}</div></div>`;
+  return '';
+}
+function renderBanner() { const el = $('banner'); if (el) el.innerHTML = bannerHtml(); }
+
+// ---- 画面: 拾い出し ---------------------------------------------------------------------------
+function chips(act, name, vals, on) { return vals.map((v) => `<button class="opt ${on(v) ? 'on' : ''}" data-act="${act}" data-n="${esc(name)}" data-v="${esc(v)}" aria-pressed="${!!on(v)}">${esc(v)}</button>`).join(''); }
+function optRow(g) {
+  if (g.band) return `<div class="band">${esc(g.band)}</div>`;
+  if (g.tag) { const cur = R.doc.tags[g.id] || []; return `<div class="row"><div class="lbl">${esc(g.t)}<span class="note"> (メモ)</span></div><div class="opts">${chips('tag', g.id, g.vals, (v) => cur.includes(v))}</div></div>`; }
+  const by = byNo(R.doc.priceCol);
+  return `<div class="row"><div class="lbl">${esc(g.t)}</div><div class="opts">` + g.opts.map((o) => {
+    const k = g.id + ':' + o.l; const on = R.doc.sel[k];
+    const nm = o.name || (typeof o.no === 'number' && by[o.no] ? by[o.no].name : '');
+    const st = (on && g.c) ? `<span class="st"><button data-act="dec" data-k="${esc(k)}" aria-label="${esc(g.t + o.l)}を減らす">−</button><b>${on.qty}</b><button data-act="inc" data-k="${esc(k)}" aria-label="${esc(g.t + o.l)}を増やす">＋</button></span>` : '';
+    return `<span class="optw"><button class="opt ${on ? 'on' : ''}" data-act="opt" data-k="${esc(k)}" aria-pressed="${!!on}" title="${esc(nm)}">${esc(o.l)}</button>${st}</span>`;
+  }).join('') + `</div></div>`;
+}
+function roomSum(r) { const a = []; if (+r.wall) a.push('壁' + r.wall); if (+r.ceil) a.push('天' + r.ceil); if (+r.acc) a.push('ア' + r.acc); if (r.floor) a.push(r.floor + (+r.floorQty ? r.floorQty : '')); if (+r.haba) a.push('巾' + r.haba); if (r.miki) a.push(r.miki); return a.join(' '); }
+function nf(r, i, f, lbl, unit) {
+  const id = `r${i}-${f}`;
+  const hint = ((HD.ROOM_HINT[HD.baseMadori(R.doc.madori)] || {})[r.name] || {})[f];
+  return `<label class="nf" for="${id}">${lbl}(${unit})<input id="${id}" type="number" inputmode="decimal" min="0" step="0.5" value="${esc(r[f])}" data-room="${i}" data-field="${f}">${(hint && !r[f]) ? `<button type="button" class="hint" data-act="hint" data-i="${i}" data-f="${f}" data-v="${hint}">よくある ${hint}</button>` : ''}</label>`;
+}
+function roomHtml(r, i) {
+  const open = UI.openRoom === r.name;
+  const set = r.name === 'トイレ' || r.name === '洗面所';
+  return `<div class="room"><button data-act="openRoom" data-n="${esc(r.name)}" aria-expanded="${open}"><b>${esc(r.name)}</b><span>${esc(roomSum(r))}</span></button>${open ? `<div class="rbody">
+    <div class="lbl">クロス張替</div><div class="nums">${nf(r, i, 'wall', '壁', '㎡')}${nf(r, i, 'ceil', '天井', '㎡')}${nf(r, i, 'acc', 'アクセント', '㎡')}</div>
+    <div class="lbl">張替面(壁)</div><div class="opts">${chips('face', i, ['全', '東', '西', '南', '北'], (v) => (r.faces || []).includes(v))}</div>
+    <div class="lbl">天井</div><div class="opts">${chips('ceilType', i, ['クロス', 'ジプトン'], (v) => r.ceilType === v)}</div>
+    <div class="lbl">原因</div><div class="opts">${chips('reason', i, ['経年変色', 'クラック', 'カビ・汚れ', '過失(汚損破損)'], (v) => (r.reasons || []).includes(v))}</div>
+    <div class="lbl">床</div><div class="opts">${chips('floor', i, ['CF', 'CF重ね', 'FT'], (v) => r.floor === v)}</div>
+    <div class="nums">${(r.floor && !(set && r.floor === 'CF')) ? nf(r, i, 'floorQty', '床', '㎡') : ''}${nf(r, i, 'haba', '巾木', 'm')}</div>
+    <div class="lbl">見切</div><div class="opts">${chips('miki', i, ['1方', '2方'], (v) => r.miki === v)}</div>
+    <div><button class="btn small" data-act="removeRoom" data-i="${i}">この部屋を一覧から外す</button></div>
+  </div>` : ''}</div>`;
+}
+function panelRooms() {
+  return R.doc.rooms.map(roomHtml).join('') + `<div class="row"><div class="lbl">部屋を足す</div><div class="opts">${['台所', 'DK', 'LDK', '洋室', '和室', 'CL', '廊下', 'ロフト', '押入'].filter((n) => !R.doc.rooms.some((r) => r.name === n)).map((n) => `<button class="btn small" data-act="addRoom" data-v="${n}">＋${n}</button>`).join('')}<input id="newRoom" class="txt" style="flex:1 1 130px;min-height:36px" placeholder="ほかの部屋名" data-ui="newRoom"><button class="btn small" data-act="addRoomText">足す</button></div></div>` + HD.SIDE.map(optRow).join('');
+}
+function panelMore() {
+  const q = norm(UI.q);
+  const by = byNo(R.doc.priceCol);
+  const hits = q ? CAT.filter((c) => norm(c.name).includes(q)).slice(0, 15) : [];
+  const pick = (no) => { const c = by[no]; if (!c) return ''; const on = R.doc.sel['t:' + no]; return `<button data-act="addItem" data-no="${no}"><span>${on ? '✓ ' : ''}${esc(c.name)}</span><span class="amt">${c.price == null ? '単価なし' : yen(c.price)}/${esc(c.unit)}</span></button>`; };
+  return `<div class="row"><label class="lbl" for="sbox">単価表から探す(全${CAT.length}項目)</label><input id="sbox" class="txt" placeholder="例: レジスター、包丁、ドアクローザー" value="${esc(UI.q)}" autocomplete="off" data-ui="q"><div class="res" id="sres">${hits.map((c) => pick(c.no)).join('')}${q && !hits.length ? '<div class="note">単価表にありません。下の欄に書いてください。</div>' : ''}</div></div>
+  <div class="row"><div class="lbl">シートにないけれど多い行</div><div class="res">${HD.FREQ.map(pick).join('')}</div></div>
+  <div class="row"><div class="lbl">自由に書く(スマホのマイクで声でも入れられます)</div>
+    <div class="free"><input id="fN" aria-label="内容" placeholder="内容" value="${esc(UI.fN)}" data-ui="fN"><input id="fQ" aria-label="数量" type="number" inputmode="decimal" value="${esc(UI.fQ)}" data-ui="fQ"><input id="fU" aria-label="単位" value="${esc(UI.fU)}" data-ui="fU"><input id="fP" aria-label="単価" type="number" inputmode="numeric" placeholder="単価" value="${esc(UI.fP)}" data-ui="fP"></div>
+    <div><button class="btn" data-act="addFree">足す</button></div></div>
+  <div class="row"><label class="lbl" for="memoBox">メモ(次回の段取りや気づいたこと。見積の行にはなりません)</label><textarea id="memoBox" class="txt" rows="3" data-doc="memo" placeholder="例: 延長コードがないとエアコンが使えない">${esc(R.doc.memo)}</textarea></div>
+  <div class="row"><div class="lbl">この下書きを消す</div>${UI.confirmDel ? `<div class="opts"><button class="btn" data-act="delDraft">本当に消す</button><button class="btn" data-act="delCancel">やめる</button></div>` : `<div><button class="btn small" data-act="delAsk">消す</button></div>`}</div>`;
+}
+function panelHtml() {
+  if (UI.tab === 'rooms') return panelRooms();
+  if (UI.tab === 'maru') return HD.MARU.map(optRow).join('');
+  if (UI.tab === 'teian') return HD.TEIAN.map(optRow).join('');
+  if (UI.tab === 'more') return panelMore();
+  return '';
+}
+const SRC_LABEL = { tap: 'タップ', num: 'タップ+数字', auto: '自動', search: '単価表から探す', free: '手書き' };
+function lineHtml(l) {
+  const open = UI.openLine === l.key; const roomLine = /^r:/.test(l.key);
+  return `<div class="ln"><button data-act="line" data-k="${esc(l.key)}" aria-expanded="${open}"><span class="ck" aria-hidden="true">✓</span><span class="nm"><i class="dot s-${l.src}" title="${SRC_LABEL[l.src]}"></i>${l.room ? esc(l.room) + ' ' : ''}${esc(l.name)}${l.burden === '入居者' ? '<span class="tenant">入居者</span>' : ''}${(l.noPrice || l.askPrice) ? '<span class="flag">単価を確認</span>' : ''}${l.specs ? `<span class="sp">${esc(l.specs)}</span>` : ''}</span><span class="am">${yen((Number(l.qty) || 0) * (Number(l.price) || 0))}<small>${esc(l.qty)}${esc(l.unit)} × ${yen(l.price)}</small></span></button>${open ? `<div class="edit">
+    <button class="opt ${l.burden === '家主' ? 'on' : ''}" data-act="burden" data-k="${esc(l.key)}" data-v="家主">家主</button><button class="opt ${l.burden === '入居者' ? 'on' : ''}" data-act="burden" data-k="${esc(l.key)}" data-v="入居者">入居者</button>
+    <label>部屋<input data-line="${esc(l.key)}" data-prop="room" value="${esc(l.room)}" list="roomList"></label>
+    ${roomLine ? '' : `<label>数量<input type="number" inputmode="decimal" value="${esc(l.qty)}" data-line="${esc(l.key)}" data-prop="qty"></label>`}
+    <label>単価<input type="number" inputmode="numeric" value="${esc(l.price)}" data-line="${esc(l.key)}" data-prop="price"></label>
+    <button class="btn small" data-act="delLine" data-k="${esc(l.key)}">消す</button></div>` : ''}</div>`;
+}
+function draftHtml() {
+  const L = currentLines(); const total = HD.totalOf(L); const cnt = { tap: 0, num: 0, auto: 0, search: 0, free: 0 }; L.forEach((l) => cnt[l.src]++);
+  const tags = Object.keys(R.doc.tags || {}).map((k) => { const g = [...HD.MARU, ...HD.TEIAN].find((x) => x.id === k); const v = R.doc.tags[k]; return (g && v && v.length) ? `${g.t}: ${v.join('・')}` : ''; }).filter(Boolean);
+  const delCount = Object.keys(R.doc.del || {}).length;
+  return `<div class="dhead"><span>見積に入る下書き</span><span>${L.length}行</span></div>
+  <div class="tally">${Object.keys(cnt).map((k) => `<span><i class="dot s-${k}"></i>${SRC_LABEL[k]} ${cnt[k]}</span>`).join('')}</div>
+  ${L.map(lineHtml).join('') || '<div class="row note">まだ行がありません。部屋や丸付けの欄を押してください。</div>'}
+  <div class="total"><span>合計(税別)</span><span class="amt">${yen(total)}</span></div>
+  ${tags.length || R.doc.memo ? `<div class="row"><div class="lbl">メモ</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc([...tags, R.doc.memo].filter(Boolean).join('\n'))}</div></div>` : ''}
+  ${delCount ? `<div class="row"><button class="btn small" data-act="restoreDel">消した行を戻す(${delCount}行)</button></div>` : ''}
+  ${(UI.askTeian && !HD.teianCount(L)) ? `<div class="warn" role="alert"><div><b>${(R.doc.timing && R.doc.timing.teianSeenAt) ? '提案は0件です。' : '提案のタブをまだ開いていません。'}</b> このまま送りますか？</div><div class="opts"><button class="btn small" data-act="sendGoTeian">提案を見る</button><button class="btn small" data-act="sendAnyway">このまま送る</button></div></div>` : ''}
+  <div class="row" style="border:0"><p class="note" style="margin:0">本番の単価は、見積に入れるときに見積アプリで引き直します。行を押すと、負担・部屋・単価を直せます。${timingText(R.doc.timing) ? `<br>入力にかかった時間: ${esc(timingText(R.doc.timing))}` : ''}</p><div class="opts"><button class="btn pri" data-act="send" id="sendBtn">見積の担当へ送る</button><button class="btn small" data-act="copy">文字でコピー</button></div></div>`;
+}
+function footHtml() { const L = currentLines(); return `<div class="sum">下書き <b>${L.length}</b> 行<br><span class="amt">税別 <b>${yen(HD.totalOf(L))}</b></span></div><button class="btn only-narrow" data-act="tab" data-v="draft">下書きを見る</button>`; }
+function infoHtml() {
+  const b = R.info || {}; const notes = [b.type && '区分: ' + b.type, b.notes, b.memo, b.accent && b.accent !== '-' && 'アクセント: ' + b.accent, b.cf && b.cf !== '-' && 'CF: ' + b.cf].filter(Boolean).join('\n');
+  const imgs = Array.isArray(b.images) ? b.images : [];
+  const urls = R.planUrls || {};
+  const plan = imgs.map((m, i) => { const u = urls[m.driveId]; return u ? `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="plan-img" src="${esc(u)}" alt="間取図 ${esc(m.label || '')}" loading="lazy"></a><div class="note" style="text-align:center">${esc(m.label || '')}</div>` : ''; }).join('');
+  const showPlan = plan && !imgs.every((m) => !urls[m.driveId]);
+  return (showPlan ? `<details ${UI.planOpen === false ? '' : 'open'}><summary>間取図</summary><div class="inner">${plan}</div></details>` : '') + (notes ? `<details><summary>物件の注意</summary><div class="inner">${esc(notes)}</div></details>` : '');
+}
+function renderEditor() {
+  document.body.classList.toggle('no-amount', !!UI.hideAmount);
+  const T = [['rooms', '部屋・床'], ['maru', '丸付け'], ['teian', '提案'], ['more', '追加'], ['draft', '下書き']];
+  const madoriChoices = [...new Set([...(Array.isArray((R.info || {}).options) ? R.info.options : []), '1K', '1R', '1DK', '1LDK', '2K', '2DK', '2LDK', '3K', '3DK', '3LDK', '4DK', '4LDK'].filter(Boolean))];
+  const col = R.doc.priceCol;
+  $('app').innerHTML = `<div class="toprow"><a href="?">← 一覧へ</a><span id="status" class="status"></span></div>
+  <div class="stage"><div class="tool">
+    <div class="head"><h1>${esc(R.bukken)} ${esc(R.room)}</h1>
+      <div class="sub">${esc(R.motouke || '')}${R.koji ? ' ・ ' + esc(R.koji) : ''}</div>
+      <div class="opts" style="gap:6px">
+        <select id="madori" data-doc="madori" aria-label="間取り" class="txt" style="flex:1 1 90px;width:auto;min-height:40px"><option value="">間取り</option>${madoriChoices.map((m) => `<option ${m === R.doc.madori ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
+        <select id="priceCol" data-doc="priceCol" aria-label="単価の列" class="txt" style="flex:1 1 130px;width:auto;min-height:40px"><option value="">単価の列を選ぶ</option>${COLS.map((c) => `<option ${c === col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      </div>
+      <div class="opts" style="gap:6px"><button class="opt ${R.doc.loft ? 'on' : ''}" data-act="flag" data-f="loft" aria-pressed="${!!R.doc.loft}">ロフト</button><button class="opt ${R.doc.stair ? 'on' : ''}" data-act="flag" data-f="stair" aria-pressed="${!!R.doc.stair}">内階段</button><label class="nf" style="grid-template-columns:auto 70px;align-items:center;gap:4px" for="ampere">アンペア<input id="ampere" style="height:44px;font-size:18px" type="number" inputmode="numeric" value="${esc(R.doc.ampere)}" data-doc="ampere"></label><button class="opt ${UI.hideAmount ? 'on' : ''}" data-act="hideAmount" aria-pressed="${!!UI.hideAmount}" style="margin-left:auto">金額を隠す</button></div>
+    </div>
+    <div id="banner">${bannerHtml()}</div>
+    <div id="link">${linkHtml()}</div>
+    ${!col ? '<div class="warn">単価の列を選ぶと金額が出ます。項目と数量はこのまま入れられます。</div>' : ''}
+    <div id="info">${infoHtml()}</div>
+    <div class="tabs" role="tablist">${T.map(([k, l]) => `<button role="tab" aria-selected="${UI.tab === k}" data-act="tab" data-v="${k}" class="${k === 'draft' ? 'only-narrow' : ''}">${l}</button>`).join('')}</div>
+    <div id="panel">${UI.tab === 'draft' ? `<div class="only-narrow" id="draftNarrow">${draftHtml()}</div>` : panelHtml()}</div>
+    <div class="foot" id="foot">${footHtml()}</div>
+  </div>
+  <aside class="draft only-wide" id="draft">${draftHtml()}</aside></div>
+  <datalist id="roomList">${R.doc.rooms.map((r) => `<option value="${esc(r.name)}">`).join('')}<option value="全室"><option value="各室"><option value="浴室"><option value="バルコニー"></datalist>`;
+  renderStatus();
+}
+function renderDraftOnly() {
+  const f = $('foot'); if (f) f.innerHTML = footHtml();
+  const d = $('draft'); if (d) d.innerHTML = draftHtml();
+  const n = $('draftNarrow'); if (n) n.innerHTML = draftHtml();
+}
+function rerender(focus) {
+  const y = window.scrollY; renderEditor(); window.scrollTo(0, y);
+  if (focus) { const el = document.querySelector(focus); if (el) el.focus({ preventScroll: true }); }
+}
+const cssv = (v) => String(v).replace(/["\\]/g, '\\$&');
+
+// ---- 押した時の動き ------------------------------------------------------------------------------
+function act(el) {
+  const a = el.dataset.act, d = el.dataset; const doc = R && R.doc; let focus = null, dirty = true;
+  const room = d.i != null ? doc.rooms[+d.i] : (d.n != null && /^\d+$/.test(d.n) ? doc.rooms[+d.n] : null);
+  switch (a) {
+    case 'tab': UI.tab = d.v; dirty = false; if (d.v === 'teian') { const t = doc.timing || (doc.timing = {}); if (!t.teianSeenAt) { t.teianSeenAt = new Date().toISOString(); persistSoon(); } } focus = `.tabs [data-v="${d.v}"]`; rerender(focus); document.querySelector('.tabs').scrollIntoView({ block: 'nearest' }); return;
+    case 'opt': if (doc.sel[d.k]) delete doc.sel[d.k]; else doc.sel[d.k] = { qty: 1 }; focus = `.opt[data-k="${cssv(d.k)}"]`; break;
+    case 'inc': doc.sel[d.k].qty++; focus = `[data-act="inc"][data-k="${cssv(d.k)}"]`; break;
+    case 'dec': doc.sel[d.k].qty--; if (doc.sel[d.k].qty <= 0) { delete doc.sel[d.k]; focus = `.opt[data-k="${cssv(d.k)}"]`; } else focus = `[data-act="dec"][data-k="${cssv(d.k)}"]`; break;
+    case 'tag': { const c = doc.tags[d.n] || []; doc.tags[d.n] = c.includes(d.v) ? c.filter((x) => x !== d.v) : [...c, d.v]; focus = `[data-act="tag"][data-n="${cssv(d.n)}"][data-v="${cssv(d.v)}"]`; break; }
+    case 'flag': doc[d.f] = !doc[d.f]; focus = `[data-act="flag"][data-f="${d.f}"]`; break;
+    case 'hideAmount': UI.hideAmount = !UI.hideAmount; dirty = false; focus = '[data-act="hideAmount"]'; break;
+    case 'openRoom': UI.openRoom = UI.openRoom === d.n ? null : d.n; dirty = false; focus = `.room button[data-n="${cssv(d.n)}"]`; break;
+    case 'face': { let f = room.faces || []; if (d.v === '全') f = ['全']; else { f = f.filter((x) => x !== '全'); f = f.includes(d.v) ? f.filter((x) => x !== d.v) : [...f, d.v]; if (!f.length) f = ['全']; } room.faces = f; focus = `[data-act="face"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break; }
+    case 'ceilType': room.ceilType = d.v; focus = `[data-act="ceilType"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
+    case 'reason': { const c = room.reasons || []; room.reasons = c.includes(d.v) ? c.filter((x) => x !== d.v) : [...c, d.v]; focus = `[data-act="reason"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break; }
+    case 'floor': room.floor = room.floor === d.v ? '' : d.v; focus = `[data-act="floor"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
+    case 'miki': room.miki = room.miki === d.v ? '' : d.v; focus = `[data-act="miki"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
+    case 'hint': room[d.f] = d.v; focus = `#r${d.i}-${d.f}`; break;
+    case 'removeRoom': { const has = roomSum(room); doc.rooms.splice(+d.i, 1); if (has) toast(`${room.name}の入力を外しました`); UI.openRoom = null; break; }
+    case 'addRoom': addRoom(d.v); break;
+    case 'addRoomText': { const e = $('newRoom'); const v = e && e.value.trim(); if (!v) { if (e) e.focus(); return; } addRoom(v); break; }
+    case 'addItem': { const k = 't:' + d.no; if (doc.sel[k]) doc.sel[k].qty++; else doc.sel[k] = { qty: 1 }; toast(byNo(doc.priceCol)[d.no].name + ' を足しました'); break; }
+    case 'addFree': { const n = UI.fN.trim(); if (!n) { const e = $('fN'); if (e) e.focus(); return; } doc.free.push({ id: 'f:' + rid('', 4), name: n, qty: Number(UI.fQ) || 1, unit: UI.fU || '式', price: Number(UI.fP) || 0 }); UI.fN = ''; UI.fQ = '1'; UI.fU = '式'; UI.fP = ''; toast('足しました'); focus = '#fN'; break; }
+    case 'line': UI.openLine = UI.openLine === d.k ? null : d.k; dirty = false; focus = `.ln button[data-k="${cssv(d.k)}"]`; break;
+    case 'burden': doc.over[d.k] = Object.assign(doc.over[d.k] || {}, { burden: d.v }); focus = `[data-act="burden"][data-k="${cssv(d.k)}"][data-v="${d.v}"]`; break;
+    case 'delLine':
+      if (doc.sel[d.k]) delete doc.sel[d.k];
+      else if (doc.free.some((f) => f.id === d.k)) doc.free = doc.free.filter((f) => f.id !== d.k);
+      else if (/^r:/.test(d.k)) {
+        const m = d.k.match(/^r:(.*):([wcafhm])$/); const r = m && doc.rooms.find((x) => x.name === m[1]);
+        if (r) ({ w: () => { r.wall = ''; }, c: () => { r.ceil = ''; }, a: () => { r.acc = ''; }, f: () => { r.floor = ''; r.floorQty = ''; }, h: () => { r.haba = ''; }, m: () => { r.miki = ''; } })[m[2]]();
+      } else doc.del[d.k] = 1;
+      delete doc.over[d.k]; UI.openLine = null; break;
+    case 'restoreDel': doc.del = {}; break;
+    case 'link': { const c = (R.candidates || []).find((x) => x.id === d.v); if (!c) return; applyAnken(c); R.ankenNote = ''; toast('見積とつなぎました'); break; }
+    case 'send': {
+      if (R.conflict) { toast('先に上の確認に答えてください'); return; }
+      const lines = currentLines(); if (!lines.length) { toast('まだ行がありません'); return; }
+      if (!HD.teianCount(lines) && !doc.teianOk) { UI.askTeian = true; const t = doc.timing || (doc.timing = {}); t.teianAsked = (t.teianAsked || 0) + 1; persistSoon(); renderDraftOnly(); const b = document.querySelector('[data-act="sendAnyway"]'); if (b) b.scrollIntoView({ block: 'nearest' }); return; }
+      markSent(); pushNow(true); return;
+    }
+    case 'sendAnyway': { doc.teianOk = true; UI.askTeian = false; const t = doc.timing || (doc.timing = {}); t.teianSkipped = true; markSent(); pushNow(true); renderDraftOnly(); return; }
+    case 'sendGoTeian': { UI.askTeian = false; UI.tab = 'teian'; const t = doc.timing || (doc.timing = {}); t.teianWent = true; if (!t.teianSeenAt) t.teianSeenAt = new Date().toISOString(); dirty = false; persistSoon(); rerender('.tabs [data-v="teian"]'); document.querySelector('.tabs').scrollIntoView({ block: 'nearest' }); return; }
+    case 'copy': copyText(); return;
+    case 'delAsk': UI.confirmDel = true; dirty = false; focus = '[data-act="delDraft"]'; break;
+    case 'delCancel': UI.confirmDel = false; dirty = false; break;
+    case 'delDraft': deleteDraft(); return;
+    case 'useRemote': useRemote(); return;
+    case 'overwrite': R.version = R.conflict.version; R.conflict = null; R.dirty = true; R.inflight = null; persistNow(); pushNow(false); renderBanner(); return;
+    case 'useExisting': { const id = R.conflict.id; store.del('d:' + R.id); location.href = '?id=' + enc(id) + (DEMO ? '&demo=1' : ''); return; }
+    case 'overwriteExisting': { store.del('d:' + R.id); R.id = R.conflict.id; R.version = R.conflict.version; R.conflict = null; R.dirty = true; R.inflight = null; persistNow(); pushNow(false); renderBanner(); return; }
+    case 'saveAsNew': { store.del('d:' + R.id); R.id = rid('hd', 5); R.version = 0; R.status = 'draft'; R.sentVersion = null; R.sentAt = null; R.conflict = null; R.inflight = null; R.dirty = true; persistNow(); pushNow(false); renderBanner(); return; }
+    default: return;
+  }
+  if (dirty) changed();
+  rerender(focus);
+}
+function markSent() { const t = R.doc.timing || (R.doc.timing = {}); const iso = new Date().toISOString(); if (!t.firstSentAt) t.firstSentAt = iso; t.lastSentAt = iso; }
+function addRoom(name) { if (!R.doc.rooms.some((r) => r.name === name)) R.doc.rooms.push(HD.blankRoom(name)); UI.openRoom = name; }
+async function useRemote() {
+  const row = await Api.draft(R.id).catch(() => null);
+  if (!row) { toast('読めませんでした。電波を確認してください'); return; }
+  const info = R.info, planUrls = R.planUrls; R = fromRow(row); R.info = info; R.planUrls = planUrls; await persistNow(); rerender();
+}
+async function deleteDraft() {
+  if (R.version) {
+    try {
+      const res = await Api.del({ op: rid('op', 6), id: R.id, base: R.version, editor: editorName() });
+      if (res.result === 'stale_version') { R.conflict = { kind: 'stale', by: res.updated_by, at: res.updated_at, version: res.version }; UI.confirmDel = false; rerender(); return; }
+    } catch (e) { toast('電波がないと消せません'); return; }
+  }
+  await store.del('d:' + R.id); R = null; location.href = '?' + (DEMO ? 'demo=1' : '');
+}
+function linesText(L) { return L.map((l) => [l.room, l.name, l.specs, `${l.qty}${l.unit}`, yen(l.price), l.burden === '入居者' ? '入居者' : ''].filter(Boolean).join(' / ')).join('\n'); }
+async function copyText() {
+  const L = currentLines(); const t = `${R.bukken} ${R.room}\n${linesText(L)}\n合計(税別) ${yen(HD.totalOf(L))}${R.doc.memo ? '\nメモ: ' + R.doc.memo : ''}`;
+  try { await navigator.clipboard.writeText(t); toast('コピーしました'); } catch (_) { toast('コピーできませんでした'); }
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  if (el.dataset.scope === 'list') return listAct(el);
+  if (R) act(el);
+});
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.dataset.ui) {
+    UI[t.dataset.ui] = t.value;
+    if (t.dataset.ui === 'q') { const box = $('sres'); if (box) { const q = norm(UI.q); const by = byNo(R.doc.priceCol); const hits = q ? CAT.filter((c) => norm(c.name).includes(q)).slice(0, 15) : []; box.innerHTML = hits.map((c) => `<button data-act="addItem" data-no="${c.no}"><span>${R.doc.sel['t:' + c.no] ? '✓ ' : ''}${esc(c.name)}</span><span class="amt">${by[c.no].price == null ? '単価なし' : yen(by[c.no].price)}/${esc(c.unit)}</span></button>`).join('') + (q && !hits.length ? '<div class="note">単価表にありません。下の欄に書いてください。</div>' : ''); } }
+    return;
+  }
+  if (!R) return;
+  if (t.dataset.room != null) { R.doc.rooms[+t.dataset.room][t.dataset.field] = t.value; changed(); renderDraftOnly(); const s = t.closest('.room') && t.closest('.room').querySelector(':scope > button span'); if (s) s.textContent = roomSum(R.doc.rooms[+t.dataset.room]); return; }
+  if (t.dataset.doc) {
+    R.doc[t.dataset.doc] = t.value; changed();
+    if (t.tagName === 'SELECT') { if (t.dataset.doc === 'madori' && !R.doc.rooms.some((r) => roomSum(r))) R.doc.rooms = HD.defaultRooms(t.value).map(HD.blankRoom); rerender('#' + t.id); }
+    else renderDraftOnly();
+    return;
+  }
+  if (t.dataset.line) {
+    const k = t.dataset.line, p = t.dataset.prop; R.doc.over[k] = Object.assign(R.doc.over[k] || {}, { [p]: t.value });
+    if (p === 'qty' && R.doc.sel[k]) R.doc.sel[k].qty = Number(t.value) || 0;
+    changed();
+    const f = $('foot'); if (f) f.innerHTML = footHtml();
+  }
+});
+document.addEventListener('change', (e) => { const t = e.target; if (t.dataset && t.dataset.line) renderDraftOnly(); });
+
+// ---- 画面: 一覧(現場の入口と、事務の届いた下書き) ---------------------------------------------------
+const stateP = (d) => (d.status !== 'sent') ? '<span class="pill">下書き</span>' : (d.entered_at ? (d.version > d.entered_version ? '<span class="pill again">入力後に直しあり</span>' : '<span class="pill done">入力済み</span>') : (d.sent_version && d.version > d.sent_version ? '<span class="pill again">送信後に直しあり</span>' : '<span class="pill todo">未入力</span>'));
+const qs = (x) => '?' + new URLSearchParams(Object.assign({}, x, DEMO ? { demo: '1' } : {})).toString();
+async function renderHome() {
+  document.title = '現場の拾い出し';
+  const local = (await localDrafts()).filter((d) => d.dirty || d.inflight);
+  let names = [], rows = [], err = '';
+  try { names = await Api.bukkenNames(); store.set('bukkenNames', names); } catch (e) { if (e.login) return; names = (await store.get('bukkenNames')) || []; }
+  try { rows = await Api.list('recent'); } catch (e) { if (e.login) return; err = e.status === 404 ? '下書きの保存先がまだ準備できていません。' : '一覧を読めませんでした。電波を確認してください。'; }
+  $('app').innerHTML = `<h1 style="font-size:18px;margin:0">現場の拾い出し</h1>
+  <div class="box"><div class="dhead"><span>部屋を選んで始める</span></div>
+    <form id="startForm" class="row" style="border:0"><label class="lbl" for="stB">物件名</label><input id="stB" class="txt" list="stL" required autocomplete="off"><datalist id="stL">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist><label class="lbl" for="stR">号室</label><input id="stR" class="txt" autocomplete="off"><button class="btn pri" type="submit">始める</button></form></div>
+  ${local.length ? `<div class="box"><div class="dhead"><span>このスマホに残っている入力</span></div><div class="list">${local.map((d) => `<a class="card" href="${qs({ id: d.id })}"><b>${esc(d.bukken)} ${esc(d.room)}</b><span class="note">まだ送れていません(${esc(when(d.savedAt))})</span></a>`).join('')}</div></div>` : ''}
+  <div class="box"><div class="dhead"><span>最近の下書き</span><a href="${qs({ view: 'sent' })}" style="color:inherit;font-weight:400;font-size:13px">届いた下書きを見る</a></div><div class="list">${err ? `<div class="row note">${esc(err)}</div>` : ''}${rows.map((d) => `<a class="card" href="${qs({ id: d.id })}"><b>${esc(d.bukken)} ${esc(d.room)}${stateP(d)}</b><span class="note">${esc(d.updated_by)} ${esc(when(d.updated_at))} ・ ${d.line_count}行</span></a>`).join('') || (err ? '' : '<div class="row note">まだありません。</div>')}</div></div>`;
+  $('startForm').addEventListener('submit', (e) => { e.preventDefault(); location.href = qs({ bukken: $('stB').value.trim(), room: $('stR').value.trim() }); });
+  if (local.length) flushOthers(null).catch(() => {});
+}
+let LIST_FILTER = 'todo';
+async function renderSent() {
+  document.title = '届いた下書き';
+  let rows = [];
+  try { rows = await Api.list('sent'); } catch (e) { if (e.login) return; $('app').innerHTML = `<p class="note">${e.status === 404 ? '下書きの保存先がまだ準備できていません。' : '読めませんでした。電波を確認してください。'}</p>`; return; }
+  const isTodo = (d) => !d.entered_at || d.version > d.entered_version;
+  const show = LIST_FILTER === 'todo' ? rows.filter(isTodo) : rows;
+  $('app').innerHTML = `<div class="toprow"><a href="${qs({})}">← 入口へ</a></div><h1 style="font-size:18px;margin:0">届いた下書き</h1>
+  <div class="opts"><button class="opt ${LIST_FILTER === 'todo' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="todo">未入力 ${rows.filter(isTodo).length}</button><button class="opt ${LIST_FILTER === 'all' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="all">すべて ${rows.length}</button></div>
+  <div class="box"><div class="list">${show.map((d) => `<a class="card" href="${qs({ id: d.id, read: '1' })}"><b>${esc(d.bukken)} ${esc(d.room)}${stateP(d)}</b><span class="note">${esc(d.sent_by || d.updated_by)} ${esc(when(d.sent_at))} ・ ${d.line_count}行 ・ ${yen(d.total)}${d.motouke ? ' ・ ' + esc(d.motouke) : ''}</span></a>`).join('') || '<div class="row note">ありません。</div>'}</div></div>`;
+}
+function listAct(el) { if (el.dataset.act === 'filter') { LIST_FILTER = el.dataset.v; renderSent(); } }
+
+// 事務が見ながら打つ画面。行ごとの✓はこのブラウザだけに残す(紙の青い✓の代わり)
+async function renderRead(id) {
+  let row = null;
+  try { row = await Api.draft(id); } catch (e) { if (e.login) return; }
+  if (!row) { $('app').innerHTML = '<p class="note">下書きを読めませんでした。消されたか、電波がありません。</p>'; return; }
+  document.title = `${row.bukken} ${row.room}`;
+  const key = 'tick:' + id; const ticks = (await store.get(key)) || {};
+  const L = (row.doc && row.doc.lines) || [];
+  const draw = () => {
+    const done = L.filter((l) => ticks[l.key]).length;
+    $('app').innerHTML = `<div class="toprow"><a href="${qs({ view: 'sent' })}">← 届いた下書き</a><a href="${qs({ id })}">直す画面へ</a></div>
+    <div class="box"><div class="head"><h1>${esc(row.bukken)} ${esc(row.room)}${stateP(row)}</h1><div class="sub">${esc(row.motouke || '')}${row.koji ? ' ・ ' + esc(row.koji) : ''}${row.doc.madori ? ' ・ ' + esc(row.doc.madori) : ''}${row.doc.ampere ? ' ・ ' + esc(row.doc.ampere) + 'A' : ''}${row.doc.loft ? ' ・ ロフト' : ''}${row.doc.stair ? ' ・ 内階段' : ''}</div>${timingText(row.doc.timing) ? `<div class="sub">現場の入力: ${esc(timingText(row.doc.timing))}</div>` : ''}<div class="sub">送った人: ${esc(row.sent_by || '')} ${esc(when(row.sent_at))} ・ 単価の列: ${esc(row.doc.priceCol || 'なし')}${row.anken_id ? ` ・ 見積 ${esc(row.anken_id)}` : ' ・ 見積とはまだつながっていません'}</div></div>
+      <div class="tally">✓ ${done} / ${L.length}行</div>
+      ${L.map((l) => `<label class="tick ${ticks[l.key] ? 'on' : ''}"><input type="checkbox" data-tick="${esc(l.key)}" ${ticks[l.key] ? 'checked' : ''}><span class="nm">${l.room ? esc(l.room) + ' ' : ''}${esc(l.name)}${l.burden === '入居者' ? '<span class="tenant">入居者</span>' : ''}${l.priceEdited ? '<span class="flag">現場で単価を変更</span>' : ''}${(l.noPrice || l.askPrice) ? '<span class="flag">単価を確認</span>' : ''}${l.specs ? `<span class="sp">${esc(l.specs)}</span>` : ''}</span><span class="am">${yen((Number(l.qty) || 0) * (Number(l.price) || 0))}<small>${esc(l.qty)}${esc(l.unit)} × ${yen(l.price)}</small></span></label>`).join('')}
+      <div class="total"><span>合計(税別)</span><span>${yen(row.doc.total)}</span></div>
+      ${row.doc.memo ? `<div class="row"><div class="lbl">メモ</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(row.doc.memo)}</div></div>` : ''}
+      <div class="row" style="border:0"><div class="opts"><button class="btn pri" id="markBtn">${row.entered_at ? '入力済みを取り消す' : '見積に入れ終わった'}</button></div><p class="note" style="margin:0">⚠ まだ見積アプリへ自動では入りません。見ながら打ってください。</p></div>
+    </div>`;
+    $('app').querySelectorAll('[data-tick]').forEach((c) => c.addEventListener('change', () => { ticks[c.dataset.tick] = c.checked; store.set(key, ticks); draw(); }));
+    $('markBtn').addEventListener('click', async () => {
+      try { const res = await Api.mark({ op: rid('op', 6), id, done: !row.entered_at, editor: editorName() }); if (res.result === 'applied') { row = await Api.draft(id); draw(); toast('記録しました'); } }
+      catch (e) { toast('記録できませんでした'); }
+    });
+  };
+  draw();
+}
+
+// 別の部屋を開いても、前の部屋の未送信を送れるようにする(カレンダーの枠は部屋ごとに開き直すため)
+const snapshotOf = (doc) => { const lines = HD.buildLines(doc, byNo(doc.priceCol)); return JSON.parse(JSON.stringify(Object.assign({}, doc, { lines, total: HD.totalOf(lines), savedFrom: 'page-v1' }))); };
+async function flushOthers(currentId) {
+  for (const d of await localDrafts()) {
+    if (d.id === currentId || d.conflict || !(d.dirty || d.inflight)) continue;
+    try {
+      const job = d.inflight || { op: rid('op', 6), id: d.id, base: d.version || 0, anken: d.ankenId, bukken: d.bukken, room: d.room, koji: d.koji, motouke: d.motouke, doc: snapshotOf(normalizeDoc(d.doc)), send: !!d.sendAfter, seq: d.seq, editor: editorName() };
+      d.inflight = job; await store.set('d:' + d.id, d);
+      const res = await Api.save(job);
+      d.inflight = null;
+      if (res.result === 'applied') { d.version = res.version; if (job.send) { d.status = 'sent'; d.sentVersion = res.version; d.sentAt = new Date().toISOString(); d.sendAfter = false; } if (d.seq === job.seq) d.dirty = false; }
+      else if (res.result === 'stale_version') d.conflict = { kind: 'stale', by: res.updated_by, at: res.updated_at, version: res.version };
+      else if (res.result === 'exists' && res.id !== d.id) d.conflict = { kind: 'exists', id: res.id, version: res.version };
+      else if (res.result === 'exists') { d.version = res.version; d.dirty = true; }
+      else if (res.result === 'deleted' || res.result === 'not_found') d.conflict = { kind: 'deleted' };
+      await store.set('d:' + d.id, d);
+    } catch (e) {
+      if (e && e.server) { d.inflight = null; await store.set('d:' + d.id, d); continue; }
+      return;   // 電波なし・ログイン切れは次の機会に
+    }
+  }
+}
+
+// ---- 下書きを開く -----------------------------------------------------------------------------
+const CLOSED = ['完了', '失注', 'キャンセル'];
+const stripRoom = (r) => norm(String(r || '').replace(/号室$/, ''));
+const sameRoom = (a, b) => stripRoom(a) === stripRoom(b);
+const sameBukken = (a, b) => { const x = norm(a), y = norm(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
+const isLiveAnken = (a) => a && String(a.deleted) !== 'true' && !CLOSED.includes(a.status);
+// 前の入居者の部屋の下書きを開かないよう、古いものは続きにしない
+const recentRow = (d) => { const age = Date.now() - new Date(d.updated_at).getTime(); return age < 60 * 864e5 && !(d.entered_at && age > 7 * 864e5); };
+const recentLocal = (d) => !!(d.dirty || d.inflight) || (Date.now() - (d.savedAt || 0)) < 60 * 864e5;
+
+function linkHtml() {
+  if (!R) return '';
+  const note = R.ankenNote ? `<div class="warn"><div>⚠ ${esc(R.ankenNote)}</div></div>` : '';
+  const c = (R.candidates || []);
+  const label = (a) => `${esc(a.status)} ・ ${esc(when(a.created_at))} 作成 ・ ${yen(a.total)}${a.koji ? ' ・ ' + esc(a.koji) : ''}`;
+  const btns = (list) => list.map((a) => `<button class="btn small" data-act="link" data-v="${esc(a.id)}">${label(a)}</button>`).join('');
+  if (R.ankenId) {
+    const me = c.find((a) => a.id === R.ankenId) || R.ankenInfo;
+    const others = c.filter((a) => a.id !== R.ankenId);
+    return note + `<details><summary>見積: ${me ? label(me) : esc(R.ankenId)}</summary><div class="inner" style="white-space:normal"><div class="note">この下書きをつないでいる見積です。${esc(R.ankenId)}</div>${others.length ? `<div class="note">同じ部屋のほかの見積:</div><div class="opts">${btns(others)}</div>` : ''}</div></details>`;
+  }
+  if (c.length) return note + `<div class="warn"><div><b>この部屋の見積を選んでください。</b> 前の入居者の見積と間違えないよう、自動ではつなぎません。まだなければ、このまま入力できます。</div><div class="opts">${btns(c)}</div></div>`;
+  return note + (R.candidates ? `<div class="warn"><div>この部屋の開いている見積はありません。下書きだけ保存します。</div></div>` : '');
+}
+function renderLink() { const el = $('link'); if (el) el.innerHTML = linkHtml(); }
+async function loadCandidates() {
+  try {
+    const rows = await Api.candidates(R.room);
+    R.candidates = rows.filter((a) => isLiveAnken(a) && sameBukken(a.bukken, R.bukken) && sameRoom(a.room, R.room) && !/^修繕/.test(a.koji || ''));
+  } catch (e) { R.candidates = null; }
+  renderLink();
+}
+function applyAnken(a) {
+  R.ankenId = a.id; R.ankenInfo = a;
+  if (a.motouke) R.motouke = a.motouke;
+  if (a.koji) R.koji = a.koji;
+  if (!R.doc.priceCol) R.doc.priceCol = colFor(R.motouke, a.priceCol);
+  if (!R.doc.madori && a.madori) { R.doc.madori = a.madori; if (!R.doc.rooms.some((r) => roomSum(r))) R.doc.rooms = HD.defaultRooms(a.madori).map(HD.blankRoom); }
+}
+async function openEditor(p) {
+  let row = null, ank = null, info = null, netOk = true, ankenNote = '';
+  let ankenId = p.anken || null;
+  try {
+    if (ankenId) {
+      ank = await Api.anken(ankenId);
+      // 渡された見積が本当にこの部屋のものか照らし合わせる(1部屋に複数パターンがある・前の入居者の案件もある)
+      if (!ank || String(ank.deleted) === 'true') ankenNote = '渡された見積が見つからないので、つなぎませんでした。';
+      else if ((p.bukken && !sameBukken(ank.bukken, p.bukken)) || (p.room && !sameRoom(ank.room, p.room))) ankenNote = `渡された見積は「${ank.bukken} ${ank.room}」のものだったので、つなぎませんでした。`;
+      else if (CLOSED.includes(ank.status)) ankenNote = `渡された見積は「${ank.status}」なので、つなぎませんでした。`;
+      if (ankenNote) { if (ank && !p.bukken) { p.bukken = ank.bukken; p.room = ank.room; } ank = null; ankenId = null; }
+    }
+    if (ankenId) row = await Api.draftByAnken(ankenId);
+    else if (p.id) row = await Api.draft(p.id);
+    const place = (ank && ank.bukken) || p.bukken;
+    if (!row && place) { const d = await Api.draftByPlace(place, (ank && ank.room) || p.room || ''); if (d && recentRow(d) && (!ankenId || !d.anken_id)) row = d; }
+  } catch (e) { if (e.login) return; if (e.status !== 404) netOk = false; }
+  // 電波がなくて照らし合わせられなかった見積は、つながない(開き直した時に選べる)
+  if (!netOk && ankenId && !ank) { ankenId = null; }
+  const all = await localDrafts();
+  const place = (ank && ank.bukken) || p.bukken || '';
+  const placeRoom = (ank && ank.room) || p.room || '';
+  const local = all.find((d) => p.id && d.id === p.id) || (ankenId && all.find((d) => d.ankenId === ankenId)) || all.find((d) => !p.id && place && sameBukken(d.bukken, place) && sameRoom(d.room, placeRoom) && recentLocal(d) && (!ankenId || !d.ankenId)) || null;
+  const bukken = (row && row.bukken) || (local && local.bukken) || place;
+  const room = (row && row.room) || (local && local.room) || placeRoom;
+  if (!bukken) { $('app').innerHTML = '<p class="note">開く部屋が分かりません。<a href="?">入口へ戻る</a></p>'; return; }
+
+  if (local && local.inflight) R = local;                                                                   // 答えが返らなかった送信は、まず送り直して答えを聞く
+  else if (local && local.dirty && (!row || (row.id === local.id && row.version === local.version))) R = local;   // 未送信の入力を優先
+  else if (local && local.dirty && row && row.id === local.id) { R = local; R.conflict = { kind: 'stale', by: row.updated_by, at: row.updated_at, version: row.version }; }
+  else if (row) R = fromRow(row);
+  else if (local) R = local;
+  else {
+    const madori = (ank && ank.madori) || p.madori || '';
+    R = { id: rid('hd', 5), version: 0, ankenId: null, bukken, room, koji: (ank && ank.koji) || p.koji || '原状回復工事', motouke: (ank && ank.motouke) || p.motouke || '', status: 'draft', doc: newDoc(madori), dirty: false, seq: 0, inflight: null, conflict: null };
+    R.isNew = true;
+    R.doc.timing = { openedAt: new Date().toISOString() };
+  }
+  R.doc = normalizeDoc(R.doc);
+  R.ankenNote = ankenNote; R.candidates = undefined;
+  if (ank) { const wasLinked = R.ankenId; applyAnken(ank); if (!wasLinked && R.version) changed(); }
+  if (!R.doc.priceCol) R.doc.priceCol = colFor(R.motouke, ank && ank.priceCol);
+  document.title = `${bukken} ${room}`;
+  try {
+    const names = await Api.bukkenNames(); store.set('bukkenNames', names);
+    const hit = names.find((n) => n === bukken) || names.find((n) => norm(n) === norm(bukken)) || names.find((n) => sameBukken(n, bukken));
+    if (hit) info = await Api.bukken(hit);
+    if (info) store.set('bk:' + norm(bukken), info);
+  } catch (e) { if (e.login) return; info = await store.get('bk:' + norm(bukken)); }
+  R.info = info;
+  if (info && R.isNew) {
+    if (!R.doc.madori) {
+      const o = Array.isArray(info.options) ? info.options : [];
+      const m = info.defaultMadori || (o.length === 1 ? o[0] : '');
+      if (m) { R.doc.madori = m; R.doc.rooms = HD.defaultRooms(m).map(HD.blankRoom); }
+    }
+    const lf = String(info.loft || '');
+    if (/内階段/.test(lf)) R.doc.stair = !/2Fのみ/.test(lf);
+    else if (/〇|○/.test(lf) && !/2Fのみ/.test(lf)) R.doc.loft = true;
+    if (/ロフト/.test(R.doc.madori)) R.doc.loft = true;
+  }
+  renderEditor();
+  if (R.inflight || R.dirty) pushNow(false);
+  loadCandidates();
+  flushOthers(R.id).catch(() => {});
+  if (info && Array.isArray(info.images) && info.images.length) {
+    try {
+      const sorted = [...info.images].sort((a, b) => (String(b.label) === String(room) ? 1 : 0) - (String(a.label) === String(room) ? 1 : 0));
+      const refs = sorted.slice(0, 2).map((m) => m.driveId).filter(Boolean);
+      R.info = Object.assign({}, info, { images: sorted.slice(0, 2) });
+      R.planUrls = await Api.planUrls(refs);
+      const el = $('info'); if (el) el.innerHTML = infoHtml();
+    } catch (_) {}
+  }
+}
+
+// ---- ログイン画面 ------------------------------------------------------------------------------
+function showLogin(msg) { $('loginMsg').textContent = msg || 'カレンダーと同じメールアドレスとパスワードです'; $('lgErr').textContent = ''; $('login').hidden = false; }
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); const btn = $('lgBtn'); btn.disabled = true; $('lgErr').textContent = '';
+  try { storeToken(await authFetch('token?grant_type=password', { email: $('lgEmail').value.trim(), password: $('lgPass').value })); $('lgPass').value = ''; $('login').hidden = true; boot(); }
+  catch (err) { $('lgErr').textContent = err && err.status === 400 ? 'メールアドレスかパスワードが違います' : '通信できませんでした'; }
+  btn.disabled = false;
+});
+
+// ---- 起動 --------------------------------------------------------------------------------------
+async function boot() {
+  try {
+    if (DEMO) {
+      await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'demo.js'; s.onload = res; s.onerror = () => rej(new Error('見本のデータがありません')); document.head.appendChild(s); });
+      Api = window.HD_DEMO_API;
+    } else if (!session()) { showLogin(''); return; }
+    purgeOld().catch(() => {});
+    await loadCatalog();
+    const view = Q.get('view');
+    if (view === 'sent') return renderSent();
+    if (Q.get('read') === '1' && Q.get('id')) return renderRead(Q.get('id'));
+    const p = { anken: Q.get('anken'), id: Q.get('id'), bukken: Q.get('bukken'), room: Q.get('room') || '', motouke: Q.get('motouke') || '', koji: Q.get('koji') || '', madori: Q.get('madori') || '' };
+    if (p.anken || p.id || p.bukken) return openEditor(p);
+    return renderHome();
+  } catch (e) {
+    if (e && e.login) return;
+    $('app').innerHTML = `<p class="note">読み込めませんでした。電波を確認して、もう一度開いてください。</p><p class="note">${esc(e && e.message)}</p>`;
+  }
+}
+boot();
+</script>
+</body>
+</html>
