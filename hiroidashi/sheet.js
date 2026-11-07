@@ -20,7 +20,7 @@
     G('kagami', '鏡磨き', [O('普通', 257), O('縦長', 259), O('ワイド', 258)]),
     G('acw', 'エアコン洗浄', [O('普通', 246), O('ロボット', 247)], { c: 1 }),
     B('ワックス剥離・処分品'),
-    G('wax', 'ワックス剥離', [O('要', 'wax'), O('㎡で', 377)], { c: 0 }),
+    G('wax', 'ワックス剥離', [O('要', 'wax'), O('㎡で', 377, { qtyIn: '㎡' })], { c: 0 }),   // qtyIn = 押したら数字を打つ(打つまで行にならない)
     G('shobun', '処分品', [O('物干', 248), O('風呂フタ', 251), O('ガス台', 249), O('ガスストーブ', 250)]),
     B('消耗品交換'),
     G('pakkin', 'パッキン', [O('台所', 80, { room: '台所' }), O('洗濯', 80, { room: '洗面所', specs: '洗濯' }), O('化粧台', 80, { room: '洗面所', specs: '化粧台' }), O('浴室', 80, { room: '浴室' })], { c: 1 }),
@@ -161,6 +161,7 @@
     ALL_GROUPS.forEach((g) => g.opts.forEach((o) => {
       const key = g.id + ':' + o.l; const v = sel[key]; if (!v) return;
       let no = o.no, src = 'tap', qty = v.qty || 1;
+      if (o.qtyIn) { if (!NUM(v.qty)) return; qty = NUM(v.qty); src = 'num'; }
       if (no === 'wax') {
         no = waxItem(doc.madori);
         if (!no) { out.push(mk(key, null, { name: 'ポリッシャー掛け剥離清掃提案', unit: '式', src, qty, askPrice: true })); return; }
@@ -186,6 +187,21 @@
       return c;
     });
   }
+  // 押したのに数字が空で、見積の行にならないもの(床のCF・CF重ね・FTの㎡、ワックスの㎡など)。buildLines と同じ条件
+  function waiting(doc) {
+    const out = [];
+    (doc.rooms || []).forEach((r, i) => {
+      if (!r.floor || NUM(r.floorQty)) return;
+      if (r.floor === 'CF' && (r.name === 'トイレ' || r.name === '洗面所')) return;
+      out.push({ room: r.name, i, what: r.floor, unit: '㎡' });
+    });
+    const sel = doc.sel || {};
+    ALL_GROUPS.forEach((g) => g.opts.forEach((o) => {
+      const key = g.id + ':' + o.l; const v = sel[key];
+      if (v && o.qtyIn && !NUM(v.qty)) out.push({ key, what: g.t + ' ' + o.l, unit: o.qtyIn });
+    }));
+    return out;
+  }
   const totalOf = (lines) => Math.round(lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.price) || 0), 0));
 
   // 提案の行を数える(シートの提案の欄+単価表から探して足した提案の項目)。消耗品の「〜交換提案」は数えない
@@ -193,6 +209,6 @@
   const TEIAN_CATS = new Set(['照明交換提案', '水回り設備交換提案', '化粧台交換提案', '電気工事提案', 'フローリング工事', '便座交換提案', 'シート施工提案', '浴室シート施工提案', 'エアコン交換提案', 'スイッチ・コンセント交換提案']);
   const teianCount = (lines) => lines.filter((l) => TEIAN_IDS.has(String(l.key).split(':')[0]) || TEIAN_CATS.has(l.cat)).length;
 
-  const API = { SIDE, MARU, TEIAN, FREQ, OPT, ALL_GROUPS, ROOM_HINT, TEIAN_CATS, baseMadori, hcItem, waxItem, defaultRooms, blankRoom, buildLines, totalOf, faceText, teianCount };
+  const API = { SIDE, MARU, TEIAN, FREQ, OPT, ALL_GROUPS, ROOM_HINT, TEIAN_CATS, baseMadori, hcItem, waxItem, defaultRooms, blankRoom, buildLines, waiting, totalOf, faceText, teianCount };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.HD = API;
 })(typeof window !== 'undefined' ? window : globalThis);

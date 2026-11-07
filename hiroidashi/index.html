@@ -10,13 +10,13 @@
 <style>
 /* 紙の拾い出しシートをスマホへ。黒い帯・灰色の見出しは紙と同じ。選ぶと赤ペンの丸、下書きに入ると青い✓ */
 :root{
-  --paper:#eef1f3; --sheet:#ffffff; --ink:#1d2226; --ink2:#47515a; --muted:#6b7680; --line:#c9d0d6;
+  --paper:#eef1f3; --sheet:#ffffff; --ink:#1d2226; --ink2:#47515a; --muted:#6b7680; --line:#c9d0d6; --optline:#7b8792;
   --band:#3a4046; --band-ink:#ffffff; --grey:#dde2e6; --pen:#c7281e; --check:#1a6fd6; --warnbg:#fff4d6; --warnink:#6d4a00; --okbg:#e3f3ea; --okink:#14573a; --ngbg:#fde7e4; --ngink:#8a1d14;
   --s-tap:#1a5fb4; --s-num:#0e9474; --s-auto:#7a5fc0; --s-search:#e5a50a; --s-free:#c7362c;
   --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic",sans-serif; --hand:"Klee One","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
 }
 @media (prefers-color-scheme:dark){:root{
-  --paper:#14171a; --sheet:#1c2024; --ink:#e9ecee; --ink2:#bcc5cc; --muted:#94a0a9; --line:#3a4249;
+  --paper:#14171a; --sheet:#1c2024; --ink:#e9ecee; --ink2:#bcc5cc; --muted:#94a0a9; --line:#3a4249; --optline:#7d8993;
   --band:#2c3238; --band-ink:#f1f3f4; --grey:#2a3036; --pen:#ff7468; --check:#6aaeff; --warnbg:#3a2f12; --warnink:#f4d98f; --okbg:#143225; --okink:#9fe0bf; --ngbg:#3d1c19; --ngink:#ffb4ab;
   --s-tap:#3f86dc; --s-num:#0f9a78; --s-auto:#b26adf; --s-search:#b98407; --s-free:#b8352c; color-scheme:dark}}
 *{box-sizing:border-box}
@@ -37,6 +37,7 @@ a{color:var(--check)}
 .head h1{font-size:17px;margin:0;line-height:1.35}
 .sub{font-size:13px;color:var(--ink2)}
 .toprow{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.toprow a{display:inline-flex;align-items:center;min-height:44px;padding-right:12px}
 .status{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--grey);white-space:nowrap}
 .status.ok{background:var(--okbg);color:var(--okink)}.status.ng{background:var(--ngbg);color:var(--ngink)}.status.wait{background:var(--warnbg);color:var(--warnink)}
 .warn{background:var(--warnbg);color:var(--warnink);padding:8px 12px;font-size:13px;border-bottom:1px solid var(--line);display:grid;gap:6px}
@@ -51,12 +52,12 @@ details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid
 .band{background:var(--grey);text-align:center;font-weight:700;font-size:14px;padding:6px 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .row{padding:8px 12px;border-bottom:1px solid var(--line);display:grid;gap:6px;min-width:0}
 .lbl{font-size:13px;color:var(--ink2);font-weight:700}
-.opts{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.opts{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .optw{display:inline-flex;align-items:center;gap:4px}
-.opt{min-height:44px;min-width:44px;padding:4px 13px;background:transparent;border:1.5px solid var(--line);border-radius:10px;cursor:pointer}
+.opt{min-height:44px;min-width:44px;padding:4px 13px;background:transparent;border:2px solid var(--optline);border-radius:10px;cursor:pointer}
 .opt.on{border:2.5px solid var(--pen);border-radius:48% 52% 45% 55%/62% 44% 56% 38%;font-weight:700;padding:3px 15px}
 .st{display:inline-flex;align-items:center;gap:2px}
-.st button{width:38px;height:38px;border:1.5px solid var(--line);background:var(--sheet);border-radius:8px;font-size:18px;line-height:1;cursor:pointer}
+.st button{width:44px;height:44px;border:2px solid var(--optline);background:var(--sheet);border-radius:8px;font-size:18px;line-height:1;cursor:pointer}
 .st b{font-family:var(--hand);color:var(--pen);font-size:21px;min-width:26px;text-align:center}
 .room{border-bottom:1px solid var(--line)}
 .room>button{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:48px;padding:6px 12px;background:none;border:0;cursor:pointer;text-align:left}
@@ -65,8 +66,8 @@ details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid
 .rbody{padding:4px 12px 12px;display:grid;gap:8px}
 .nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .nf{display:grid;gap:3px;font-size:12px;color:var(--ink2);min-width:0;align-content:start}
-.nf input{width:100%;height:48px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);text-align:center;font-family:var(--hand);font-size:23px;color:var(--pen);padding:0 4px}
-.hint{border:1px dashed var(--line);background:none;border-radius:8px;padding:4px 6px;font-size:12px;min-height:34px;cursor:pointer;color:var(--ink2)}
+.nf input{width:100%;height:48px;border:2px solid var(--optline);border-radius:8px;background:var(--sheet);text-align:center;font-family:var(--hand);font-size:23px;color:var(--pen);padding:0 4px}
+.hint{border:1px dashed var(--line);background:none;border-radius:8px;padding:4px 6px;font-size:12px;min-height:44px;cursor:pointer;color:var(--ink2)}
 .txt{width:100%;min-height:46px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);padding:6px 10px}
 .res{display:grid}
 .res button{display:flex;justify-content:space-between;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);min-height:44px;padding:6px 2px;cursor:pointer}
@@ -75,12 +76,17 @@ details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid
 .free input{height:46px;border:1.5px solid var(--line);border-radius:8px;background:var(--sheet);padding:0 8px;min-width:0;width:100%}
 .btn{min-height:44px;padding:6px 14px;border:1.5px solid var(--ink);background:var(--sheet);border-radius:8px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;color:var(--ink)}
 .btn.pri{background:var(--band);color:var(--band-ink);border-color:var(--band)}
-.btn.small{min-height:36px;padding:3px 10px;font-size:13px}
+.btn.small{min-height:44px;padding:3px 12px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:default}
-.foot{position:sticky;bottom:0;background:var(--band);color:var(--band-ink);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:4}
+.foot{position:sticky;bottom:0;background:var(--band);color:var(--band-ink);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:6}
 .foot .sum{font-size:13px;line-height:1.35}
 .foot .sum b{font-size:17px}
 .foot .btn{border-color:var(--band-ink);background:var(--band-ink);color:var(--band)}
+.foot .fwait{display:inline-block;margin-left:8px;padding:0 6px;border-radius:4px;background:var(--ngbg);color:var(--ngink);font-weight:700}
+.qin{display:inline-flex;align-items:center;gap:4px;font-size:14px;color:var(--ink2)}
+.qin input{width:84px;height:44px;border:2px solid var(--pen);border-radius:8px;background:var(--sheet);text-align:center;font-family:var(--hand);font-size:21px;color:var(--pen)}
+#noteD>summary{background:var(--ngbg);color:var(--ngink);gap:6px}
+#noteD>summary .nprev{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 0}
 .draft{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);max-height:calc(100vh - 16px);overflow:auto}
 @media (max-width:880px){.draft{position:static;max-height:none;border:0;border-top:1.5px solid var(--ink)}}
 .dhead{background:var(--band);color:var(--band-ink);padding:8px 12px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
@@ -112,7 +118,9 @@ details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid
 .tick.on .nm{color:var(--muted)}
 #login{position:fixed;inset:0;background:var(--paper);z-index:30;display:grid;place-items:center;padding:16px}
 #login form{background:var(--sheet);border:1.5px solid var(--ink);padding:16px;max-width:360px;width:100%;display:grid;gap:10px}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--band);color:var(--band-ink);padding:8px 14px;border-radius:8px;font-size:14px;z-index:20;max-width:90vw}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--band);color:var(--band-ink);padding:8px 14px;border-radius:8px;font-size:14px;z-index:20;width:max-content;max-width:90vw;display:flex;align-items:center;gap:10px}
+#toast[hidden]{display:none}
+#toast .btn{border-color:var(--band-ink);background:var(--band-ink);color:var(--band);min-height:40px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -128,7 +136,7 @@ details .inner{padding:8px 12px;border-bottom:1px solid var(--line);display:grid
   </form>
 </div>
 <div id="toast" role="status" hidden></div>
-<script src="sheet.js?v=1"></script>
+<script src="sheet.js?v=2"></script>
 <script>
 'use strict';
 // ---- 設定 ------------------------------------------------------------------------------------
@@ -142,7 +150,7 @@ const yen = (n) => '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
 const norm = (s) => String(s || '').normalize('NFKC').replace(/[\s　・\-‐ー―]/g, '').toLowerCase();
 const rid = (p, n) => p + Date.now().toString(36) + Array.from(crypto.getRandomValues(new Uint8Array(n || 5)), (b) => (b % 36).toString(36)).join('');
 const when = (t) => { if (!t) return ''; const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2600); }
+function toast(msg, btn) { const t = $('toast'); t.innerHTML = `<span>${esc(msg)}</span>` + (btn ? `<button type="button" class="btn small" data-act="${esc(btn.act)}">${esc(btn.label)}</button>` : ''); t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, btn ? 8000 : 2600); }   // btn = { act, label }(押せる時間は8秒)
 
 // ---- スマホ内の保存(IndexedDB)。localStorage はカレンダーと同じ5MB枠なので使わない ---------------
 const store = (() => {
@@ -391,7 +399,7 @@ function renderStatus() { const el = $('status'); if (!el) return; const [c, t] 
 function bannerHtml() {
   if (!R) return '';
   const c = R.conflict;
-  if (c && c.kind === 'stale') return `<div class="warn ng"><div><b>${esc(c.by || '別の人')}さんが ${esc(when(c.at))} に直しました。</b> どちらを残すか選んでください。こちらの入力はスマホ内に残っています。</div><div class="opts"><button class="btn small" data-act="useRemote">相手の版を読む</button><button class="btn small" data-act="overwrite">自分の版で上書きする</button></div></div>`;
+  if (c && c.kind === 'stale') return `<div class="warn ng"><div><b>${esc(c.by || '別の人')}さんが ${esc(when(c.at))} に直しました。</b> どちらを残すか選んでください。こちらの入力はスマホ内に残っています。</div><div class="opts"><button class="btn small" data-act="useRemote">${esc(c.by || '相手')}さんの入力を使う</button><button class="btn small" data-act="overwrite">自分の入力で上書きする</button></div></div>`;
   if (c && c.kind === 'exists') return `<div class="warn ng"><div><b>この見積の下書きは、別の人がもう始めています。</b></div><div class="opts"><button class="btn small" data-act="useExisting">そちらを開く(こちらの入力は消えます)</button><button class="btn small" data-act="overwriteExisting">自分の入力で上書きする</button></div></div>`;
   if (c && c.kind === 'deleted') return `<div class="warn ng"><div><b>この下書きは消されています。</b> 入力を残すなら新しい下書きとして保存します。</div><div class="opts"><button class="btn small" data-act="saveAsNew">新しい下書きにする</button></div></div>`;
   const readLink = `<a href="${qs({ id: R.id, read: '1' })}">見積に入れる画面を開く</a>`;
@@ -411,10 +419,12 @@ function optRow(g) {
     const k = g.id + ':' + o.l; const on = R.doc.sel[k];
     const nm = o.name || (typeof o.no === 'number' && by[o.no] ? by[o.no].name : '');
     const st = (on && g.c) ? `<span class="st"><button data-act="dec" data-k="${esc(k)}" aria-label="${esc(g.t + o.l)}を減らす">−</button><b>${on.qty}</b><button data-act="inc" data-k="${esc(k)}" aria-label="${esc(g.t + o.l)}を増やす">＋</button></span>` : '';
-    return `<span class="optw"><button class="opt ${on ? 'on' : ''}" data-act="opt" data-k="${esc(k)}" aria-pressed="${!!on}" title="${esc(nm)}">${esc(o.l)}</button>${st}</span>`;
+    const qin = (on && o.qtyIn) ? `<label class="qin"><input type="number" inputmode="decimal" min="0" step="0.5" value="${esc(on.qty)}" data-selqty="${esc(k)}" aria-label="${esc(g.t + ' ' + o.l)}(${esc(o.qtyIn)})" placeholder="?">${esc(o.qtyIn)}</label>` : '';
+    return `<span class="optw"><button class="opt ${on ? 'on' : ''}" data-act="opt" data-k="${esc(k)}" aria-pressed="${!!on}" title="${esc(nm)}">${esc(o.l)}</button>${st}${qin}</span>`;
   }).join('') + `</div></div>`;
 }
-function roomSum(r) { const a = []; if (+r.wall) a.push('壁' + r.wall); if (+r.ceil) a.push('天' + r.ceil); if (+r.acc) a.push('ア' + r.acc); if (r.floor) a.push(r.floor + (+r.floorQty ? r.floorQty : '')); if (+r.haba) a.push('巾' + r.haba); if (r.miki) a.push(r.miki); return a.join(' '); }
+const needFloorQty = (r) => !!r.floor && !(r.floor === 'CF' && (r.name === 'トイレ' || r.name === '洗面所'));   // sheet.js の waiting と同じ
+function roomSum(r) { const a = []; if (+r.wall) a.push('壁' + r.wall); if (+r.ceil) a.push('天' + r.ceil); if (+r.acc) a.push('ア' + r.acc); if (r.floor) a.push(r.floor + (+r.floorQty > 0 ? r.floorQty : (needFloorQty(r) ? ' ㎡?' : ''))); if (+r.haba) a.push('巾' + r.haba); if (r.miki) a.push(r.miki); return a.join(' '); }
 function nf(r, i, f, lbl, unit) {
   const id = `r${i}-${f}`;
   const hint = ((HD.ROOM_HINT[HD.baseMadori(R.doc.madori)] || {})[r.name] || {})[f];
@@ -460,7 +470,7 @@ function panelHtml() {
 const SRC_LABEL = { tap: 'タップ', num: 'タップ+数字', auto: '自動', search: '単価表から探す', free: '手書き' };
 function lineHtml(l) {
   const open = UI.openLine === l.key; const roomLine = /^r:/.test(l.key);
-  return `<div class="ln"><button data-act="line" data-k="${esc(l.key)}" aria-expanded="${open}"><span class="ck" aria-hidden="true">✓</span><span class="nm"><i class="dot s-${l.src}" title="${SRC_LABEL[l.src]}"></i>${l.room ? esc(l.room) + ' ' : ''}${esc(l.name)}${l.burden === '入居者' ? '<span class="tenant">入居者</span>' : ''}${(l.noPrice || l.askPrice) ? '<span class="flag">単価を確認</span>' : ''}${l.specs ? `<span class="sp">${esc(l.specs)}</span>` : ''}</span><span class="am">${yen((Number(l.qty) || 0) * (Number(l.price) || 0))}<small>${esc(l.qty)}${esc(l.unit)} × ${yen(l.price)}</small></span></button>${open ? `<div class="edit">
+  return `<div class="ln"><button data-act="line" data-k="${esc(l.key)}" aria-expanded="${open}"><span class="ck" aria-hidden="true">✓</span><span class="nm">${l.room ? esc(l.room) + ' ' : ''}${esc(l.name)}${l.burden === '入居者' ? '<span class="tenant">入居者</span>' : ''}${(l.noPrice || l.askPrice) ? '<span class="flag">単価を確認</span>' : ''}${l.specs ? `<span class="sp">${esc(l.specs)}</span>` : ''}</span><span class="am">${yen((Number(l.qty) || 0) * (Number(l.price) || 0))}<small>${esc(l.qty)}${esc(l.unit)} × ${yen(l.price)}</small></span></button>${open ? `<div class="edit">
     <button class="opt ${l.burden === '家主' ? 'on' : ''}" data-act="burden" data-k="${esc(l.key)}" data-v="家主">家主</button><button class="opt ${l.burden === '入居者' ? 'on' : ''}" data-act="burden" data-k="${esc(l.key)}" data-v="入居者">入居者</button>
     <label>部屋<input data-line="${esc(l.key)}" data-prop="room" value="${esc(l.room)}" list="roomList"></label>
     ${roomLine ? '' : `<label>数量<input type="number" inputmode="decimal" value="${esc(l.qty)}" data-line="${esc(l.key)}" data-prop="qty"></label>`}
@@ -468,26 +478,28 @@ function lineHtml(l) {
     <button class="btn small" data-act="delLine" data-k="${esc(l.key)}">消す</button></div>` : ''}</div>`;
 }
 function draftHtml() {
-  const L = currentLines(); const total = HD.totalOf(L); const cnt = { tap: 0, num: 0, auto: 0, search: 0, free: 0 }; L.forEach((l) => cnt[l.src]++);
+  const L = currentLines(); const total = HD.totalOf(L);
   const tags = Object.keys(R.doc.tags || {}).map((k) => { const g = [...HD.MARU, ...HD.TEIAN].find((x) => x.id === k); const v = R.doc.tags[k]; return (g && v && v.length) ? `${g.t}: ${v.join('・')}` : ''; }).filter(Boolean);
   const delCount = Object.keys(R.doc.del || {}).length;
+  const W = HD.waiting(R.doc); const wText = W.map((w) => (w.room ? w.room + ' ' : '') + w.what).join('・');
   return `<div class="dhead"><span>見積に入る下書き</span><span>${L.length}行</span></div>
-  <div class="tally">${Object.keys(cnt).map((k) => `<span><i class="dot s-${k}"></i>${SRC_LABEL[k]} ${cnt[k]}</span>`).join('')}</div>
+  ${W.length ? `<div class="warn ng"><div><b>㎡が空で、見積の行になっていません:</b> ${esc(wText)}</div><div class="opts"><button class="btn small" data-act="waitFix">㎡を入れる</button></div></div>` : ''}
   ${L.map(lineHtml).join('') || '<div class="row note">まだ行がありません。部屋や丸付けの欄を押してください。</div>'}
   <div class="total"><span>合計(税別)</span><span class="amt">${yen(total)}</span></div>
   ${tags.length || R.doc.memo ? `<div class="row"><div class="lbl">メモ</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc([...tags, R.doc.memo].filter(Boolean).join('\n'))}</div></div>` : ''}
   ${delCount ? `<div class="row"><button class="btn small" data-act="restoreDel">消した行を戻す(${delCount}行)</button></div>` : ''}
-  ${(UI.askTeian && !HD.teianCount(L)) ? `<div class="warn" role="alert"><div><b>${(R.doc.timing && R.doc.timing.teianSeenAt) ? '提案は0件です。' : '提案のタブをまだ開いていません。'}</b> このまま送りますか？</div><div class="opts"><button class="btn small" data-act="sendGoTeian">提案を見る</button><button class="btn small" data-act="sendAnyway">このまま送る</button></div></div>` : ''}
-  <div class="row" style="border:0"><p class="note" style="margin:0">本番の単価は、見積に入れるときに見積アプリで引き直します。行を押すと、負担・部屋・単価を直せます。${timingText(R.doc.timing) ? `<br>入力にかかった時間: ${esc(timingText(R.doc.timing))}` : ''}</p><div class="opts"><button class="btn pri" data-act="send" id="sendBtn">入力を終える</button><button class="btn small" data-act="copy">文字でコピー</button></div></div>`;
+  ${(UI.askWait && W.length) ? `<div class="warn ng" role="alert"><div><b>㎡が空の所があります(${esc(wText)})。</b> このままだと見積の行になりません。</div><div class="opts"><button class="btn small" data-act="waitFix" id="waitAsk">㎡を入れる</button><button class="btn small" data-act="waitAnyway">このまま終える</button></div></div>` : ''}
+  ${(UI.askTeian && !HD.teianCount(L)) ? `<div class="warn" role="alert"><div><b>${(R.doc.timing && R.doc.timing.teianSeenAt) ? '提案は0件です。' : '提案のタブをまだ開いていません。'}</b> このまま終えますか？</div><div class="opts"><button class="btn small" data-act="sendGoTeian">提案を見る</button><button class="btn small" data-act="sendAnyway">このまま終える</button></div></div>` : ''}
+  <div class="row" style="border:0"><p class="note" style="margin:0">本番の単価は、見積に入れるときに見積アプリで引き直します。行を押すと、負担・部屋・単価を直せます。</p><div class="opts"><button class="btn pri" data-act="send" id="sendBtn">入力を終える</button><button class="btn small" data-act="copy">文字でコピー</button></div></div>`;
 }
-function footHtml() { const L = currentLines(); return `<div class="sum">下書き <b>${L.length}</b> 行<br><span class="amt">税別 <b>${yen(HD.totalOf(L))}</b></span></div><button class="btn only-narrow" data-act="tab" data-v="draft">下書きを見る</button>`; }
+function footHtml() { const L = currentLines(); const W = HD.waiting(R.doc); return `<div class="sum">下書き <b>${L.length}</b> 行${W.length ? `<span class="fwait">㎡待ち ${W.length}</span>` : ''}<br><span class="amt">税別 <b>${yen(HD.totalOf(L))}</b></span></div>${UI.tab === 'draft' ? '<button class="btn only-narrow" data-act="send">入力を終える</button>' : '<button class="btn only-narrow" data-act="tab" data-v="draft">下書きを見る</button>'}`; }
 function infoHtml() {
   const b = R.info || {}; const notes = [b.type && '区分: ' + b.type, b.notes, b.memo, b.accent && b.accent !== '-' && 'アクセント: ' + b.accent, b.cf && b.cf !== '-' && 'CF: ' + b.cf].filter(Boolean).join('\n');
   const urls = R.planUrls || {};
   const imgs = (Array.isArray(b.images) ? b.images : []).filter((m) => urls[m.driveId]);
   const i = Math.min(UI.planIdx || 0, Math.max(imgs.length - 1, 0));
   const plan = imgs.length ? `<a href="${esc(urls[imgs[i].driveId])}" target="_blank" rel="noopener"><img class="plan-img" src="${esc(urls[imgs[i].driveId])}" alt="間取図 ${esc(imgs[i].label || '')}"></a>` + (imgs.length > 1 ? `<div class="opts" style="white-space:normal">${imgs.map((m, n) => `<button class="opt ${n === i ? 'on' : ''}" data-act="plan" data-i="${n}">${esc(m.label || '図' + (n + 1))}</button>`).join('')}</div>` : `<div class="note" style="text-align:center">${esc(imgs[i].label || '')}</div>`) : '';
-  return (plan ? `<details id="planD" ${UI.planOpen === false ? '' : 'open'}><summary>間取図</summary><div class="inner">${plan}</div></details>` : '') + (notes ? `<details id="noteD" ${UI.noteOpen ? 'open' : ''}><summary>物件の注意</summary><div class="inner">${esc(notes)}</div></details>` : '');
+  return (plan ? `<details id="planD" ${UI.planOpen === false ? '' : 'open'}><summary>間取図</summary><div class="inner">${plan}</div></details>` : '') + (notes ? `<details id="noteD" ${UI.noteOpen ? 'open' : ''}><summary>⚠ 物件の注意<span class="nprev">${esc(String(b.notes || b.memo || notes).split('\n')[0])}</span></summary><div class="inner">${esc(notes)}</div></details>` : '');
 }
 function renderEditor() {
   document.body.classList.toggle('no-amount', !!UI.hideAmount);
@@ -500,13 +512,13 @@ function renderEditor() {
       <div class="sub">${esc(R.motouke || '')}${R.koji ? ' ・ ' + esc(R.koji) : ''}</div>
       <div class="opts" style="gap:6px">
         <select id="madori" data-doc="madori" aria-label="間取り" class="txt" style="flex:1 1 90px;width:auto;min-height:40px"><option value="">間取り</option>${madoriChoices.map((m) => `<option ${m === R.doc.madori ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
-        <select id="priceCol" data-doc="priceCol" aria-label="単価の列" class="txt" style="flex:1 1 130px;width:auto;min-height:40px"><option value="">単価の列を選ぶ</option>${COLS.map((c) => `<option ${c === col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <select id="priceCol" data-doc="priceCol" aria-label="元請け(単価の列)" class="txt" style="flex:1 1 130px;width:auto;min-height:40px"><option value="">元請けを選ぶ</option>${COLS.map((c) => `<option ${c === col ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       </div>
       <div class="opts" style="gap:6px"><button class="opt ${R.doc.loft ? 'on' : ''}" data-act="flag" data-f="loft" aria-pressed="${!!R.doc.loft}">ロフト</button><button class="opt ${R.doc.stair ? 'on' : ''}" data-act="flag" data-f="stair" aria-pressed="${!!R.doc.stair}">内階段</button><label class="nf" style="grid-template-columns:auto 70px;align-items:center;gap:4px" for="ampere">アンペア<input id="ampere" style="height:44px;font-size:18px" type="number" inputmode="numeric" value="${esc(R.doc.ampere)}" data-doc="ampere"></label><button class="opt ${UI.hideAmount ? 'on' : ''}" data-act="hideAmount" aria-pressed="${!!UI.hideAmount}" style="margin-left:auto">金額を隠す</button></div>
     </div>
     <div id="banner">${bannerHtml()}</div>
     <div id="link">${linkHtml()}</div>
-    ${!col ? '<div class="warn">単価の列を選ぶと金額が出ます。項目と数量はこのまま入れられます。</div>' : ''}
+    ${!col ? '<div class="warn">元請けを選ぶと金額が出ます。項目と数量はこのまま入れられます。</div>' : ''}
     <div id="info">${infoHtml()}</div>
     <div class="tabs" role="tablist">${T.map(([k, l]) => `<button role="tab" aria-selected="${UI.tab === k}" data-act="tab" data-v="${k}" class="${k === 'draft' ? 'only-narrow' : ''}">${l}</button>`).join('')}</div>
     <div id="panel">${UI.tab === 'draft' ? `<div class="only-narrow" id="draftNarrow">${draftHtml()}</div>` : panelHtml()}</div>
@@ -529,13 +541,13 @@ const cssv = (v) => String(v).replace(/["\\]/g, '\\$&');
 
 // ---- 押した時の動き ------------------------------------------------------------------------------
 function act(el) {
-  const a = el.dataset.act, d = el.dataset; const doc = R && R.doc; let focus = null, dirty = true;
+  const a = el.dataset.act, d = el.dataset; const doc = R && R.doc; let focus = null, dirty = true, say = '', sayKey = null;
   const room = d.i != null ? doc.rooms[+d.i] : (d.n != null && /^\d+$/.test(d.n) ? doc.rooms[+d.n] : null);
   switch (a) {
     case 'tab': UI.tab = d.v; dirty = false; if (d.v === 'teian') { const t = doc.timing || (doc.timing = {}); if (!t.teianSeenAt) { t.teianSeenAt = new Date().toISOString(); persistSoon(); } } focus = `.tabs [data-v="${d.v}"]`; rerender(focus); document.querySelector('.tabs').scrollIntoView({ block: 'nearest' }); return;
-    case 'opt': if (doc.sel[d.k]) delete doc.sel[d.k]; else doc.sel[d.k] = { qty: 1 }; focus = `.opt[data-k="${cssv(d.k)}"]`; break;
-    case 'inc': doc.sel[d.k].qty++; focus = `[data-act="inc"][data-k="${cssv(d.k)}"]`; break;
-    case 'dec': doc.sel[d.k].qty--; if (doc.sel[d.k].qty <= 0) { delete doc.sel[d.k]; focus = `.opt[data-k="${cssv(d.k)}"]`; } else focus = `[data-act="dec"][data-k="${cssv(d.k)}"]`; break;
+    case 'opt': { const o = HD.OPT[d.k] || {}; if (doc.sel[d.k]) { const l = lineOf(d.k); delete doc.sel[d.k]; say = l ? l + ' を外しました' : ''; } else { doc.sel[d.k] = { qty: o.qtyIn ? '' : 1 }; sayKey = d.k; } focus = (o.qtyIn && doc.sel[d.k]) ? `[data-selqty="${cssv(d.k)}"]` : `.opt[data-k="${cssv(d.k)}"]`; break; }
+    case 'inc': doc.sel[d.k].qty++; sayKey = d.k; focus = `[data-act="inc"][data-k="${cssv(d.k)}"]`; break;
+    case 'dec': doc.sel[d.k].qty--; if (doc.sel[d.k].qty <= 0) { delete doc.sel[d.k]; focus = `.opt[data-k="${cssv(d.k)}"]`; } else { sayKey = d.k; focus = `[data-act="dec"][data-k="${cssv(d.k)}"]`; } break;
     case 'tag': { const c = doc.tags[d.n] || []; doc.tags[d.n] = c.includes(d.v) ? c.filter((x) => x !== d.v) : [...c, d.v]; focus = `[data-act="tag"][data-n="${cssv(d.n)}"][data-v="${cssv(d.v)}"]`; break; }
     case 'flag': doc[d.f] = !doc[d.f]; focus = `[data-act="flag"][data-f="${d.f}"]`; break;
     case 'hideAmount': UI.hideAmount = !UI.hideAmount; dirty = false; focus = '[data-act="hideAmount"]'; break;
@@ -543,10 +555,11 @@ function act(el) {
     case 'face': { let f = room.faces || []; if (d.v === '全') f = ['全']; else { f = f.filter((x) => x !== '全'); f = f.includes(d.v) ? f.filter((x) => x !== d.v) : [...f, d.v]; if (!f.length) f = ['全']; } room.faces = f; focus = `[data-act="face"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break; }
     case 'ceilType': room.ceilType = d.v; focus = `[data-act="ceilType"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
     case 'reason': { const c = room.reasons || []; room.reasons = c.includes(d.v) ? c.filter((x) => x !== d.v) : [...c, d.v]; focus = `[data-act="reason"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break; }
-    case 'floor': room.floor = room.floor === d.v ? '' : d.v; focus = `[data-act="floor"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
+    case 'floor': room.floor = room.floor === d.v ? '' : d.v; focus = (needFloorQty(room) && !(+room.floorQty > 0)) ? `#r${d.n}-floorQty` : `[data-act="floor"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;   // 床を押したら㎡の欄へ
     case 'miki': room.miki = room.miki === d.v ? '' : d.v; focus = `[data-act="miki"][data-n="${d.n}"][data-v="${cssv(d.v)}"]`; break;
     case 'hint': room[d.f] = d.v; focus = `#r${d.i}-${d.f}`; break;
-    case 'removeRoom': { const has = roomSum(room); doc.rooms.splice(+d.i, 1); if (has) toast(`${room.name}の入力を外しました`); UI.openRoom = null; break; }
+    case 'removeRoom': { UI.undoRoom = { id: R.id, i: +d.i, room: JSON.parse(JSON.stringify(room)) }; doc.rooms.splice(+d.i, 1); toast(`${room.name}を外しました`, { act: 'undoRoom', label: '戻す' }); UI.openRoom = null; break; }
+    case 'undoRoom': { const u = UI.undoRoom; UI.undoRoom = null; $('toast').hidden = true; if (!u || u.id !== R.id || doc.rooms.some((r) => r.name === u.room.name)) return; doc.rooms.splice(Math.min(u.i, doc.rooms.length), 0, u.room); UI.openRoom = u.room.name; UI.tab = 'rooms'; say = u.room.name + 'を戻しました'; break; }
     case 'addRoom': addRoom(d.v); break;
     case 'addRoomText': { const e = $('newRoom'); const v = e && e.value.trim(); if (!v) { if (e) e.focus(); return; } addRoom(v); break; }
     case 'addItem': { const k = 't:' + d.no; if (doc.sel[k]) doc.sel[k].qty++; else doc.sel[k] = { qty: 1 }; toast(byNo(doc.priceCol)[d.no].name + ' を足しました'); break; }
@@ -567,9 +580,16 @@ function act(el) {
     case 'send': {
       if (R.conflict) { toast('先に上の確認に答えてください'); return; }
       const lines = currentLines(); if (!lines.length) { toast('まだ行がありません'); return; }
+      const W = HD.waiting(doc), wsig = JSON.stringify(W); if (W.length && UI.waitOk !== wsig) { UI.askWait = true; renderDraftOnly(); const b = $('waitAsk'); if (b) b.scrollIntoView({ block: 'nearest' }); return; }
       if (!HD.teianCount(lines) && !doc.teianOk) { UI.askTeian = true; const t = doc.timing || (doc.timing = {}); t.teianAsked = (t.teianAsked || 0) + 1; persistSoon(); renderDraftOnly(); const b = document.querySelector('[data-act="sendAnyway"]'); if (b) b.scrollIntoView({ block: 'nearest' }); return; }
       markSent(); pushNow(true); return;
     }
+    case 'waitFix': {   // ㎡が空の1つ目へ連れていく
+      UI.askWait = false; const w = HD.waiting(doc)[0]; if (!w) { renderDraftOnly(); return; }
+      if (w.key) { UI.tab = 'maru'; focus = `[data-selqty="${cssv(w.key)}"]`; } else { UI.tab = 'rooms'; UI.openRoom = w.room; focus = `#r${w.i}-floorQty`; }
+      renderEditor(); const el = document.querySelector(focus); if (el) { el.scrollIntoView({ block: 'center' }); el.focus({ preventScroll: true }); } return;
+    }
+    case 'waitAnyway': UI.askWait = false; UI.waitOk = JSON.stringify(HD.waiting(doc)); return act({ dataset: { act: 'send' } });
     case 'sendAnyway': { doc.teianOk = true; UI.askTeian = false; const t = doc.timing || (doc.timing = {}); t.teianSkipped = true; markSent(); pushNow(true); renderDraftOnly(); return; }
     case 'sendGoTeian': { UI.askTeian = false; UI.tab = 'teian'; const t = doc.timing || (doc.timing = {}); t.teianWent = true; if (!t.teianSeenAt) t.teianSeenAt = new Date().toISOString(); dirty = false; persistSoon(); rerender('.tabs [data-v="teian"]'); document.querySelector('.tabs').scrollIntoView({ block: 'nearest' }); return; }
     case 'copy': copyText(); return;
@@ -585,7 +605,11 @@ function act(el) {
   }
   if (dirty) changed();
   rerender(focus);
+  { const fe = document.activeElement; if (fe && fe.tagName === 'INPUT' && focus && fe.matches(focus)) { const b = fe.getBoundingClientRect(); if (b.top < 60 || b.bottom > innerHeight - 100) fe.scrollIntoView({ block: 'center' }); } }   // 数字の欄へ移った時は見える所まで
+  if (sayKey) { const t = lineOf(sayKey); const o = HD.OPT[sayKey] || {}; say = t ? '＋' + t : (o.qtyIn ? `${o.group} の${o.qtyIn}を入れてください` : ''); }
+  if (say) toast(say);
 }
+function lineOf(k) { const l = currentLines().find((x) => x.key === k); return l ? [l.room, l.name].filter(Boolean).join(' ') + (Number(l.qty) > 1 ? ' ×' + l.qty : '') : ''; }   // 押した直後に「何が入ったか」を下に出す
 function markSent() { const t = R.doc.timing || (R.doc.timing = {}); const iso = new Date().toISOString(); if (!t.firstSentAt) t.firstSentAt = iso; t.lastSentAt = iso; }
 function addRoom(name) { if (!R.doc.rooms.some((r) => r.name === name)) R.doc.rooms.push(HD.blankRoom(name)); UI.openRoom = name; }
 async function useRemote() {
@@ -620,6 +644,7 @@ document.addEventListener('input', (e) => {
     return;
   }
   if (!R) return;
+  if (t.dataset.selqty != null) { const v = R.doc.sel[t.dataset.selqty]; if (v) { v.qty = t.value; changed(); renderDraftOnly(); } return; }
   if (t.dataset.room != null) { R.doc.rooms[+t.dataset.room][t.dataset.field] = t.value; changed(); renderDraftOnly(); const s = t.closest('.room') && t.closest('.room').querySelector(':scope > button span'); if (s) s.textContent = roomSum(R.doc.rooms[+t.dataset.room]); return; }
   if (t.dataset.doc) {
     R.doc[t.dataset.doc] = t.value; changed();
