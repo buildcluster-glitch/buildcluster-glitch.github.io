@@ -240,6 +240,7 @@ const LIST_COLS = 'id,anken_id,bukken,room,koji,motouke,status,version,line_coun
 
 const RealApi = {
   who() { const s = session(); return s ? { email: s.email, role: s.role } : null; },
+  async myName() { const s = session(); if (!s || !s.email) return ''; const r = await dbJson(`/rest/v1/bc_users?email=eq.${enc(s.email)}&select=display_name`); return (r[0] && r[0].display_name) || ''; },
   async items() {
     let rows;
     try { rows = await dbJson('/rest/v1/tanka_items?is_deleted=eq.false&select=item_no,cat,item,unit,prices,room:doc-%3E%3E' + enc('室名')); }
@@ -343,7 +344,7 @@ async function pushNow(send) {
       const result = res && res.result;
       if (result === 'applied') {
         R.version = res.version;
-        if (job.send) { R.status = 'sent'; R.sentVersion = res.version; R.sentAt = new Date().toISOString(); R.sendAfter = false; toast('送りました'); }
+        if (job.send) { R.status = 'sent'; R.sentVersion = res.version; R.sentAt = new Date().toISOString(); R.sendAfter = false; toast('入力を終えました'); }
         if (R.seq === job.seq) R.dirty = false;
       } else if (result === 'stale_version') {
         R.conflict = { kind: 'stale', by: res.updated_by, at: res.updated_at, version: res.version };
@@ -364,7 +365,7 @@ async function pushNow(send) {
       R.inflight = null;
       R.lastError = /no role/.test(e.message) ? 'この権限では保存できません(スマホ内には残っています)'
         : (e.status === 404 ? '保存先がまだ準備できていません(スマホ内には残っています)' : '保存できませんでした: ' + e.message);
-    } else { online = false; R.lastError = ''; if (R.sendAfter) toast('電波が戻ったら送ります'); clearTimeout(retryT); retryT = setTimeout(() => pushNow(false), 20000); }
+    } else { online = false; R.lastError = ''; if (R.sendAfter) toast('電波が戻ったら保存します'); clearTimeout(retryT); retryT = setTimeout(() => pushNow(false), 20000); }
     await persistNow();
   } finally {
     pushing = false; renderStatus(); renderBanner();
@@ -393,8 +394,9 @@ function bannerHtml() {
   if (c && c.kind === 'stale') return `<div class="warn ng"><div><b>${esc(c.by || '別の人')}さんが ${esc(when(c.at))} に直しました。</b> どちらを残すか選んでください。こちらの入力はスマホ内に残っています。</div><div class="opts"><button class="btn small" data-act="useRemote">相手の版を読む</button><button class="btn small" data-act="overwrite">自分の版で上書きする</button></div></div>`;
   if (c && c.kind === 'exists') return `<div class="warn ng"><div><b>この見積の下書きは、別の人がもう始めています。</b></div><div class="opts"><button class="btn small" data-act="useExisting">そちらを開く(こちらの入力は消えます)</button><button class="btn small" data-act="overwriteExisting">自分の入力で上書きする</button></div></div>`;
   if (c && c.kind === 'deleted') return `<div class="warn ng"><div><b>この下書きは消されています。</b> 入力を残すなら新しい下書きとして保存します。</div><div class="opts"><button class="btn small" data-act="saveAsNew">新しい下書きにする</button></div></div>`;
-  if (R.status === 'sent' && R.version && R.sentVersion && R.version > R.sentVersion) return `<div class="warn"><div>送った後に直しました。見積の担当に見てもらうには、もう一度送ってください。</div></div>`;
-  if (R.status === 'sent') return `<div class="warn ok"><div>${esc(when(R.sentAt))} に送りました。${R.enteredAt ? ` ${esc(R.enteredBy || '')}さんが見積に入れました。` : ''}</div></div>`;
+  const readLink = `<a href="${qs({ id: R.id, read: '1' })}">見積に入れる画面を開く</a>`;
+  if (R.status === 'sent' && R.version && R.sentVersion && R.version > R.sentVersion) return `<div class="warn"><div>入力を終えた後に直しました。${readLink}</div></div>`;
+  if (R.status === 'sent') return `<div class="warn ok"><div>${esc(when(R.sentAt))} に入力を終えました。${R.enteredAt ? ` ${esc(R.enteredBy || '')}さんが見積に入れました。` : ` 戻ったら、自分で見積アプリに仕上げてください。${readLink}`}</div></div>`;
   return '';
 }
 function renderBanner() { const el = $('banner'); if (el) el.innerHTML = bannerHtml(); }
@@ -476,7 +478,7 @@ function draftHtml() {
   ${tags.length || R.doc.memo ? `<div class="row"><div class="lbl">メモ</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc([...tags, R.doc.memo].filter(Boolean).join('\n'))}</div></div>` : ''}
   ${delCount ? `<div class="row"><button class="btn small" data-act="restoreDel">消した行を戻す(${delCount}行)</button></div>` : ''}
   ${(UI.askTeian && !HD.teianCount(L)) ? `<div class="warn" role="alert"><div><b>${(R.doc.timing && R.doc.timing.teianSeenAt) ? '提案は0件です。' : '提案のタブをまだ開いていません。'}</b> このまま送りますか？</div><div class="opts"><button class="btn small" data-act="sendGoTeian">提案を見る</button><button class="btn small" data-act="sendAnyway">このまま送る</button></div></div>` : ''}
-  <div class="row" style="border:0"><p class="note" style="margin:0">本番の単価は、見積に入れるときに見積アプリで引き直します。行を押すと、負担・部屋・単価を直せます。${timingText(R.doc.timing) ? `<br>入力にかかった時間: ${esc(timingText(R.doc.timing))}` : ''}</p><div class="opts"><button class="btn pri" data-act="send" id="sendBtn">見積の担当へ送る</button><button class="btn small" data-act="copy">文字でコピー</button></div></div>`;
+  <div class="row" style="border:0"><p class="note" style="margin:0">本番の単価は、見積に入れるときに見積アプリで引き直します。行を押すと、負担・部屋・単価を直せます。${timingText(R.doc.timing) ? `<br>入力にかかった時間: ${esc(timingText(R.doc.timing))}` : ''}</p><div class="opts"><button class="btn pri" data-act="send" id="sendBtn">入力を終える</button><button class="btn small" data-act="copy">文字でコピー</button></div></div>`;
 }
 function footHtml() { const L = currentLines(); return `<div class="sum">下書き <b>${L.length}</b> 行<br><span class="amt">税別 <b>${yen(HD.totalOf(L))}</b></span></div><button class="btn only-narrow" data-act="tab" data-v="draft">下書きを見る</button>`; }
 function infoHtml() {
@@ -635,8 +637,8 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', (e) => { const t = e.target; if (t.dataset && t.dataset.line) renderDraftOnly(); });
 document.addEventListener('toggle', (e) => { if (e.target.id === 'planD') UI.planOpen = e.target.open; if (e.target.id === 'noteD') UI.noteOpen = e.target.open; }, true);
 
-// ---- 画面: 一覧(現場の入口と、事務の届いた下書き) ---------------------------------------------------
-const stateP = (d) => (d.status !== 'sent') ? '<span class="pill">下書き</span>' : (d.entered_at ? (d.version > d.entered_version ? '<span class="pill again">入力後に直しあり</span>' : '<span class="pill done">入力済み</span>') : (d.sent_version && d.version > d.sent_version ? '<span class="pill again">送信後に直しあり</span>' : '<span class="pill todo">未入力</span>'));
+// ---- 画面: 一覧(現場の入口と、見積に入れる下書き) ---------------------------------------------------
+const stateP = (d) => (d.status !== 'sent') ? '<span class="pill">下書き</span>' : (d.entered_at ? (d.version > d.entered_version ? '<span class="pill again">入力後に直しあり</span>' : '<span class="pill done">入力済み</span>') : (d.sent_version && d.version > d.sent_version ? '<span class="pill again">終えた後に直しあり</span>' : '<span class="pill todo">未入力</span>'));
 const qs = (x) => '?' + new URLSearchParams(Object.assign({}, x, DEMO ? { demo: '1' } : {})).toString();
 async function renderHome() {
   document.title = '現場の拾い出し';
@@ -648,24 +650,28 @@ async function renderHome() {
   <div class="box"><div class="dhead"><span>部屋を選んで始める</span></div>
     <form id="startForm" class="row" style="border:0"><label class="lbl" for="stB">物件名</label><input id="stB" class="txt" list="stL" required autocomplete="off"><datalist id="stL">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist><label class="lbl" for="stR">号室</label><input id="stR" class="txt" autocomplete="off"><button class="btn pri" type="submit">始める</button></form></div>
   ${local.length ? `<div class="box"><div class="dhead"><span>このスマホに残っている入力</span></div><div class="list">${local.map((d) => `<a class="card" href="${qs({ id: d.id })}"><b>${esc(d.bukken)} ${esc(d.room)}</b><span class="note">まだ送れていません(${esc(when(d.savedAt))})</span></a>`).join('')}</div></div>` : ''}
-  <div class="box"><div class="dhead"><span>最近の下書き</span><a href="${qs({ view: 'sent' })}" style="color:inherit;font-weight:400;font-size:13px">届いた下書きを見る</a></div><div class="list">${err ? `<div class="row note">${esc(err)}</div>` : ''}${rows.map((d) => `<a class="card" href="${qs({ id: d.id })}"><b>${esc(d.bukken)} ${esc(d.room)}${stateP(d)}</b><span class="note">${esc(d.updated_by)} ${esc(when(d.updated_at))} ・ ${d.line_count}行</span></a>`).join('') || (err ? '' : '<div class="row note">まだありません。</div>')}</div></div>`;
+  <div class="box"><div class="dhead"><span>最近の下書き</span><a href="${qs({ view: 'sent' })}" style="color:inherit;font-weight:400;font-size:13px">見積に入れる下書きを見る</a></div><div class="list">${err ? `<div class="row note">${esc(err)}</div>` : ''}${rows.map((d) => `<a class="card" href="${qs({ id: d.id })}"><b>${esc(d.bukken)} ${esc(d.room)}${stateP(d)}</b><span class="note">${esc(d.updated_by)} ${esc(when(d.updated_at))} ・ ${d.line_count}行</span></a>`).join('') || (err ? '' : '<div class="row note">まだありません。</div>')}</div></div>`;
   $('startForm').addEventListener('submit', (e) => { e.preventDefault(); location.href = qs({ bukken: $('stB').value.trim(), room: $('stR').value.trim() }); });
   if (local.length) flushOthers(null).catch(() => {});
 }
-let LIST_FILTER = 'todo';
+let LIST_FILTER = 'mine';
 async function renderSent() {
-  document.title = '届いた下書き';
-  let rows = [];
+  document.title = '見積に入れる下書き';
+  let rows = [], me = '';
+  try { me = await Api.myName(); } catch (e) { if (e.login) return; }
   try { rows = await Api.list('sent'); } catch (e) { if (e.login) return; $('app').innerHTML = `<p class="note">${e.status === 404 ? '下書きの保存先がまだ準備できていません。' : '読めませんでした。電波を確認してください。'}</p>`; return; }
   const isTodo = (d) => !d.entered_at || d.version > d.entered_version;
-  const show = LIST_FILTER === 'todo' ? rows.filter(isTodo) : rows;
-  $('app').innerHTML = `<div class="toprow"><a href="${qs({})}">← 入口へ</a></div><h1 style="font-size:18px;margin:0">届いた下書き</h1>
-  <div class="opts"><button class="opt ${LIST_FILTER === 'todo' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="todo">未入力 ${rows.filter(isTodo).length}</button><button class="opt ${LIST_FILTER === 'all' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="all">すべて ${rows.length}</button></div>
+  const isMine = (d) => !!me && norm(d.sent_by || d.updated_by) === norm(me);
+  if (LIST_FILTER === 'mine' && !me) LIST_FILTER = 'todo';   // 自分の名前が分からない時は全員の分を出す
+  const pick = { mine: (d) => isMine(d) && isTodo(d), todo: isTodo, all: () => true };
+  const show = rows.filter(pick[LIST_FILTER]);
+  $('app').innerHTML = `<div class="toprow"><a href="${qs({})}">← 入口へ</a></div><h1 style="font-size:18px;margin:0">見積に入れる下書き</h1>
+  <div class="opts">${me ? `<button class="opt ${LIST_FILTER === 'mine' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="mine">自分の未入力 ${rows.filter(pick.mine).length}</button>` : ''}<button class="opt ${LIST_FILTER === 'todo' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="todo">全員の未入力 ${rows.filter(isTodo).length}</button><button class="opt ${LIST_FILTER === 'all' ? 'on' : ''}" data-scope="list" data-act="filter" data-v="all">すべて ${rows.length}</button></div>
   <div class="box"><div class="list">${show.map((d) => `<a class="card" href="${qs({ id: d.id, read: '1' })}"><b>${esc(d.bukken)} ${esc(d.room)}${stateP(d)}</b><span class="note">${esc(d.sent_by || d.updated_by)} ${esc(when(d.sent_at))} ・ ${d.line_count}行 ・ ${yen(d.total)}${d.motouke ? ' ・ ' + esc(d.motouke) : ''}</span></a>`).join('') || '<div class="row note">ありません。</div>'}</div></div>`;
 }
 function listAct(el) { if (el.dataset.act === 'filter') { LIST_FILTER = el.dataset.v; renderSent(); } }
 
-// 事務が見ながら打つ画面。行ごとの✓はこのブラウザだけに残す(紙の青い✓の代わり)
+// 現場の担当が見ながら見積に入れる画面。行ごとの✓はこのブラウザだけに残す(紙の青い✓の代わり)
 async function renderRead(id) {
   let row = null;
   try { row = await Api.draft(id); } catch (e) { if (e.login) return; }
@@ -675,8 +681,8 @@ async function renderRead(id) {
   const L = (row.doc && row.doc.lines) || [];
   const draw = () => {
     const done = L.filter((l) => ticks[l.key]).length;
-    $('app').innerHTML = `<div class="toprow"><a href="${qs({ view: 'sent' })}">← 届いた下書き</a><a href="${qs({ id })}">直す画面へ</a></div>
-    <div class="box"><div class="head"><h1>${esc(row.bukken)} ${esc(row.room)}${stateP(row)}</h1><div class="sub">${esc(row.motouke || '')}${row.koji ? ' ・ ' + esc(row.koji) : ''}${row.doc.madori ? ' ・ ' + esc(row.doc.madori) : ''}${row.doc.ampere ? ' ・ ' + esc(row.doc.ampere) + 'A' : ''}${row.doc.loft ? ' ・ ロフト' : ''}${row.doc.stair ? ' ・ 内階段' : ''}</div>${timingText(row.doc.timing) ? `<div class="sub">現場の入力: ${esc(timingText(row.doc.timing))}</div>` : ''}<div class="sub">送った人: ${esc(row.sent_by || '')} ${esc(when(row.sent_at))} ・ 単価の列: ${esc(row.doc.priceCol || 'なし')}${row.anken_id ? ` ・ 見積 ${esc(row.anken_id)}` : ' ・ 見積とはまだつながっていません'}</div></div>
+    $('app').innerHTML = `<div class="toprow"><a href="${qs({ view: 'sent' })}">← 見積に入れる下書き</a><a href="${qs({ id })}">直す画面へ</a></div>
+    <div class="box"><div class="head"><h1>${esc(row.bukken)} ${esc(row.room)}${stateP(row)}</h1><div class="sub">${esc(row.motouke || '')}${row.koji ? ' ・ ' + esc(row.koji) : ''}${row.doc.madori ? ' ・ ' + esc(row.doc.madori) : ''}${row.doc.ampere ? ' ・ ' + esc(row.doc.ampere) + 'A' : ''}${row.doc.loft ? ' ・ ロフト' : ''}${row.doc.stair ? ' ・ 内階段' : ''}</div>${timingText(row.doc.timing) ? `<div class="sub">現場の入力: ${esc(timingText(row.doc.timing))}</div>` : ''}<div class="sub">入力した人: ${esc(row.sent_by || '')} ${esc(when(row.sent_at))} ・ 単価の列: ${esc(row.doc.priceCol || 'なし')}${row.anken_id ? ` ・ 見積 ${esc(row.anken_id)}` : ' ・ 見積とはまだつながっていません'}</div></div>
       <div class="tally">✓ ${done} / ${L.length}行</div>
       ${L.map((l) => `<label class="tick ${ticks[l.key] ? 'on' : ''}"><input type="checkbox" data-tick="${esc(l.key)}" ${ticks[l.key] ? 'checked' : ''}><span class="nm">${l.room ? esc(l.room) + ' ' : ''}${esc(l.name)}${l.burden === '入居者' ? '<span class="tenant">入居者</span>' : ''}${l.priceEdited ? '<span class="flag">現場で単価を変更</span>' : ''}${(l.noPrice || l.askPrice) ? '<span class="flag">単価を確認</span>' : ''}${l.specs ? `<span class="sp">${esc(l.specs)}</span>` : ''}</span><span class="am">${yen((Number(l.qty) || 0) * (Number(l.price) || 0))}<small>${esc(l.qty)}${esc(l.unit)} × ${yen(l.price)}</small></span></label>`).join('')}
       <div class="total"><span>合計(税別)</span><span>${yen(row.doc.total)}</span></div>
