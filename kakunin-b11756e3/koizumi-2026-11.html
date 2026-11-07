@@ -152,11 +152,11 @@ textarea::placeholder{color:var(--muted)}
   <div class="list" id="list"></div>
   <p class="note">※まだ単価表は変えていません。みんなの回答を見て、山田が決めます。<br>※単価表の材料費は、ぜんぶ「今」の値に直す案です。売値は、仕入れが上がった分を1,000円単位にして足します(他の元請けの欄も同じ考え方で上げます)。6畳シーリングは上がっていますが、売値はそのままです。<br>※前=直近の請求(—は2025年6月〜2026年10月締の請求に出てこない品目)。今=小泉東北の見積(10/28、11/4)。浴室照明の前は2024年の取り決め(請求なし)。流し台はK77CEV-13で計算し、壁開口はベニヤ分1,000円込み。W600の前は鏡をふだんの6,820円で計算(4月だけ6,200円)。W750三面鏡の前は本体(5月)と鏡(10月)の合計。カナエルは内訳テンプレート3件のフロア材の行です。金額は税別、売値は山一地所の欄です。<br>※仕入れ値が載っています。社内だけで見てください。</p>
 </div>
-<div class="foot" id="foot" hidden><div class="in"><div class="st" id="st"></div><button class="send" id="send" disabled>送信</button></div></div>
+<div class="foot" id="foot" hidden><div class="in"><div class="st" id="st"></div><button class="send" id="send" hidden>もう一度保存</button></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
-const ENC = {"salt": "f+h0C0VzMJtBLm/hmeDyUg==", "iv": "6YekgUd0KksSQzcY", "ct": "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", "iter": 200000};
+const ENC = {"salt": "wuHC+raSVhMNJ/+QxwSn1A==", "iv": "08Hb8XDL6iO90IMa", "ct": "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", "iter": 200000};
 let DATA = null, DB = null, ALL = {};
 let DEVICE = ''; try { DEVICE = localStorage.getItem('sk_device') || ''; if (!DEVICE){ DEVICE = Math.random().toString(36).slice(2,10); localStorage.setItem('sk_device', DEVICE); } } catch(e){}
 const KEY = 'sk_koizumi-2026-11';
@@ -286,6 +286,9 @@ document.getElementById('loginf').addEventListener('submit', async ev => {
 });
 
 
+// 🔑 2026-11-07 山田「送信押さなくてもいいんじゃね？」: 押したらそのまま保存する。送信ボタンは保存できなかった時の「もう一度保存」だけ。
+//   表は追記専用なので取り消しはできない=変える時はもう一方を押す。最新が正。未保存は localStorage に残り、次に開いた時・電波が戻った時に送る。
+let saving = false, saveAgain = false, saveFailed = '', cmtTimer = null;
 function items_(){ return DATA.items; }
 function mine_(){ return who ? (ans[who] = ans[who] || {}) : {}; }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(ans)); } catch(e){} }
@@ -303,7 +306,7 @@ function renderChips(){
     .concat(DATA.staff.map(s => `<button class="chip" aria-pressed="${who===s}" data-who="${esc(s)}">${esc(s.replace(/\s+/g,''))}${lab(s)}</button>`)).join('');
   el.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
     who = b.dataset.who; try { localStorage.setItem(KEY + '_who', who); } catch(e){}
-    render(); window.scrollTo({top:0});
+    render(); window.scrollTo({top:0}); flush_();
   }));
 }
 function numsHtml_(i){
@@ -339,12 +342,12 @@ function renderAll_(){
 function renderMine_(){
   const m = mine_(), n = items_().length;
   const allSent = items_().every(i => m[i.id] && m[i.id].sent);
-  document.getElementById('hint').innerHTML = '1品目ずつ<b>「OK」か「検討したい」</b>を押して、最後に<b>送信</b>してください。気になる時は「検討したい」を押して、ひとこと書いてください。';
-  const banner = allSent ? `<div class="alldone">✅ ${esc(who)}さんの${n}件は全部送信済みです。ありがとうございました。(変えたい時は、もう一方のボタンを押して送信してください)</div>` : '';
+  document.getElementById('hint').innerHTML = '1品目ずつ<b>「OK」か「検討したい」</b>を押してください。<b>押すとそのまま保存されます</b>(送信ボタンはありません)。気になる時は「検討したい」を押して、ひとこと書いてください。';
+  const banner = allSent ? bannerHtml_() : '';
   const list = document.getElementById('list');
   list.innerHTML = banner + withSections_(i => {
     const a = m[i.id] || {};
-    const state = a.sent ? '<span class="state sent">✅ 送信済み</span>' : (a.v ? '<span class="state draft">📝 未送信</span>' : '');
+    const state = stateHtml_(a);
     return `<article class="card${a.v?' answered':''}${a.sent?' sent':''}" data-id="${esc(i.id)}">${state}${headHtml_(i)}${numsHtml_(i)}
       <div class="seg seg2" role="group" aria-label="回答">
         <button data-v="ok" aria-pressed="${a.v==='ok'}">OK</button>
@@ -356,21 +359,21 @@ function renderMine_(){
   list.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
     const id = b.closest('.card').dataset.id, cur = m[id];
     if (cur && cur.v === b.dataset.v){
-      if (cur.sent){ toast('変えたい時は、もう一方のボタンを押して送信してください'); return; }
-      delete m[id]; save(); render(); toast('選択を取り消しました'); return;
+      toast('変えたい時は、もう一方のボタンを押してください'); return;
     }
     m[id] = Object.assign({}, cur, {v: b.dataset.v, at: new Date().toISOString(), sent: null});
     if (b.dataset.v === 'ok') delete m[id].c;
     save(); render();
     if (b.dataset.v === 'ask'){ const t = document.querySelector(`.card[data-id="${id}"] textarea`); if (t) t.focus({preventScroll:true}); }
+    flush_();
   }));
   list.querySelectorAll('textarea').forEach(t => t.addEventListener('input', () => {
     const id = t.closest('.card').dataset.id;
     m[id] = Object.assign({}, m[id], {c: t.value, at: new Date().toISOString(), sent: null});
-    save(); renderFoot();
-    const card = t.closest('.card'); const st = card.querySelector('.state');
-    card.classList.remove('sent'); if (st){ st.className = 'state draft'; st.textContent = '📝 未送信'; }
+    save(); paintStates_(); renderFoot();
+    clearTimeout(cmtTimer); cmtTimer = setTimeout(() => flush_(), 1200);   // 書き終わったら保存(打っている途中は画面を描き直さない)
   }));
+  list.querySelectorAll('textarea').forEach(t => t.addEventListener('blur', () => { clearTimeout(cmtTimer); flush_(); }));
 }
 function renderFoot(){
   const st = document.getElementById('st'), send = document.getElementById('send'), n = items_().length;
@@ -382,19 +385,38 @@ function renderFoot(){
     st.textContent = `「検討したい」が付いた品目 ${asks}件`;
     send.hidden = true; return;
   }
-  send.hidden = false;
   const m = mine_();
   const done = items_().filter(i => m[i.id] && m[i.id].v).length;
   const asks = items_().filter(i => m[i.id] && m[i.id].v === 'ask').length;
   const unsent = items_().filter(i => m[i.id] && m[i.id].v && !m[i.id].sent).length;
   document.getElementById('prog').textContent = `${done} / ${n}`;
   document.getElementById('bar').style.width = (100*done/n) + '%';
-  st.textContent = done ? `${done}件回答(検討したい${asks})` + (unsent ? `　未送信${unsent}件` : '　✅全部送信済み') : 'まだ回答がありません';
-  send.disabled = !unsent;
+  const label = !unsent ? '　✅保存済み' : (saveFailed ? `　⚠️まだ保存できていません ${unsent}件` : '　保存中…');
+  st.textContent = done ? `${done}件回答(検討したい${asks})` + label : 'まだ回答がありません';
+  send.hidden = !(unsent && saveFailed && !saving); send.disabled = saving;
 }
 function render(){ renderChips(); if (who) renderMine_(); else renderAll_(); renderFoot(); }
+function stateHtml_(a){
+  if (!a || !a.v) return '';
+  if (a.sent) return '<span class="state sent">✅ 保存済み</span>';
+  return saveFailed && !saving ? '<span class="state draft">⚠️ 未保存</span>' : '<span class="state draft">保存中…</span>';
+}
+function bannerHtml_(){ return `<div class="alldone" id="alldone">✅ ${esc(who)}さんの${items_().length}件は全部保存しました。ありがとうございました。(変えたい時は、もう一方のボタンを押してください)</div>`; }
+function paintStates_(){   // 打っている途中の入力を消さないよう、一覧は描き直さず印だけ変える
+  if (!who) return;
+  const m = mine_(), list = document.getElementById('list');
+  list.querySelectorAll('.card[data-id]').forEach(card => {
+    const a = m[card.dataset.id];
+    card.classList.toggle('answered', !!(a && a.v)); card.classList.toggle('sent', !!(a && a.sent));
+    const old = card.querySelector('.state'); if (old) old.remove();
+    const h = stateHtml_(a); if (h) card.insertAdjacentHTML('afterbegin', h);
+  });
+  const all = items_().every(i => m[i.id] && m[i.id].sent), bn = document.getElementById('alldone');
+  if (all && !bn) list.insertAdjacentHTML('afterbegin', bannerHtml_());
+  if (!all && bn) bn.remove();
+}
 
-// 開いた時にDBの最新回答を読む。別の端末でも「✅送信済み」が出る。手元に新しい未送信の変更があれば、そちらを残す。
+// 開いた時にDBの最新回答を読む。別の端末でも「✅保存済み」が出る。手元に新しい未保存の変更があれば、そちらを残して送る。
 async function syncFromDb(){
   if (!authOn() || !DATA) return false;
   try {
@@ -411,23 +433,26 @@ async function syncFromDb(){
       if (a && !a.sent && localAt > dbAt) continue;
       m[row.item_id] = {v: row.answer, c: row.comment || '', at: row.answered_at, sent: row.answered_at};
     }
-    ALL = next; save(); return true;
+    ALL = next; save(); setTimeout(() => flush_(), 0); return true;
   } catch(e){ return false; }
 }
 function toast(m){ const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 1800); }
 
-document.getElementById('send').addEventListener('click', async () => {
-  if (!who){ toast('先に自分の名前を選んでください'); return; }
-  const m = mine_(), rows = [];
+async function flush_(){   // まだ保存していない自分の回答を送る。同時に1本だけ。
+  if (!who || !DATA) return;
+  if (saving){ saveAgain = true; return; }
+  const me = who, m = mine_(), rows = [];
   items_().forEach(i => { const a = m[i.id]; if (!a || !a.v || a.sent) return;
-    rows.push({topic: DATA.topic, item_id: i.id, tantou: who, answer: a.v,
+    if (!a.at) a.at = new Date().toISOString();
+    rows.push({topic: DATA.topic, item_id: i.id, tantou: me, answer: a.v,
       comment: a.v === 'ask' ? ((a.c || '').slice(0,500) || null) : null,
-      answered_at: a.at || new Date().toISOString(), device: DEVICE || null}); });
-  if (!rows.length) return;
-  const btn = document.getElementById('send'), st = document.getElementById('st'); btn.disabled = true;
+      answered_at: a.at, device: DEVICE || null}); });
+  if (!rows.length){ if (saveFailed){ saveFailed = ''; paintStates_(); renderFoot(); } return; }
+  saving = true; saveFailed = ''; paintStates_(); renderFoot();
+  const st = document.getElementById('st');
   let ok = false, lastErr = '';
   for (let k = 0; k < 4 && !ok; k++){
-    if (k){ st.textContent = `送信をやり直しています(${k}回目)…`; await new Promise(r => setTimeout(r, [0,2000,5000,10000][k])); }
+    if (k){ st.textContent = `保存をやり直しています(${k}回目)…`; await new Promise(r => setTimeout(r, [0,2000,5000,10000][k])); }
     try {
       const r = await mcDbFetch_('/rest/v1/staff_kakunin_answers', {method:'POST',
         headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(rows)});
@@ -435,15 +460,24 @@ document.getElementById('send').addEventListener('click', async () => {
       else { lastErr = 'HTTP ' + r.status; if (r.status === 400 || r.status === 403) break; }
     } catch(e){ if (e && e.login){ lastErr = 'ログイン'; break; } lastErr = '通信'; }
   }
+  saving = false;
   if (ok){
-    const t = new Date().toISOString(); rows.forEach(x => { if (m[x.item_id]) m[x.item_id].sent = t; }); save();
-    toast('送信しました。ありがとうございます'); await syncFromDb(); render();
+    rows.forEach(x => { const a = m[x.item_id];
+      if (a && a.at === x.answered_at) a.sent = x.answered_at;   // 送っている間に変えた分は未保存のまま(すぐ次を送る)
+      (ALL[x.item_id] = ALL[x.item_id] || {})[me] = {v: x.answer, c: x.comment || '', at: x.answered_at}; });
+    save();
   } else {
-    toast(lastErr === 'ログイン' ? 'ログインしてから、もう一度「送信」を押してください(回答は残っています)'
-      : lastErr === '通信' ? '送信できませんでした。電波の良いところで再度お試しください' : `送信できませんでした(${lastErr})。山田まで連絡してください`);
-    renderFoot();
+    saveFailed = lastErr;
+    toast(lastErr === 'ログイン' ? 'ログインしてください(回答は残っています)'
+      : lastErr === '通信' ? '保存できませんでした。電波の良いところで「もう一度保存」を押してください' : `保存できませんでした(${lastErr})。山田まで連絡してください`);
   }
-});
+  paintStates_(); renderChips(); renderFoot();
+  const more = items_().some(i => m[i.id] && m[i.id].v && !m[i.id].sent);
+  if (saveAgain || (ok && more)){ saveAgain = false; return flush_(); }
+}
+document.getElementById('send').addEventListener('click', () => flush_());
+window.addEventListener('online', () => flush_());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush_(); });
 async function unlock(pw){
   const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
