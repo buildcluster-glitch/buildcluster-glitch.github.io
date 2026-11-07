@@ -481,11 +481,11 @@ function draftHtml() {
 function footHtml() { const L = currentLines(); return `<div class="sum">下書き <b>${L.length}</b> 行<br><span class="amt">税別 <b>${yen(HD.totalOf(L))}</b></span></div><button class="btn only-narrow" data-act="tab" data-v="draft">下書きを見る</button>`; }
 function infoHtml() {
   const b = R.info || {}; const notes = [b.type && '区分: ' + b.type, b.notes, b.memo, b.accent && b.accent !== '-' && 'アクセント: ' + b.accent, b.cf && b.cf !== '-' && 'CF: ' + b.cf].filter(Boolean).join('\n');
-  const imgs = Array.isArray(b.images) ? b.images : [];
   const urls = R.planUrls || {};
-  const plan = imgs.map((m, i) => { const u = urls[m.driveId]; return u ? `<a href="${esc(u)}" target="_blank" rel="noopener"><img class="plan-img" src="${esc(u)}" alt="間取図 ${esc(m.label || '')}" loading="lazy"></a><div class="note" style="text-align:center">${esc(m.label || '')}</div>` : ''; }).join('');
-  const showPlan = plan && !imgs.every((m) => !urls[m.driveId]);
-  return (showPlan ? `<details ${UI.planOpen === false ? '' : 'open'}><summary>間取図</summary><div class="inner">${plan}</div></details>` : '') + (notes ? `<details><summary>物件の注意</summary><div class="inner">${esc(notes)}</div></details>` : '');
+  const imgs = (Array.isArray(b.images) ? b.images : []).filter((m) => urls[m.driveId]);
+  const i = Math.min(UI.planIdx || 0, Math.max(imgs.length - 1, 0));
+  const plan = imgs.length ? `<a href="${esc(urls[imgs[i].driveId])}" target="_blank" rel="noopener"><img class="plan-img" src="${esc(urls[imgs[i].driveId])}" alt="間取図 ${esc(imgs[i].label || '')}"></a>` + (imgs.length > 1 ? `<div class="opts" style="white-space:normal">${imgs.map((m, n) => `<button class="opt ${n === i ? 'on' : ''}" data-act="plan" data-i="${n}">${esc(m.label || '図' + (n + 1))}</button>`).join('')}</div>` : `<div class="note" style="text-align:center">${esc(imgs[i].label || '')}</div>`) : '';
+  return (plan ? `<details id="planD" ${UI.planOpen === false ? '' : 'open'}><summary>間取図</summary><div class="inner">${plan}</div></details>` : '') + (notes ? `<details id="noteD" ${UI.noteOpen ? 'open' : ''}><summary>物件の注意</summary><div class="inner">${esc(notes)}</div></details>` : '');
 }
 function renderEditor() {
   document.body.classList.toggle('no-amount', !!UI.hideAmount);
@@ -559,6 +559,7 @@ function act(el) {
         if (r) ({ w: () => { r.wall = ''; }, c: () => { r.ceil = ''; }, a: () => { r.acc = ''; }, f: () => { r.floor = ''; r.floorQty = ''; }, h: () => { r.haba = ''; }, m: () => { r.miki = ''; } })[m[2]]();
       } else doc.del[d.k] = 1;
       delete doc.over[d.k]; UI.openLine = null; break;
+    case 'plan': { UI.planIdx = +d.i; const box = $('info'); if (box) box.innerHTML = infoHtml(); return; }
     case 'restoreDel': doc.del = {}; break;
     case 'link': { const c = (R.candidates || []).find((x) => x.id === d.v); if (!c) return; applyAnken(c); R.ankenNote = ''; toast('見積とつなぎました'); break; }
     case 'send': {
@@ -632,6 +633,7 @@ document.addEventListener('input', (e) => {
   }
 });
 document.addEventListener('change', (e) => { const t = e.target; if (t.dataset && t.dataset.line) renderDraftOnly(); });
+document.addEventListener('toggle', (e) => { if (e.target.id === 'planD') UI.planOpen = e.target.open; if (e.target.id === 'noteD') UI.noteOpen = e.target.open; }, true);
 
 // ---- 画面: 一覧(現場の入口と、事務の届いた下書き) ---------------------------------------------------
 const stateP = (d) => (d.status !== 'sent') ? '<span class="pill">下書き</span>' : (d.entered_at ? (d.version > d.entered_version ? '<span class="pill again">入力後に直しあり</span>' : '<span class="pill done">入力済み</span>') : (d.sent_version && d.version > d.sent_version ? '<span class="pill again">送信後に直しあり</span>' : '<span class="pill todo">未入力</span>'));
@@ -745,6 +747,18 @@ async function loadCandidates() {
   } catch (e) { R.candidates = null; }
   renderLink();
 }
+// 間取図のラベルは「206」「6号室」「101・202」「全部屋」など物件ごとに違う。合う図を先に出し、ほかの図にも切り替えられる
+function bestPlan(images, room) {
+  const r = stripRoom(room), t2 = r.slice(-2).replace(/^0/, ''), t1 = r.slice(-1);
+  let best = 0, score = 0;
+  images.forEach((m, i) => {
+    const label = String(m.label || '').normalize('NFKC');
+    const toks = label.split(/[・,、\s]+/).map((t) => t.replace(/号室.*$/, '').trim());
+    const s = toks.includes(r) ? 3 : (/号室/.test(label) && (toks.includes(t2) || toks.includes(t1))) ? 2 : /全部屋/.test(label) ? 1 : 0;
+    if (s > score) { score = s; best = i; }
+  });
+  return best;
+}
 function applyAnken(a) {
   R.ankenId = a.id; R.ankenInfo = a;
   if (a.motouke) R.motouke = a.motouke;
@@ -819,10 +833,10 @@ async function openEditor(p) {
   flushOthers(R.id).catch(() => {});
   if (info && Array.isArray(info.images) && info.images.length) {
     try {
-      const sorted = [...info.images].sort((a, b) => (String(b.label) === String(room) ? 1 : 0) - (String(a.label) === String(room) ? 1 : 0));
-      const refs = sorted.slice(0, 2).map((m) => m.driveId).filter(Boolean);
-      R.info = Object.assign({}, info, { images: sorted.slice(0, 2) });
-      R.planUrls = await Api.planUrls(refs);
+      R.planUrls = await Api.planUrls(info.images.map((m) => m.driveId).filter(Boolean));
+      const imgs = info.images.filter((m) => R.planUrls[m.driveId]);
+      R.info = Object.assign({}, info, { images: imgs });
+      UI.planIdx = bestPlan(imgs, room);
       const el = $('info'); if (el) el.innerHTML = infoHtml();
     } catch (_) {}
   }
